@@ -1,0 +1,12 @@
+# Local Postgres for backend work (step 4+). The UI (ui-hub) needs no database.
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: rr
+      POSTGRES_PASSWORD: rr
+      POSTGRES_DB: rr
+    ports: ["5432:5432"]
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+volumes:
+  pgdata:

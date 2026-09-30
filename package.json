@@ -1,0 +1,26 @@
+{
+  "name": "referral-review",
+  "private": true,
+  "version": "0.0.0",
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev:hub": "pnpm --filter @rr/ui-hub dev",
+    "build": "pnpm -r build",
+    "build:hub": "pnpm --filter @rr/ui-hub build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r --if-present test",
+    "lint": "node scripts/check-boundaries.mjs && eslint .",
+    "check": "pnpm lint && pnpm typecheck && pnpm test"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.17.0",
+    "eslint": "^9.17.0",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.0",
+    "@types/node": "^22.10.2"
+  },
+  "type": "module"
+}
