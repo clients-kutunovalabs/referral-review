@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  :root {
+    --surface-2: #ffffff; --surface-1: #f6f5f2; --surface-0: #efeee8;
+    --text-primary: #1a1a18; --text-secondary: #6b6a63; --text-muted: #9c9a92;
+    --border: #ddd; --border-strong: #b8b6ae;
+    --teal: #0f6e56; --teal-bg: #e1f5ee;
+    --amber: #854f0b; --amber-bg: #faeeda;
+    --coral: #993c1d; --coral-bg: #faece7;
+    --green: #3b6d11; --green-bg: #eaf3de;
+  }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, sans-serif; background: var(--surface-0); margin:0; padding: 32px; display:flex; justify-content:center; align-items:flex-start; }
+  .phone { width: 375px; height: 760px; background: var(--surface-2); border-radius: 30px; border: 8px solid #222; overflow: hidden; position: relative; box-shadow: 0 10px 30px rgba(0,0,0,0.18); flex-shrink:0; }
+  .screen { position:absolute; inset:0; display:flex; flex-direction:column; display:none; }
+  .screen.active { display:flex; }
+  .topbar { padding: 16px; font-size: 15px; font-weight: 500; border-bottom: 0.5px solid var(--border); display:flex; align-items:center; gap:10px; flex-shrink:0; }
+  .back { cursor:pointer; color: var(--text-secondary); font-size:18px; }
+  .scrollarea { flex:1; overflow-y:auto; padding-bottom: 10px; }
+  .content { padding: 14px 16px; }
+  .card { background: var(--surface-1); border-radius: 12px; padding: 14px; margin-bottom: 12px; border: 0.5px solid var(--border); }
+  .card h3 { margin:0 0 4px; font-size: 15px; font-weight:500; }
+  .card p { margin:0; font-size: 13px; color: var(--text-secondary); }
+  .row { display:flex; justify-content:space-between; align-items:center; margin-top:10px; }
+  .pill { font-size: 11px; padding: 3px 9px; border-radius: 20px; font-weight:500; }
+  .pill.teal { background: var(--teal-bg); color: var(--teal); }
+  .pill.amber { background: var(--amber-bg); color: var(--amber); }
+  .pill.coral { background: var(--coral-bg); color: var(--coral); }
+  .pill.green { background: var(--green-bg); color: var(--green); }
+  .btn { border: 0.5px solid var(--border-strong); background: transparent; border-radius: 8px; padding: 8px 14px; font-size: 13px; font-weight:500; cursor:pointer; color: var(--text-primary); }
+  .btn.primary { background: var(--text-primary); color: #fff; border:none; }
+  .btn.block { width:100%; padding: 12px; }
+  .tabs { display:flex; gap:6px; padding: 10px 16px; overflow-x:auto; border-bottom: 0.5px solid var(--border); flex-shrink:0; }
+  .tab { font-size: 12px; padding: 6px 12px; border-radius: 20px; white-space:nowrap; color: var(--text-secondary); cursor:pointer; }
+  .tab.on { background: var(--text-primary); color:#fff; }
+  .placeholder-box { border: 1.5px dashed var(--border-strong); border-radius: 10px; padding: 30px 10px; text-align:center; color: var(--text-muted); font-size: 13px; margin: 10px 0; }
+  input, textarea { width:100%; border: 0.5px solid var(--border-strong); border-radius: 8px; padding: 10px; font-size: 13px; margin-top:6px; font-family:inherit; }
+  .stat { display:flex; justify-content:space-between; padding: 10px 0; border-bottom: 0.5px solid var(--border); font-size:13px; }
+  .txn { display:flex; justify-content:space-between; padding: 10px 0; border-bottom: 0.5px solid var(--border); font-size: 13px; cursor:pointer; }
+  .txn .amt { font-weight:500; }
+  .err { color: var(--coral); font-size: 12px; margin-top: 6px; display:none; }
+  .center-icon { text-align:center; padding: 40px 0 10px; font-size: 40px; }
+  .bottomnav { height:58px; border-top:0.5px solid var(--border); display:flex; flex-shrink:0; background: var(--surface-2); }
+  .navitem { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; font-size:11px; color: var(--text-muted); cursor:pointer; gap:3px; }
+  .navitem.on { color: var(--text-primary); font-weight:500; }
+  .navdot { width:5px; height:5px; border-radius:50%; background:transparent; }
+  .navitem.on .navdot { background: var(--text-primary); }
+
+  .jumppanel { width: 260px; background: var(--surface-2); border-radius: 12px; border: 0.5px solid var(--border); padding: 16px; }
+  .jumppanel h4 { margin: 0 0 4px; font-size: 13px; font-weight:500; }
+  .jumppanel p { margin:0 0 12px; font-size:12px; color:var(--text-secondary); }
+  .jumpgroup { margin-bottom: 14px; }
+  .jumpgroup .glabel { font-size: 11px; color: var(--text-muted); margin-bottom: 6px; text-transform:uppercase; letter-spacing:0.03em; }
+  .jumpbtn { display:block; width:100%; text-align:left; background:transparent; border:0.5px solid var(--border); border-radius:8px; padding:7px 10px; font-size:12.5px; margin-bottom:6px; cursor:pointer; color: var(--text-primary); }
+  .jumpbtn:hover { background: var(--surface-1); }
+</style>
+</head>
+<body>
+
+<div class="phone" id="phone">
+
+  <div class="screen active" data-tab="board" id="board">
+    <div class="topbar">Tasks</div>
+    <div class="scrollarea"><div class="content">
+      <div class="card" onclick="show('detail')" style="cursor:pointer">
+        <h3>Review our app on Play Store</h3>
+        <p>Reward &#8377;40 &middot; 32 of 100 slots left</p>
+        <div class="row"><span class="pill teal">30 min timer</span><button class="btn">View</button></div>
+      </div>
+      <div class="card">
+        <h3>Sign up for newsletter</h3>
+        <p>Reward &#8377;15 &middot; unlimited slots</p>
+        <div class="row"><span class="pill teal">15 min timer</span><button class="btn">View</button></div>
+      </div>
+      <div class="card">
+        <h3>Try the new checkout flow</h3>
+        <p>Reward &#8377;60 &middot; 4 of 20 slots left</p>
+        <div class="row"><span class="pill amber">closing soon</span><button class="btn">View</button></div>
+      </div>
+    </div></div>
+    <div class="bottomnav" id="nav"></div>
+  </div>
+
+  <div class="screen" data-tab="board" id="detail">
+    <div class="topbar"><span class="back" onclick="show('board')">&larr;</span>Task detail</div>
+    <div class="scrollarea"><div class="content">
+      <div class="card">
+        <h3>Review our app on Play Store</h3>
+        <p>Post a genuine review after using the app for at least a day.</p>
+        <div class="row"><span class="pill teal">&#8377;40 reward</span><span class="pill amber">30 min once claimed</span></div>
+      </div>
+      <p style="font-size:12px;color:var(--text-secondary)">32 of 100 slots remaining. You can only claim this task once.</p>
+      <button class="btn primary block" style="margin-top:14px" onclick="show('claimed')">Claim task</button>
+    </div></div>
+    <div class="bottomnav" id="nav2"></div>
+  </div>
+
+  <div class="screen" data-tab="board" id="claimed">
+    <div class="topbar">Task claimed</div>
+    <div class="scrollarea"><div class="content">
+      <div class="center-icon">&#10003;</div>
+      <p style="text-align:center;font-size:14px">Task added to your list. Complete it within 30 minutes.</p>
+      <p style="text-align:center;font-size:12px;color:var(--text-secondary)">Find it under My tasks &rarr; Active</p>
+      <button class="btn block" style="margin-top:20px" onclick="show('mytasks')">Go to My tasks</button>
+    </div></div>
+    <div class="bottomnav" id="nav3"></div>
+  </div>
+
+  <div class="screen" data-tab="mytasks" id="mytasks">
+    <div class="topbar">My tasks</div>
+    <div class="tabs">
+      <div class="tab on">Active</div>
+      <div class="tab" onclick="show('review')">Under review</div>
+      <div class="tab" onclick="show('completed')">Completed</div>
+      <div class="tab" onclick="show('rejected')">Rejected</div>
+    </div>
+    <div class="scrollarea"><div class="content">
+      <div class="card">
+        <h3>Review our app on Play Store</h3>
+        <div class="row"><span class="pill amber">18:42 left</span><button class="btn" onclick="show('submit')">Submit proof</button></div>
+      </div>
+    </div></div>
+    <div class="bottomnav" id="nav4"></div>
+  </div>
+
+  <div class="screen" data-tab="mytasks" id="review">
+    <div class="topbar">My tasks</div>
+    <div class="tabs"><div class="tab" onclick="show('mytasks')">Active</div><div class="tab on">Under review</div><div class="tab" onclick="show('completed')">Completed</div><div class="tab" onclick="show('rejected')">Rejected</div></div>
+    <div class="scrollarea"><div class="content">
+      <div class="card">
+        <h3>Sign up for newsletter</h3>
+        <p>Submitted 2 hours ago &middot; waiting for admin review</p>
+        <span class="pill teal">Under review</span>
+      </div>
+    </div></div>
+    <div class="bottomnav" id="nav5"></div>
+  </div>
+
+  <div class="screen" data-tab="mytasks" id="completed">
+    <div class="topbar">My tasks</div>
+    <div class="tabs"><div class="tab" onclick="show('mytasks')">Active</div><div class="tab" onclick="show('review')">Under review</div><div class="tab on">Completed</div><div class="tab" onclick="show('rejected')">Rejected</div></div>
+    <div class="scrollarea"><div class="content">
+      <div class="card">
+        <h3>Try the new checkout flow</h3>
+        <p>Paid &#8377;60 &middot; approved 100%</p>
+        <span class="pill green">Approved</span>
+      </div>
+      <div class="card">
+        <h3>Follow our Instagram</h3>
+        <p>Paid &#8377;10 of &#8377;20 &middot; "screenshot missing follow confirmation"</p>
+        <span class="pill amber">Partial &middot; 50%</span>
+      </div>
+    </div></div>
+    <div class="bottomnav" id="nav6"></div>
+  </div>
+
+  <div class="screen" data-tab="mytasks" id="rejected">
+    <div class="topbar">My tasks</div>
+    <div class="tabs"><div class="tab" onclick="show('mytasks')">Active</div><div class="tab" onclick="show('review')">Under review</div><div class="tab" onclick="show('completed')">Completed</div><div class="tab on">Rejected</div></div>
+    <div class="scrollarea"><div class="content">
+      <div class="card">
+        <h3>Rate us on the App Store</h3>
+        <p>"Screenshot didn't show a 5-star rating, only 3 stars." No payout for this task.</p>
+        <span class="pill coral">Rejected &middot; 0%</span>
+      </div>
+    </div></div>
+    <div class="bottomnav" id="nav7"></div>
+  </div>
+
+  <div class="screen" data-tab="mytasks" id="submit">
+    <div class="topbar"><span class="back" onclick="show('mytasks')">&larr;</span>Submit proof</div>
+    <div class="scrollarea"><div class="content">
+      <p style="font-size:13px;color:var(--text-secondary)">Upload a screenshot proving you completed the task.</p>
+      <div class="placeholder-box">Tap to upload screenshot</div>
+      <label style="font-size:12px;color:var(--text-secondary)">Note (optional)<textarea rows="3" placeholder="Anything the reviewer should know"></textarea></label>
+      <button class="btn primary block" style="margin-top:14px" onclick="show('submitted')">Submit for review</button>
+    </div></div>
+    <div class="bottomnav" id="nav8"></div>
+  </div>
+
+  <div class="screen" data-tab="mytasks" id="submitted">
+    <div class="topbar">Submitted</div>
+    <div class="scrollarea"><div class="content">
+      <div class="center-icon">&#10003;</div>
+      <p style="text-align:center;font-size:14px">Proof submitted. Moved to Under review.</p>
+      <button class="btn block" style="margin-top:20px" onclick="show('review')">View under review</button>
+    </div></div>
+    <div class="bottomnav" id="nav9"></div>
+  </div>
+
+  <div class="screen" data-tab="wallet" id="wallet">
+    <div class="topbar">Wallet</div>
+    <div class="scrollarea"><div class="content">
+      <div class="card">
+        <div class="stat"><span>Total earned</span><span>&#8377;420</span></div>
+        <div class="stat"><span>Total withdrawn</span><span>&#8377;250</span></div>
+        <div class="stat" style="border:none;font-weight:500"><span>Withdrawable balance</span><span>&#8377;170</span></div>
+      </div>
+      <p style="font-size:12px;color:var(--text-secondary);margin:14px 0 6px">Earnings history</p>
+      <div class="txn" onclick="show('txn1')"><span>Try the new checkout flow</span><span class="amt">+&#8377;60</span></div>
+      <div class="txn" onclick="show('txn2')"><span>Follow our Instagram (50%)</span><span class="amt">+&#8377;10</span></div>
+      <div class="txn" onclick="show('txn3')"><span>Review on Google Maps</span><span class="amt">+&#8377;35</span></div>
+    </div></div>
+    <div class="bottomnav" id="nav10"></div>
+  </div>
+
+  <div class="screen" data-tab="wallet" id="txn1">
+    <div class="topbar"><span class="back" onclick="show('wallet')">&larr;</span>Earning detail</div>
+    <div class="scrollarea"><div class="content">
+      <div class="card">
+        <h3>Try the new checkout flow</h3>
+        <p>Approved 100% &middot; 4 Sep, 6:12 PM</p>
+        <div class="row"><span class="pill green">+&#8377;60 credited</span></div>
+      </div>
+      <p style="font-size:12px;color:var(--text-secondary)">Reviewer note: proof clearly showed completed checkout.</p>
+    </div></div>
+    <div class="bottomnav" id="nav11"></div>
+  </div>
+
+  <div class="screen" data-tab="wallet" id="txn2">
+    <div class="topbar"><span class="back" onclick="show('wallet')">&larr;</span>Earning detail</div>
+    <div class="scrollarea"><div class="content">
+      <div class="card">
+        <h3>Follow our Instagram</h3>
+        <p>Partial approval 50% &middot; 3 Sep, 11:04 AM</p>
+        <div class="row"><span class="pill amber">+&#8377;10 of &#8377;20 credited</span></div>
+      </div>
+      <p style="font-size:12px;color:var(--text-secondary)">Reviewer note: screenshot missing follow confirmation, rest of proof was valid.</p>
+    </div></div>
+    <div class="bottomnav" id="nav12"></div>
+  </div>
+
+  <div class="screen" data-tab="wallet" id="txn3">
+    <div class="topbar"><span class="back" onclick="show('wallet')">&larr;</span>Earning detail</div>
+    <div class="scrollarea"><div class="content">
+      <div class="card">
+        <h3>Review on Google Maps</h3>
+        <p>Approved 100% &middot; 1 Sep, 9:30 AM</p>
+        <div class="row"><span class="pill green">+&#8377;35 credited</span></div>
+      </div>
+    </div></div>
+    <div class="bottomnav" id="nav13"></div>
+  </div>
+
+  <div class="screen" data-tab="payout" id="payout">
+    <div class="topbar">Payout</div>
+    <div class="scrollarea"><div class="content">
+      <div class="card">
+        <p style="font-size:12px;margin:0 0 4px">Withdrawable balance</p>
+        <h3 style="font-size:20px">&#8377;170</h3>
+      </div>
+      <label style="font-size:12px;color:var(--text-secondary)">UPI ID<input id="upi-input" placeholder="yourname@upi"></label>
+      <p class="err" id="upi-err">Enter a UPI ID before requesting payout.</p>
+      <button class="btn primary block" style="margin-top:14px" onclick="requestPayout()">Request payout</button>
+      <p style="font-size:12px;color:var(--text-secondary);margin:16px 0 6px">Payout history</p>
+      <div class="txn"><span>Requested 3 days ago</span><span class="pill green">Paid &#8377;250</span></div>
+      <div class="txn"><span>Requested today</span><span class="pill amber">Pending &#8377;170</span></div>
+      <p style="font-size:11px;color:var(--text-muted);margin-top:20px;cursor:pointer" onclick="show('flagged')">Demo: UPI belongs to another account &rarr;</p>
+    </div></div>
+    <div class="bottomnav" id="nav14"></div>
+  </div>
+
+  <div class="screen" data-tab="payout" id="pending">
+    <div class="topbar">Request sent</div>
+    <div class="scrollarea"><div class="content">
+      <div class="center-icon">&#10003;</div>
+      <p style="text-align:center;font-size:14px">Payout request submitted. We'll settle it manually within a few days.</p>
+      <button class="btn block" style="margin-top:20px" onclick="show('payout')">Back to payout</button>
+    </div></div>
+    <div class="bottomnav" id="nav15"></div>
+  </div>
+
+  <div class="screen" data-tab="payout" id="flagged">
+    <div class="topbar"><span class="back" onclick="show('payout')">&larr;</span>Payout rejected</div>
+    <div class="scrollarea"><div class="content">
+      <div class="card" style="border-color:var(--coral)">
+        <p style="font-size:13px;color:var(--coral)">This UPI ID is already linked to another account. Enter a different UPI ID to continue.</p>
+      </div>
+      <p style="font-size:12px;color:var(--text-secondary)">Your balance is untouched. This request has been flagged for review and won't be paid until resolved.</p>
+      <button class="btn primary block" style="margin-top:14px" onclick="show('payout')">Try a different UPI ID</button>
+    </div></div>
+    <div class="bottomnav" id="nav16"></div>
+  </div>
+
+</div>
+
+<script>
+var NAV_ITEMS = [
+  { tab: 'board', label: 'Tasks', root: 'board' },
+  { tab: 'mytasks', label: 'My tasks', root: 'mytasks' },
+  { tab: 'wallet', label: 'Wallet', root: 'wallet' },
+  { tab: 'payout', label: 'Payout', root: 'payout' }
+];
+
+function buildNav(activeTab) {
+  var html = '';
+  NAV_ITEMS.forEach(function(item) {
+    var on = item.tab === activeTab ? ' on' : '';
+    html += '<div class="navitem' + on + '" onclick="show(\'' + item.root + '\')"><span class="navdot"></span>' + item.label + '</div>';
+  });
+  return html;
+}
+
+function show(id) {
+  var phone = document.getElementById('phone');
+  phone.querySelectorAll('.screen').forEach(function(s) { s.classList.remove('active'); });
+  var target = document.getElementById(id);
+  target.classList.add('active');
+  var navSlot = target.querySelector('.bottomnav');
+  if (navSlot) navSlot.innerHTML = buildNav(target.dataset.tab);
+}
+
+show('board');
+</script>
+</body>
+</html>

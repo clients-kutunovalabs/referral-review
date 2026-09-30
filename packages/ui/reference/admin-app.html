@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  :root {
+    --surface-2: #ffffff; --surface-1: #f6f5f2; --surface-0: #efeee8;
+    --text-primary: #1a1a18; --text-secondary: #6b6a63; --text-muted: #9c9a92;
+    --border: #ddd; --border-strong: #b8b6ae;
+    --teal: #0f6e56; --teal-bg: #e1f5ee;
+    --amber: #854f0b; --amber-bg: #faeeda;
+    --coral: #993c1d; --coral-bg: #faece7;
+    --green: #3b6d11; --green-bg: #eaf3de;
+  }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, sans-serif; background: var(--surface-0); margin:0; padding: 32px; display:flex; justify-content:center; align-items:flex-start; }
+  .phone { width: 375px; height: 760px; background: var(--surface-2); border-radius: 30px; border: 8px solid #222; overflow: hidden; position: relative; box-shadow: 0 10px 30px rgba(0,0,0,0.18); }
+  .screen { position:absolute; inset:0; display:flex; flex-direction:column; display:none; }
+  .screen.active { display:flex; }
+  .topbar { padding: 16px; font-size: 15px; font-weight: 500; border-bottom: 0.5px solid var(--border); display:flex; align-items:center; gap:10px; flex-shrink:0; }
+  .back { cursor:pointer; color: var(--text-secondary); font-size:18px; }
+  .scrollarea { flex:1; overflow-y:auto; }
+  .content { padding: 14px 16px; }
+  .card { background: var(--surface-1); border-radius: 12px; padding: 14px; margin-bottom: 12px; border: 0.5px solid var(--border); }
+  .card h3 { margin:0 0 4px; font-size: 14px; font-weight:500; }
+  .card p { margin:0; font-size: 13px; color: var(--text-secondary); }
+  .row { display:flex; justify-content:space-between; align-items:center; margin-top:8px; flex-wrap:wrap; gap:6px; }
+  .pill { font-size: 11px; padding: 3px 9px; border-radius: 20px; font-weight:500; white-space:nowrap; }
+  .pill.teal { background: var(--teal-bg); color: var(--teal); }
+  .pill.amber { background: var(--amber-bg); color: var(--amber); }
+  .pill.coral { background: var(--coral-bg); color: var(--coral); }
+  .pill.green { background: var(--green-bg); color: var(--green); }
+  .pill.gray { background: var(--surface-1); color: var(--text-secondary); border:0.5px solid var(--border); }
+  .btn { border: 0.5px solid var(--border-strong); background: transparent; border-radius: 8px; padding: 8px 12px; font-size: 13px; font-weight:500; cursor:pointer; color: var(--text-primary); }
+  .btn.primary { background: var(--text-primary); color: #fff; border:none; }
+  .btn.danger { color: var(--coral); border-color: var(--coral); }
+  .btn.block { width:100%; padding: 12px; }
+  label { display:block; font-size: 12px; color: var(--text-secondary); margin-bottom: 12px; }
+  input, textarea, select { width:100%; border: 0.5px solid var(--border-strong); border-radius: 8px; padding: 9px 10px; font-size: 13px; margin-top:6px; font-family:inherit; }
+  .placeholder-img { background: var(--surface-1); border: 1.5px dashed var(--border-strong); border-radius: 10px; height: 150px; display:flex; align-items:center; justify-content:center; color: var(--text-muted); font-size:13px; margin-bottom:12px; }
+  .outcomes { display:grid; grid-template-columns: repeat(5,1fr); gap:6px; margin: 8px 0 14px; }
+  .outcomebtn { padding: 9px 2px; text-align:center; border-radius:8px; border:0.5px solid var(--border-strong); font-size:12px; cursor:pointer; }
+  .outcomebtn.picked { background: var(--text-primary); color:#fff; border-color:var(--text-primary); }
+  .metricrow { display:grid; grid-template-columns: 1fr 1fr 1fr; gap:8px; margin-bottom:16px; }
+  .metric { background: var(--surface-1); border-radius: 10px; padding: 12px 8px; text-align:center; }
+  .metric .num { font-size: 18px; font-weight:500; }
+  .metric .lbl { font-size:10.5px; color: var(--text-secondary); margin-top:2px; line-height:1.3; }
+  .listrow { padding: 10px 0; border-bottom: 0.5px solid var(--border); cursor:pointer; }
+  .listrow .top { display:flex; justify-content:space-between; font-size:13px; }
+  .listrow .sub { font-size:12px; color:var(--text-secondary); margin-top:2px; }
+  .bottomnav { height:60px; border-top:0.5px solid var(--border); display:flex; flex-shrink:0; background: var(--surface-2); }
+  .navitem { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; font-size:10px; color: var(--text-muted); cursor:pointer; gap:2px; padding: 0 2px; text-align:center; line-height:1.2; }
+  .navitem.on { color: var(--text-primary); font-weight:500; }
+  .navdot { width:5px; height:5px; border-radius:50%; }
+  .navitem.on .navdot { background: var(--text-primary); }
+  .note-text { font-size:13px; color:var(--text-secondary); }
+</style>
+</head>
+<body>
+
+<div class="phone" id="phone">
+
+  <div class="screen active" data-tab="dashboard" id="dashboard">
+    <div class="topbar">Admin panel</div>
+    <div class="scrollarea"><div class="content">
+      <div class="metricrow">
+        <div class="metric"><div class="num">3</div><div class="lbl">Pending review</div></div>
+        <div class="metric"><div class="num">12</div><div class="lbl">Active tasks</div></div>
+        <div class="metric"><div class="num">2</div><div class="lbl">Payouts due</div></div>
+      </div>
+      <p style="font-size:12px;color:var(--text-secondary);margin:4px 0 8px">Recent activity</p>
+      <div class="card"><p style="margin:0;font-size:13px">Priya S. submitted proof for "Review our app on Play Store" &middot; 12 min ago</p></div>
+      <div class="card"><p style="margin:0;font-size:13px">Rahul K. requested a payout of &#8377;170 &middot; 1 hour ago</p></div>
+      <div class="card"><p style="margin:0;font-size:13px">"Rate us on the App Store" reached its slot limit &middot; 3 hours ago</p></div>
+    </div></div>
+    <div class="bottomnav"></div>
+  </div>
+
+  <div class="screen" data-tab="tasks" id="tasks">
+    <div class="topbar">Tasks</div>
+    <div class="scrollarea"><div class="content">
+      <button class="btn primary block" style="margin-bottom:14px" onclick="show('newtask')">New task</button>
+      <div class="listrow" onclick="show('taskdetail')">
+        <div class="top"><span>Review our app on Play Store</span><span class="pill teal">Active</span></div>
+        <div class="sub">&#8377;40 &middot; 68/100 slots &middot; 30 min timer</div>
+      </div>
+      <div class="listrow">
+        <div class="top"><span>Sign up for newsletter</span><span class="pill teal">Active</span></div>
+        <div class="sub">&#8377;15 &middot; unlimited &middot; 15 min timer</div>
+      </div>
+      <div class="listrow">
+        <div class="top"><span>Try the new checkout flow</span><span class="pill amber">Closing soon</span></div>
+        <div class="sub">&#8377;60 &middot; 16/20 slots &middot; 45 min timer</div>
+      </div>
+      <div class="listrow">
+        <div class="top"><span>Rate us on the App Store</span><span class="pill gray">Closed</span></div>
+        <div class="sub">&#8377;25 &middot; 100/100 slots &middot; 20 min timer</div>
+      </div>
+      <div class="listrow">
+        <div class="top"><span>Follow our Instagram</span><span class="pill coral">Removed</span></div>
+        <div class="sub">&#8377;20 &middot; unlimited &middot; 10 min timer</div>
+      </div>
+    </div></div>
+    <div class="bottomnav"></div>
+  </div>
+
+  <div class="screen" data-tab="tasks" id="newtask">
+    <div class="topbar"><span class="back" onclick="show('tasks')">&larr;</span>New task template</div>
+    <div class="scrollarea"><div class="content">
+      <label>Title<input placeholder="e.g. Review our app on Play Store"></label>
+      <label>Instructions<textarea rows="3" placeholder="What exactly should the user do"></textarea></label>
+      <label>Proof type<select><option>Screenshot only</option><option>Screenshot + link</option><option>Screenshot + text note</option></select></label>
+      <label>Reward amount (&#8377;)<input placeholder="40"></label>
+      <label>Total slots<input placeholder="100 or leave blank for unlimited"></label>
+      <label>Timer duration<input placeholder="e.g. 30 minutes"></label>
+      <button class="btn primary block" onclick="show('tasks')">Publish task</button>
+    </div></div>
+    <div class="bottomnav"></div>
+  </div>
+
+  <div class="screen" data-tab="tasks" id="taskdetail">
+    <div class="topbar"><span class="back" onclick="show('tasks')">&larr;</span>Task detail</div>
+    <div class="scrollarea"><div class="content">
+      <div class="card">
+        <h3>Review our app on Play Store</h3>
+        <p>Post a genuine review after using the app for at least a day.</p>
+        <div class="row"><span class="pill teal">&#8377;40 reward</span><span class="pill gray">68/100 slots</span><span class="pill amber">30 min timer</span></div>
+      </div>
+      <button class="btn block" style="margin-bottom:8px">Pause task</button>
+      <button class="btn danger block" onclick="show('removeconfirm')">Remove task</button>
+    </div></div>
+    <div class="bottomnav"></div>
+  </div>
+
+  <div class="screen" data-tab="tasks" id="removeconfirm">
+    <div class="topbar"><span class="back" onclick="show('taskdetail')">&larr;</span>Remove this task?</div>
+    <div class="scrollarea"><div class="content">
+      <p class="note-text">New claims will be blocked immediately. Anyone with this task in Active (not yet submitted) will have their claim voided. Submissions already awaiting review will still be processed normally.</p>
+      <button class="btn danger block" style="margin:14px 0 8px" onclick="show('tasks')">Confirm remove</button>
+      <button class="btn block" onclick="show('taskdetail')">Cancel</button>
+    </div></div>
+    <div class="bottomnav"></div>
+  </div>
+
+  <div class="screen" data-tab="review" id="reviewqueue">
+    <div class="topbar">Review queue</div>
+    <div class="scrollarea"><div class="content">
+      <p class="note-text" style="margin-bottom:10px">3 waiting, oldest first.</p>
+      <div class="listrow" onclick="show('reviewitem')">
+        <div class="top"><span>Priya S.</span><span class="sub">12 min ago</span></div>
+        <div class="sub">Review our app on Play Store</div>
+      </div>
+      <div class="listrow">
+        <div class="top"><span>Amit V.</span><span class="sub">1 hour ago</span></div>
+        <div class="sub">Sign up for newsletter</div>
+      </div>
+      <div class="listrow">
+        <div class="top"><span>Neha J.</span><span class="sub">3 hours ago</span></div>
+        <div class="sub">Try the new checkout flow</div>
+      </div>
+    </div></div>
+    <div class="bottomnav"></div>
+  </div>
+
+  <div class="screen" data-tab="review" id="reviewitem">
+    <div class="topbar"><span class="back" onclick="show('reviewqueue')">&larr;</span>Review submission</div>
+    <div class="scrollarea"><div class="content">
+      <div class="placeholder-img">Screenshot proof placeholder</div>
+      <p class="note-text" style="margin-bottom:12px">User note: "Posted a 5-star review, screenshot attached above."</p>
+      <div class="card">
+        <p style="font-size:13px;font-weight:500;margin:0 0 2px">Priya S.</p>
+        <p style="font-size:12px">Task: Review our app on Play Store &middot; Reward &#8377;40</p>
+      </div>
+      <p style="font-size:12px;color:var(--text-secondary);margin-bottom:4px">Outcome</p>
+      <div class="outcomes">
+        <div class="outcomebtn picked" onclick="pickOutcome(this)">100%</div>
+        <div class="outcomebtn" onclick="pickOutcome(this)">75%</div>
+        <div class="outcomebtn" onclick="pickOutcome(this)">50%</div>
+        <div class="outcomebtn" onclick="pickOutcome(this)">25%</div>
+        <div class="outcomebtn" onclick="pickOutcome(this)">0%</div>
+      </div>
+      <label>Note to user (required)<textarea rows="3" placeholder="Explain the outcome, especially for partial or rejected"></textarea></label>
+      <button class="btn primary block" onclick="show('reviewqueue')">Submit review</button>
+    </div></div>
+    <div class="bottomnav"></div>
+  </div>
+
+  <div class="screen" data-tab="payouts" id="payouts">
+    <div class="topbar">Payouts</div>
+    <div class="scrollarea"><div class="content">
+      <p class="note-text" style="margin-bottom:10px">2 pending, 1 flagged.</p>
+      <div class="listrow" onclick="show('payoutitem')">
+        <div class="top"><span>Rahul K.</span><span class="pill amber">Pending</span></div>
+        <div class="sub">&#8377;170 &middot; rahul&#8226;&#8226;@upi &middot; 1 hour ago</div>
+      </div>
+      <div class="listrow">
+        <div class="top"><span>Sara M.</span><span class="pill amber">Pending</span></div>
+        <div class="sub">&#8377;90 &middot; sara&#8226;&#8226;@upi &middot; 4 hours ago</div>
+      </div>
+      <div class="listrow" onclick="show('payoutflagged')">
+        <div class="top"><span>Karan D.</span><span class="pill coral">Flagged</span></div>
+        <div class="sub">&#8377;220 &middot; 9876&#8226;&#8226;&#8226;@upi &middot; yesterday</div>
+      </div>
+    </div></div>
+    <div class="bottomnav"></div>
+  </div>
+
+  <div class="screen" data-tab="payouts" id="payoutitem">
+    <div class="topbar"><span class="back" onclick="show('payouts')">&larr;</span>Payout request</div>
+    <div class="scrollarea"><div class="content">
+      <div class="card">
+        <p style="font-size:13px;margin:0 0 6px">Rahul K. &middot; &#8377;170</p>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:12px;font-family:monospace" id="upi-full-text">rahul.kumar@okhdfc</span>
+          <button class="btn" style="padding:3px 9px;font-size:11px" onclick="copyUpi(this, 'upi-full-text')">Copy</button>
+        </div>
+        <p style="font-size:12px;margin-top:8px">Requested 1 hour ago</p>
+      </div>
+      <button class="btn primary block" onclick="show('payouts')">Mark as paid</button>
+    </div></div>
+    <div class="bottomnav"></div>
+  </div>
+
+  <div class="screen" data-tab="payouts" id="payoutflagged">
+    <div class="topbar"><span class="back" onclick="show('payouts')">&larr;</span>Flagged payout</div>
+    <div class="scrollarea"><div class="content">
+      <div class="card" style="border-color:var(--coral)">
+        <p style="font-size:13px;color:var(--coral);margin:0 0 8px">This UPI ID matches an existing UPI on another account (Meena D.).</p>
+        <p style="font-size:12px">Karan D. &middot; &#8377;220 &middot; requested yesterday</p>
+      </div>
+      <button class="btn danger block" style="margin-bottom:8px">Ban both accounts</button>
+      <button class="btn block">Ignore &middot; allow this once</button>
+    </div></div>
+    <div class="bottomnav"></div>
+  </div>
+
+  <div class="screen" data-tab="users" id="users">
+    <div class="topbar">Users</div>
+    <div class="scrollarea"><div class="content">
+      <p class="note-text" style="margin-bottom:10px">142 total.</p>
+      <div class="listrow">
+        <div class="top"><span>Priya S.</span><span class="pill teal">Active</span></div>
+        <div class="sub">priya&#8226;&#8226;@gmail.com &middot; &#8377;540 lifetime</div>
+      </div>
+      <div class="listrow">
+        <div class="top"><span>Rahul K.</span><span class="pill teal">Active</span></div>
+        <div class="sub">rahul&#8226;&#8226;@gmail.com &middot; &#8377;320 lifetime</div>
+      </div>
+      <div class="listrow">
+        <div class="top"><span>Karan D.</span><span class="pill coral">Flagged</span></div>
+        <div class="sub">karan&#8226;&#8226;@gmail.com &middot; &#8377;220 lifetime</div>
+      </div>
+    </div></div>
+    <div class="bottomnav"></div>
+  </div>
+
+</div>
+
+<script>
+var NAV_ITEMS = [
+  { tab: 'dashboard', label: 'Home', root: 'dashboard' },
+  { tab: 'tasks', label: 'Tasks', root: 'tasks' },
+  { tab: 'review', label: 'Review', root: 'reviewqueue' },
+  { tab: 'payouts', label: 'Payouts', root: 'payouts' },
+  { tab: 'users', label: 'Users', root: 'users' }
+];
+
+function buildNav(activeTab) {
+  var html = '';
+  NAV_ITEMS.forEach(function(item) {
+    var on = item.tab === activeTab ? ' on' : '';
+    html += '<div class="navitem' + on + '" onclick="show(\'' + item.root + '\')"><span class="navdot"></span>' + item.label + '</div>';
+  });
+  return html;
+}
+
+function show(id) {
+  var phone = document.getElementById('phone');
+  phone.querySelectorAll('.screen').forEach(function(s) { s.classList.remove('active'); });
+  var target = document.getElementById(id);
+  target.classList.add('active');
+  var navSlot = target.querySelector('.bottomnav');
+  if (navSlot) navSlot.innerHTML = buildNav(target.dataset.tab);
+}
+
+function pickOutcome(el) {
+  el.parentNode.querySelectorAll('.outcomebtn').forEach(function(b){ b.classList.remove('picked'); });
+  el.classList.add('picked');
+}
+function copyUpi(btn, textId) {
+  var text = document.getElementById(textId).textContent;
+  navigator.clipboard.writeText(text).then(function() {
+    var original = btn.textContent;
+    btn.textContent = 'Copied';
+    setTimeout(function() { btn.textContent = original; }, 1200);
+  });
+}
+
+show('dashboard');
+</script>
+</body>
+</html>

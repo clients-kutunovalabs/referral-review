@@ -1,0 +1,34 @@
+/* ui-hub chrome only. Never imported by the production apps. */
+.hub-nav { display: flex; gap: var(--space-3); align-items: center; padding: var(--space-5) var(--space-8); background: var(--surface-2); border-bottom: var(--border-width) solid var(--border); position: sticky; top: 0; z-index: 20; flex-wrap: wrap; }
+.hub-nav .brand { font-family: var(--font-heading); font-size: 18px; margin-right: var(--space-7); }
+.hub-nav a { text-decoration: none; color: var(--text-secondary); padding: 8px 14px; border-radius: var(--radius-pill); font-size: var(--text-md); min-height: 36px; display: inline-flex; align-items: center; }
+.hub-nav a.on { background: var(--text-primary); color: var(--text-inverse); }
+.hub-nav .env { margin-left: auto; }
+.hub-page { padding: var(--space-9); display: flex; gap: var(--space-9); align-items: flex-start; justify-content: center; flex-wrap: wrap; }
+.jumppanel { width: 280px; background: var(--surface-2); border-radius: var(--radius-lg); border: var(--border-width) solid var(--border); padding: var(--space-7); position: sticky; top: 80px; }
+.jumppanel h4 { margin: 0 0 4px; font-size: var(--text-md); font-weight: var(--weight-medium); font-family: var(--font-body); }
+.jumppanel p { margin: 0 0 12px; font-size: var(--text-sm); color: var(--text-secondary); }
+.jumpgroup { margin-bottom: 14px; }
+.glabel { font-size: var(--text-xs); color: var(--text-muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.03em; }
+.jumpbtn { display: block; width: 100%; text-align: left; background: transparent; border: var(--border-width) solid var(--border); border-radius: var(--radius-sm); padding: 7px 10px; min-height: 36px; font-size: 12.5px; margin-bottom: 6px; cursor: pointer; color: var(--text-primary); }
+.jumpbtn:hover, .jumpbtn.on { background: var(--surface-1); }
+.jumpbtn.on { border-color: var(--text-primary); }
+.gallery { display: flex; flex-wrap: wrap; gap: var(--space-9); justify-content: center; }
+.gallery figure { margin: 0; }
+.gallery figcaption { text-align: center; font-size: var(--text-sm); color: var(--text-secondary); margin-top: var(--space-4); }
+.ds { max-width: 980px; margin: 0 auto; padding: var(--space-9) var(--space-7) 80px; }
+.ds h1 { font-size: 32px; margin: 0 0 8px; }
+.ds h2 { font-size: 22px; margin: 40px 0 12px; border-bottom: var(--border-width) solid var(--border-strong); padding-bottom: 8px; }
+.ds p.lead { color: var(--text-secondary); max-width: 640px; }
+.swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--space-5); }
+.swatch { background: var(--surface-2); border: var(--border-width) solid var(--border); border-radius: var(--radius-md); overflow: hidden; font-size: var(--text-sm); }
+.swatch .chip-color { height: 56px; border-bottom: var(--border-width) solid var(--border); }
+.swatch .meta { padding: var(--space-3) var(--space-4); }
+.swatch code { font-family: var(--font-mono); font-size: 11px; color: var(--text-secondary); display: block; }
+.specimen { background: var(--surface-2); border: var(--border-width) solid var(--border); border-radius: var(--radius-md); padding: var(--space-7); margin-bottom: var(--space-5); }
+.states { display: flex; flex-wrap: wrap; gap: var(--space-5); align-items: center; }
+.state-box { width: 340px; max-width: 100%; }
+.frame-box { width: 375px; height: 200px; border: var(--border-width) solid var(--border-strong); border-radius: var(--radius-md); overflow: hidden; position: relative; }
+.ds table { border-collapse: collapse; width: 100%; font-size: var(--text-md); background: var(--surface-2); }
+.ds th, .ds td { text-align: left; padding: 8px 10px; border-bottom: var(--border-width) solid var(--border); }
+@media (max-width: 720px) { .hub-page { padding: var(--space-5); } .jumppanel { position: static; width: 100%; } }
