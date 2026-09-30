@@ -3,7 +3,7 @@ import { fixtures, type Claim, type Identity, type Task } from "@rr/core";
 import { formatRupees, parseRupees, rupees, type Paise } from "@rr/money";
 import {
   BottomNav, Button, Card, Chips, CopyButton, Countdown, EmptyState, Field, FileUpload, Input, Select,
-  StatusPill, Tabs, Textarea, Toast, TopBar
+  Sheet, StatusPill, Tabs, Textarea, Toast, TopBar
 } from "../../primitives";
 
 export type UserScreen =
@@ -85,8 +85,13 @@ export function UserApp({ initialScreen = "board", initialTab = "active", logged
       <BoardScreen identity={identity} onIdentity={() => show("identities")} onOpen={(id) => { setTaskId(id); show("detail"); }} />
     ); break;
     case "detail": body = (
-      <DetailScreen task={task} identities={identities} identityId={identityId} setIdentityId={setIdentityId} claims={claims}
-        loggedIn={loggedIn} onClaim={claimTask} onBack={() => show("board")} />
+      <>
+        <BoardScreen identity={identity} onIdentity={() => show("identities")} onOpen={(id) => { setTaskId(id); show("detail"); }} />
+        <Sheet title="Task details" onClose={() => show("board")}>
+          <DetailBody task={task} identities={identities} identityId={identityId} setIdentityId={setIdentityId} claims={claims}
+            loggedIn={loggedIn} onClaim={claimTask} />
+        </Sheet>
+      </>
     ); break;
     case "claimed": body = <ClaimedScreen task={task} minutes={task.timerMinutes} onGo={() => { setTab("active"); show("mytasks"); }} text={claims.find((c) => c.taskId === task.id && c.identityId === identityId)?.assignedText} notify={notify} />; break;
     case "mytasks": body = (
@@ -190,35 +195,33 @@ function BoardScreen({ identity, onIdentity, onOpen }: { identity: Identity; onI
   );
 }
 
-function DetailScreen({ task, identities, identityId, setIdentityId, claims, loggedIn, onClaim, onBack }: {
+function DetailBody({ task, identities, identityId, setIdentityId, claims, loggedIn, onClaim }: {
   task: Task; identities: Identity[]; identityId: string; setIdentityId: (id: string) => void;
-  claims: Claim[]; loggedIn: boolean; onClaim: () => void; onBack: () => void;
+  claims: Claim[]; loggedIn: boolean; onClaim: () => void;
 }) {
   const already = claims.some((c) => c.taskId === task.id && c.identityId === identityId && c.status !== "void" && c.status !== "expired");
-  const perTextNote = task.textMode === "manual_pool" ? "You'll get a pitch to use once you claim."
-    : task.textMode === "ai_generated" ? "A pitch is written for you when you claim." : null;
   return (
-    <div className="screen"><TopBar title="Task detail" onBack={onBack} /><div className="scrollarea"><div className="content">
-      <Card>
-        <h3>{task.title}</h3>
-        <p>{task.description}</p>
-        <div className="row"><StatusPill tone="teal">{formatRupees(task.reward)} reward</StatusPill><StatusPill tone="amber">{task.timerMinutes} min once claimed</StatusPill></div>
-        <div className="linkrow">Task site: <a href={task.siteUrl} target="_blank" rel="noreferrer noopener">{task.siteUrl.replace("https://", "")} &#8599;</a></div>
-      </Card>
-      {task.keywords.length ? (<><div className="section-label">Features to highlight</div><Chips items={task.keywords} /></>) : null}
-      {perTextNote ? <p className="hint" style={{ marginTop: 12 }}>{perTextNote}</p> : null}
-      <p className="muted" style={{ marginTop: 12 }}>
-        {task.slotsTotal === null ? "Unlimited slots." : `${task.slotsRemaining} of ${task.slotsTotal} slots remaining.`} Each email can claim this task once.
-      </p>
+    <>
+      <h3 style={{ fontSize: 17, margin: "0 0 6px", fontFamily: "var(--font-body)", fontWeight: 500 }}>{task.title}</h3>
+      <p className="note-text" style={{ margin: 0 }}>{task.description}</p>
+      <div className="row" style={{ marginTop: 12 }}>
+        <StatusPill tone="teal">{formatRupees(task.reward)} reward</StatusPill>
+        <StatusPill tone="amber">{task.timerMinutes} min time limit</StatusPill>
+      </div>
+      <div className="linkrow">Task site: <a href={task.siteUrl} target="_blank" rel="noreferrer noopener">{task.siteUrl.replace("https://", "")} &#8599;</a></div>
+      <div className="slots-line" style={{ marginTop: 12 }}>
+        <span>Slots remaining</span>
+        <strong>{task.slotsTotal === null ? "Unlimited" : `${task.slotsRemaining} of ${task.slotsTotal}`}</strong>
+      </div>
       {loggedIn ? (
-        <Field label="Claim as">
+        <Field label="Claim as" hint="Each email can claim this task once.">
           <Select value={identityId} onChange={(e) => setIdentityId(e.target.value)}>
             {identities.map((i) => <option key={i.id} value={i.id}>{i.email}</option>)}
           </Select>
         </Field>
       ) : null}
       <Button variant="primary" block disabled={already} onClick={onClaim}>{already ? "Already claimed from this email" : loggedIn ? "Claim task" : "Log in to claim"}</Button>
-    </div></div></div>
+    </>
   );
 }
 

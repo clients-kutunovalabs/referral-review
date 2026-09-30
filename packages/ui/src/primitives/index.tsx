@@ -1,4 +1,4 @@
-import { useEffect, useState, type ButtonHTMLAttributes, type ReactNode, type InputHTMLAttributes, type TextareaHTMLAttributes, type SelectHTMLAttributes } from "react";
+import { useEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode, type InputHTMLAttributes, type TextareaHTMLAttributes, type SelectHTMLAttributes } from "react";
 import { copyText } from "../lib/clipboard";
 
 export type Tone = "teal" | "amber" | "coral" | "green" | "gray";
@@ -145,4 +145,29 @@ export function Countdown({ minutes }: { minutes: number }) {
 
 export function PhoneFrame({ children }: { children: ReactNode }) {
   return <div className="phone"><div className="app-frame">{children}</div></div>;
+}
+
+/** Overlay panel: slides up over the current screen. Closes on backdrop tap, close button or Esc. */
+export function Sheet({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  useEffect(() => {
+    const prev = document.activeElement as HTMLElement | null;
+    ref.current?.focus();
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") closeRef.current(); };
+    document.addEventListener("keydown", onKey);
+    return () => { document.removeEventListener("keydown", onKey); prev?.focus?.(); };
+  }, []);
+  return (
+    <div className="sheet-backdrop" onClick={onClose}>
+      <div className="sheet" role="dialog" aria-modal="true" aria-label={title} tabIndex={-1} ref={ref} onClick={(e) => e.stopPropagation()}>
+        <div className="sheet-head">
+          <span className="grow">{title}</span>
+          <button className="sheet-close" aria-label="Close" onClick={onClose}>&times;</button>
+        </div>
+        <div className="sheet-body">{children}</div>
+      </div>
+    </div>
+  );
 }
