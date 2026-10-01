@@ -22,7 +22,7 @@ export const colorTokens = {
   }
 } as const;
 
-export const layoutTokens = { "--safe-top": "12px", "--safe-bottom": "24px" } as const;
+export const layoutTokens = { "--safe-top": "12px", "--safe-bottom": "24px", "--topbar-height": "56px" } as const;
 
 export const fontTokens = {
   "--font-body": '"Urbanist", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',

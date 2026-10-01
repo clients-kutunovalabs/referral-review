@@ -5,8 +5,8 @@
 
 .screen { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .screen-footer { flex-shrink: 0; padding: var(--space-4) var(--space-7); border-top: var(--border-width) solid var(--border); background: var(--surface-2); }
-.topbar { padding: var(--space-7); font-size: var(--text-xl); font-weight: var(--weight-medium); border-bottom: var(--border-width) solid var(--border); display: flex; align-items: center; gap: var(--space-4); flex-shrink: 0; }
-.topbar .grow { flex: 1; }
+.topbar { height: var(--topbar-height); min-height: var(--topbar-height); padding: 0 var(--space-7); font-size: var(--text-xl); font-weight: var(--weight-medium); border-bottom: var(--border-width) solid var(--border); display: flex; align-items: center; gap: var(--space-4); flex-shrink: 0; }
+.topbar .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .back { cursor: pointer; color: var(--text-secondary); font-size: 18px; background: none; border: 0; padding: 0 var(--space-3) 0 0; min-height: var(--tap-min); min-width: 28px; }
 .scrollarea { flex: 1; overflow-y: auto; padding-bottom: var(--space-4); }
 .content { padding: var(--space-6) var(--space-7); }
@@ -185,7 +185,7 @@ button.metric:hover { border-color: var(--border-strong); }
 .listrow .top { display: flex; justify-content: space-between; gap: var(--space-3); font-size: var(--text-md); }
 .listrow .sub { font-size: var(--text-sm); color: var(--text-secondary); margin-top: 2px; }
 
-.bottomnav { height: var(--nav-height); border-top: var(--border-width) solid var(--border); display: flex; flex-shrink: 0; background: var(--surface-2); }
+.bottomnav { height: var(--nav-height); min-height: var(--nav-height); border-top: var(--border-width) solid var(--border); display: flex; flex-shrink: 0; background: var(--surface-2); }
 .navitem { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: var(--text-xs); color: var(--text-muted); cursor: pointer; gap: 3px; padding: 0 2px; text-align: center; line-height: 1.2; background: none; border: 0; font-family: inherit; min-height: var(--tap-min); }
 .navitem.on { color: var(--brand); font-weight: var(--weight-medium); }
 .bottomnav.dense .navitem { font-size: var(--text-2xs); }

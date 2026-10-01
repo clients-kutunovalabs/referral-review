@@ -25,7 +25,7 @@ const TAB_OF: Partial<Record<UserScreen, string>> = {
   mytasks: "mytasks", submit: "mytasks", submitted: "mytasks",
   wallet: "wallet",
   payout: "payout", payoutSent: "payout", payoutFlagged: "payout",
-  help: "help", createTicket: "help"
+  help: "help", createTicket: "help", ticket: "help", identities: "board"
 };
 const MIN_PAYOUT = rupees(10);
 

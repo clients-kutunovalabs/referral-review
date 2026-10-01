@@ -120,7 +120,7 @@ export function AdminApp({ initialScreen = "dashboard", viewerRoleIds = ["role-o
       ];
       body = (
         <div className="screen">
-          <div className="topbar" style={{ paddingBlock: 8 }}>
+          <div className="topbar">
             <span className="grow">Admin panel</span>
             <button className="profile-btn" aria-label="Roles and permissions" onClick={() => show("access")}>
               <Icon name="user" /><span>{adminName}</span><span className="chev" aria-hidden="true">&#9656;</span>
@@ -281,7 +281,7 @@ export function AdminApp({ initialScreen = "dashboard", viewerRoleIds = ["role-o
     <>
       {body}
       {toast ? <Toast message={toast} onDone={() => setToast(null)} /> : null}
-      {screen === "ticket" && can(screen) ? null : <BottomNav items={navItems} active={tab} onSelect={(t) => show(NAV_DEF.find((n) => n.tab === t)!.id)} />}
+      <BottomNav items={navItems} active={tab} onSelect={(t) => show(NAV_DEF.find((n) => n.tab === t)!.id)} />
     </>
   );
 }

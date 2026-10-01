@@ -76,6 +76,7 @@
   /* Sizing */
   --tap-min: 44px;
   --nav-height: 60px;
+  --topbar-height: 56px;
   --border-width: 0.5px;
   --shadow-device: 0 10px 30px rgba(0, 0, 0, 0.18);
   --focus-ring: 0 0 0 2px var(--surface-2), 0 0 0 4px var(--brand);
