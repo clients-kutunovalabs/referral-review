@@ -1,8 +1,8 @@
 import { useState } from "react";
 import {
-  fixtures, PERMISSIONS, TEXT_MODE_LABEL, type AdminMember, type PermissionKey, type Role, type Task, type TextMode
+  activeTill, fixtures, PERMISSIONS, TEXT_MODE_LABEL, type AdminMember, type PermissionKey, type Role, type Task, type TextMode
 } from "@rr/core";
-import { OUTCOME_PERCENTS, formatRupees, outcomeAmount, type OutcomePercent } from "@rr/money";
+import { OUTCOME_PERCENTS, formatRupees, outcomeAmount, rupees, type OutcomePercent, type Paise } from "@rr/money";
 import {
   BottomNav, Icon, type IconName, Button, Card, Chips, CopyButton, EmptyState, Field, FileUpload, Input, ListRow, Select,
   StatusPill, Tabs, Textarea, Toast, TopBar
@@ -38,10 +38,26 @@ const TAB_OF: Partial<Record<AdminScreen, string>> = {
   userdetail: "dashboard", tickets: "support", ticket: "support", access: "dashboard"
 };
 
-const extraTasks: { title: string; status: "closed" | "removed"; meta: string }[] = [
-  { title: "Rate us on the App Store", status: "closed", meta: "₹25 · 100/100 slots · 20 min timer" },
-  { title: "Follow our Instagram", status: "removed", meta: "₹20 · unlimited · 10 min timer" }
+const extraTasks: { id: string; title: string; status: "closed" | "removed"; reward: Paise; claimed: string; timer: number; mode: string }[] = [
+  { id: "x1", title: "Rate us on the App Store", status: "closed", reward: rupees(25), claimed: "100 of 100 claimed", timer: 20, mode: TEXT_MODE_LABEL.none },
+  { id: "x2", title: "Follow our Instagram", status: "removed", reward: rupees(20), claimed: "unlimited slots", timer: 10, mode: TEXT_MODE_LABEL.none }
 ];
+
+/** Same card idea as the user board: title, reward line, then a compact row with the status pill and the action button. */
+function AdminTaskCard({ title, reward, claimed, timer, mode, pill, onOpen }: {
+  title: string; reward: Paise; claimed: string; timer: number; mode: string; pill: React.ReactNode; onOpen?: () => void;
+}) {
+  return (
+    <Card {...(onOpen ? { onClick: onOpen } : {})}>
+      <h3>{title}</h3>
+      <p>{formatRupees(reward)} reward &middot; {claimed} &middot; {timer} min limit</p>
+      <div className="card-split" style={{ marginTop: "var(--space-3)" }}>
+        <div className="card-split-main"><div className="chips" style={{ margin: 0 }}>{pill}<StatusPill tone="gray">{mode}</StatusPill></div></div>
+        {onOpen ? <Button compact>Manage</Button> : null}
+      </div>
+    </Card>
+  );
+}
 
 export interface AdminAppProps {
   initialScreen?: AdminScreen;
@@ -69,6 +85,7 @@ export function AdminApp({ initialScreen = "dashboard", viewerRoleIds = ["role-o
   const [userId, setUserId] = useState("u1");
   const [userStatus, setUserStatus] = useState<Record<string, string>>({});
   const [ticketId, setTicketId] = useState(initialTicketId);
+  const [adminTaskId, setAdminTaskId] = useState("t1");
   const [supportTab, setSupportTab] = useState<SupportTab>("open");
   const allTickets = useTickets();
 
@@ -129,19 +146,25 @@ export function AdminApp({ initialScreen = "dashboard", viewerRoleIds = ["role-o
     }
     case "tasks": body = (
       <div className="screen"><TopBar title="Tasks" /><div className="scrollarea"><div className="content">
-        {perms.has("task.manage") ? <Button variant="primary" block style={{ marginBottom: 14 }} onClick={() => show("newtask")}>New task</Button> : null}
-        {fixtures.tasks.map((t) => (
-          <ListRow key={t.id} onClick={() => show("taskdetail")} title={t.title}
-            right={<StatusPill tone={t.status === "closing_soon" ? "amber" : "teal"}>{t.status === "closing_soon" ? "Closing soon" : "Active"}</StatusPill>}
-            sub={`${formatRupees(t.reward)} · ${t.slotsTotal === null ? "unlimited" : `${t.slotsTotal - (t.slotsRemaining ?? 0)}/${t.slotsTotal} slots`} · ${t.timerMinutes} min timer · ${TEXT_MODE_LABEL[t.textMode]}`} />
-        ))}
+        {fixtures.tasks.map((t) => {
+          const till = activeTill(t.activeUntil);
+          const closed = t.status === "closed" || t.status === "removed" || till.kind === "closed";
+          const tone = closed ? "coral" : till.kind === "left" ? "amber" : "teal";
+          const pill = <StatusPill tone={tone}>{closed ? "Closed" : till.kind === "none" ? "Active · no end date" : `Active till: ${till.label}`}</StatusPill>;
+          return <AdminTaskCard key={t.id} title={t.title} reward={t.reward} timer={t.timerMinutes} mode={TEXT_MODE_LABEL[t.textMode]} pill={pill}
+            claimed={t.slotsTotal === null ? "unlimited slots" : `${t.slotsTotal - (t.slotsRemaining ?? 0)} of ${t.slotsTotal} claimed`}
+            onOpen={() => { setAdminTaskId(t.id); show("taskdetail"); }} />;
+        })}
         {extraTasks.map((t) => (
-          <ListRow key={t.title} title={t.title} right={<StatusPill tone={t.status === "removed" ? "coral" : "gray"}>{t.status === "removed" ? "Removed" : "Closed"}</StatusPill>} sub={t.meta} />
+          <AdminTaskCard key={t.id} title={t.title} reward={t.reward} timer={t.timer} mode={t.mode} claimed={t.claimed}
+            pill={<StatusPill tone={t.status === "removed" ? "coral" : "gray"}>{t.status === "removed" ? "Removed" : "Closed"}</StatusPill>} />
         ))}
-      </div></div></div>
+      </div></div>
+      {perms.has("task.manage") ? <div className="screen-footer"><Button variant="primary" block onClick={() => show("newtask")}>New task</Button></div> : null}
+      </div>
     ); break;
     case "newtask": body = <NewTaskScreen onBack={() => show("tasks")} onPublish={() => { notify("Task published"); show("tasks"); }} />; break;
-    case "taskdetail": body = <TaskDetailScreen task={fixtures.tasks[0]!} canManage={perms.has("task.manage")} canTexts={perms.has("task_text.manage")} onBack={() => show("tasks")} onRemove={() => show("removeconfirm")} notify={notify} />; break;
+    case "taskdetail": body = <TaskDetailScreen task={fixtures.tasks.find((t) => t.id === adminTaskId) ?? fixtures.tasks[0]!} canManage={perms.has("task.manage")} canTexts={perms.has("task_text.manage")} onBack={() => show("tasks")} onRemove={() => show("removeconfirm")} notify={notify} />; break;
     case "removeconfirm": body = (
       <div className="screen"><TopBar title="Remove this task?" onBack={() => show("taskdetail")} /><div className="scrollarea"><div className="content">
         <p className="note-text">New claims will be blocked immediately. Anyone with this task in Active (not yet submitted) will have their claim voided. Submissions already awaiting review will still be processed normally.</p>
@@ -360,7 +383,7 @@ function TaskDetailScreen({ task, canManage, canTexts, onBack, onRemove, notify 
     <div className="screen"><TopBar title="Task detail" onBack={onBack} /><div className="scrollarea"><div className="content">
       <Card>
         <h3>{task.title}</h3><p>{task.description}</p>
-        <div className="row"><StatusPill tone="teal">{formatRupees(task.reward)} reward</StatusPill><StatusPill tone="gray">68/100 slots</StatusPill><StatusPill tone="amber">{task.timerMinutes} min timer</StatusPill></div>
+        <div className="row"><StatusPill tone="teal">{formatRupees(task.reward)} reward</StatusPill><StatusPill tone="gray">{task.slotsTotal === null ? "unlimited slots" : `${task.slotsTotal - (task.slotsRemaining ?? 0)} of ${task.slotsTotal} claimed`}</StatusPill><StatusPill tone="amber">{task.timerMinutes} min limit</StatusPill></div>
         <div className="linkrow">Site: <a href={task.siteUrl} target="_blank" rel="noreferrer noopener">{task.siteUrl.replace("https://", "")} &#8599;</a></div>
         <Chips items={task.keywords} />
         <p className="hint" style={{ marginTop: 8 }}>Task text: {TEXT_MODE_LABEL[task.textMode]}</p>
@@ -368,7 +391,7 @@ function TaskDetailScreen({ task, canManage, canTexts, onBack, onRemove, notify 
       {task.textMode === "manual_pool" ? (
         <Card>
           <h3>Pitch pool ({pool.length})</h3>
-          <p className="muted">Shared evenly and randomly. With {pool.length} pitches and 100 workers, each pitch goes to about {Math.ceil(100 / pool.length)}.</p>
+          <p className="muted">Shared evenly and randomly. With {pool.length} pitches and {task.slotsTotal ?? 100} workers, each pitch goes to about {Math.ceil((task.slotsTotal ?? 100) / pool.length)}.</p>
           {pool.map((p, i) => <div key={i} className="pitch">{p}</div>)}
           {canTexts ? (<>
             <Field label="Add a pitch"><Textarea rows={3} value={add} onChange={(e) => setAdd(e.target.value)} /></Field>
