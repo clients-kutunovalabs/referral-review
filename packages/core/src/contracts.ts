@@ -63,6 +63,7 @@ export interface WalletEntry {
   reward: Paise;
   credited: Paise;
   whenLabel: string;
+  at: string; // ISO, for ordering
   reviewerNote?: string;
 }
 
@@ -83,6 +84,7 @@ export interface PayoutRequest {
   upiMasked: string;
   upiFull: string; // only ever rendered on the admin payout detail screen
   whenLabel: string;
+  at?: string; // ISO, for ordering
   flagReason?: string;
   paidBy?: string;
 }

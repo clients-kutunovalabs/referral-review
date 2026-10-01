@@ -64,6 +64,14 @@
 .active-row .info-cell { flex: 1; min-height: 52px; }
 .active-row .btn { flex-shrink: 0; min-height: 52px; }
 
+.section-title { font-family: var(--font-body); font-size: var(--text-stat); font-weight: var(--weight-medium); color: var(--text-primary); margin: var(--space-8) 0 var(--space-2); }
+.txn-main { display: flex; flex-direction: column; min-width: 0; gap: 2px; }
+.txn-title { font-size: var(--text-lg); font-weight: var(--weight-medium); }
+.txn-sub { font-size: var(--text-sm); color: var(--text-secondary); }
+.txn-right { display: flex; flex-direction: column; align-items: flex-end; gap: var(--space-1); flex-shrink: 0; }
+.txn-amt { font-size: var(--text-lg); font-weight: var(--weight-medium); white-space: nowrap; }
+.txn-amt.in { color: var(--green); }
+
 .chips { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-3); }
 .chip { font-size: var(--text-sm); padding: 4px 10px; border-radius: var(--radius-pill); background: var(--surface-2); border: var(--border-width) solid var(--border-strong); color: var(--text-primary); }
 .chip.hit { background: var(--green-bg); border-color: var(--green); color: var(--green); }

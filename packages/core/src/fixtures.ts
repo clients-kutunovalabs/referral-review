@@ -143,15 +143,14 @@ export const wallet: Wallet = {
   held: rupees(0),
   available: rupees(170),
   entries: [
-    { id: "w1", title: "Write and send a follow-up email", identityId: "i2", outcome: 100, reward: rupees(60), credited: rupees(60), whenLabel: "4 Sep, 6:12 PM", reviewerNote: "Email sent, screenshot clear." },
-    { id: "w2", title: "Sign up 3 leads for the newsletter (50%)", identityId: "i1", outcome: 50, reward: rupees(20), credited: rupees(10), whenLabel: "3 Sep, 11:04 AM", reviewerNote: "Only two of three signups visible, rest of proof was valid." },
-    { id: "w3", title: "Pitch our CRM to a local clinic", identityId: "i1", outcome: 100, reward: rupees(35), credited: rupees(35), whenLabel: "1 Sep, 9:30 AM" }
+    { id: "w1", title: "Write and send a follow-up email", identityId: "i2", outcome: 100, reward: rupees(60), credited: rupees(60), whenLabel: "4 Sep, 6:12 PM", at: "2026-09-04T18:12:00", reviewerNote: "Email sent, screenshot clear." },
+    { id: "w2", title: "Sign up 3 leads for the newsletter (50%)", identityId: "i1", outcome: 50, reward: rupees(20), credited: rupees(10), whenLabel: "3 Sep, 11:04 AM", at: "2026-09-03T11:04:00", reviewerNote: "Only two of three signups visible, rest of proof was valid." },
+    { id: "w3", title: "Pitch our CRM to a local clinic", identityId: "i1", outcome: 100, reward: rupees(35), credited: rupees(35), whenLabel: "1 Sep, 9:30 AM", at: "2026-09-01T09:30:00" }
   ]
 };
 
 export const userPayouts: PayoutRequest[] = [
-  { id: "p1", who: "You", amount: rupees(250), status: "paid", upiMasked: "pri••@okhdfc", upiFull: "priya@okhdfc", whenLabel: "Requested 3 days ago", paidBy: "Anil (Payments)" },
-  { id: "p2", who: "You", amount: rupees(170), status: "pending", upiMasked: "pri••@okhdfc", upiFull: "priya@okhdfc", whenLabel: "Requested today" }
+  { id: "p1", who: "You", amount: rupees(250), status: "paid", upiMasked: "pri••@okhdfc", upiFull: "priya@okhdfc", whenLabel: "6 Sep, 2:15 PM", at: "2026-09-06T14:15:00", paidBy: "Anil (Payments)" }
 ];
 
 export const adminPayouts: PayoutRequest[] = [
