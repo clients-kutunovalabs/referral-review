@@ -43,6 +43,7 @@ export interface Claim {
   status: ClaimStatus;
   minutesLeft?: number; // active claims only
   submittedLabel?: string;
+  reviewedLabel?: string; // when it was reviewed / ended
   assignedText?: string; // pitch given at claim time
   outcome?: OutcomePercent;
   credited?: Paise;

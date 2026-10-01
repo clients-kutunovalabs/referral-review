@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { activeTill, fixtures, type Claim, type Identity, type Task } from "@rr/core";
 import { formatRupees, parseRupees, rupees, type Paise } from "@rr/money";
 import {
-  BottomNav, Button, Card, Chips, CopyButton, Countdown, EmptyState, Field, FileUpload, Input, Select,
+  BottomNav, Button, Card, Chips, CopyButton, Countdown, EmptyState, Field, FileUpload, Input, Notice, Select,
   Sheet, StatusPill, Tabs, Textarea, Toast, TopBar
 } from "../../primitives";
 
@@ -290,7 +290,7 @@ function MyTasksScreen({ tab, setTab, claims, identities, onSubmit }: {
           return (
             <Card key={c.id}>
               <h3>{title(c)}</h3>
-              {c.status !== "under_review" ? <p className="muted">{email(c)}</p> : null}
+              {c.status === "claimed" ? <p className="muted">{email(c)}</p> : null}
               {c.status === "claimed" && t ? (<>
                 <div className="info-cell white" style={{ marginTop: 10 }}>
                   <span className="info-label">Task site &#8599;</span>
@@ -311,12 +311,21 @@ function MyTasksScreen({ tab, setTab, claims, identities, onSubmit }: {
                 <p className="small" style={{ marginTop: 8 }}>Submitted {c.submittedLabel}</p>
               </>) : null}
               {(c.status === "approved" || c.status === "partial") ? (<>
-                <p>Paid {formatRupees(c.credited ?? 0n)}{c.status === "partial" ? ` of ${formatRupees(t?.reward ?? 0n)}` : ""} &middot; approved {c.outcome}%{c.reviewerNote ? ` · "${c.reviewerNote}"` : ""}</p>
-                <div className="row"><StatusPill tone={c.status === "approved" ? "green" : "amber"}>{c.status === "approved" ? "Approved" : `Partial · ${c.outcome}%`}</StatusPill></div>
+                <div className="tagrow"><StatusPill tone="gray">{email(c)}</StatusPill><StatusPill tone={c.status === "approved" ? "green" : "amber"}>{c.status === "approved" ? "Approved" : `Partial · ${c.outcome}%`}</StatusPill></div>
+                {c.reviewedLabel ? <p className="small" style={{ marginTop: 8 }}>Reviewed {c.reviewedLabel}</p> : null}
+                <Notice tone={c.status === "approved" ? "green" : "amber"}>
+                  {c.status === "approved"
+                    ? `Completed successfully. Task amount ${formatRupees(t?.reward ?? 0n)} added to your wallet.`
+                    : `Completed successfully. ${formatRupees(c.credited ?? 0n)} of ${formatRupees(t?.reward ?? 0n)} added to your wallet.`}
+                </Notice>
+                {c.status === "partial" && c.reviewerNote ? <p className="small" style={{ marginTop: 8 }}>Reviewer note: {c.reviewerNote}</p> : null}
               </>) : null}
               {(c.status === "rejected" || c.status === "expired" || c.status === "void") ? (<>
-                <p>{c.reviewerNote ? `"${c.reviewerNote}" ` : ""}{c.status === "rejected" ? "No payout for this task." : c.status === "expired" ? "Timer ran out." : "Task was removed."}</p>
-                <div className="row"><StatusPill tone="coral">{c.status === "rejected" ? "Rejected · 0%" : c.status === "expired" ? "Expired" : "Voided"}</StatusPill></div>
+                <div className="tagrow"><StatusPill tone="gray">{email(c)}</StatusPill><StatusPill tone="coral">{c.status === "rejected" ? "Rejected · 0%" : c.status === "expired" ? "Expired" : "Voided"}</StatusPill></div>
+                {c.reviewedLabel ? <p className="small" style={{ marginTop: 8 }}>{c.status === "rejected" ? "Reviewed" : "Ended"} {c.reviewedLabel}</p> : null}
+                <Notice tone="coral">
+                  {c.status === "rejected" ? `${c.reviewerNote ? c.reviewerNote + " " : ""}No payout for this task.` : c.status === "expired" ? "Timer ran out. No payout for this task." : "Task was removed. No payout for this task."}
+                </Notice>
               </>) : null}
             </Card>
           );

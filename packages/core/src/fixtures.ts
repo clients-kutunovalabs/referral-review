@@ -1,5 +1,5 @@
 /** Mock data for ui-hub and design review. Not used in production builds of the real apps. */
-import { rupees } from "@rr/money";
+import { outcomeAmount, rupees } from "@rr/money";
 import type {
   AdminMember, AdminUserRow, Claim, Identity, PayoutRequest, ReviewQueueItem, Role, Task, Wallet
 } from "./contracts";
@@ -105,7 +105,7 @@ tasks.push({
   title: "Follow-up call script for warm leads",
   description: "Call a warm lead using the script and screenshot the call log.",
   siteUrl: "https://kutunovalabs.com/calls",
-  reward: rupees(45),
+  reward: rupees(60),
   slotsTotal: 40,
   slotsRemaining: 0,
   timerMinutes: 30,
@@ -138,9 +138,9 @@ export const claims: Claim[] = [
   { id: "c7", taskId: "t4", identityId: "i1", status: "claimed", minutesLeft: 11 },
   { id: "c8", taskId: "t5", identityId: "i1", status: "claimed", minutesLeft: 22, assignedText: pitchPool[1] },
   { id: "c2", taskId: "t2", identityId: "i1", status: "under_review", submittedLabel: "2 hours ago" },
-  { id: "c3", taskId: "t3", identityId: "i2", status: "approved", outcome: 100, credited: rupees(60), reviewerNote: "Email sent, screenshot clear." },
-  { id: "c4", taskId: "t2", identityId: "i1", status: "partial", outcome: 50, credited: rupees(10), reviewerNote: "Only two of three signups visible." },
-  { id: "c5", taskId: "t1", identityId: "i2", status: "rejected", outcome: 0, credited: 0n, reviewerNote: "Screenshot did not show a sent message." }
+  { id: "c3", taskId: "t3", identityId: "i2", status: "approved", outcome: 100, credited: rupees(60), reviewerNote: "Email sent, screenshot clear.", reviewedLabel: "4 Sep, 6:12 PM" },
+  { id: "c4", taskId: "t6", identityId: "i1", status: "partial", outcome: 75, credited: outcomeAmount(rupees(60), 75), reviewerNote: "Screenshot was missing the call duration.", reviewedLabel: "3 Sep, 11:04 AM" },
+  { id: "c5", taskId: "t1", identityId: "i2", status: "rejected", outcome: 0, credited: 0n, reviewerNote: "Screenshot did not show a sent message.", reviewedLabel: "2 Sep, 4:40 PM" },
 ];
 
 export const wallet: Wallet = {
