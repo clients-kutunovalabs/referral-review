@@ -18,8 +18,8 @@ export function Button({ variant = "default", block, small, compact, className =
   return <button type={type} className={cls} {...rest} />;
 }
 
-export function Card({ children, alert, onClick, style }: { children: ReactNode; alert?: boolean; onClick?: () => void; style?: React.CSSProperties }) {
-  const cls = ["card", alert ? "alert" : "", onClick ? "clickable" : ""].filter(Boolean).join(" ");
+export function Card({ children, alert, hero, onClick, style }: { children: ReactNode; alert?: boolean; hero?: boolean; onClick?: () => void; style?: React.CSSProperties }) {
+  const cls = ["card", alert ? "alert" : "", hero ? "hero" : "", onClick ? "clickable" : ""].filter(Boolean).join(" ");
   return (
     <div className={cls} onClick={onClick} style={style} role={onClick ? "button" : undefined} tabIndex={onClick ? 0 : undefined}
       onKeyDown={onClick ? (e) => { if (e.key === "Enter" || e.key === " ") onClick(); } : undefined}>

@@ -27,6 +27,18 @@ describe("contrast (WCAG AA 4.5:1)", () => {
       it(`${fg} on ${bg}`, () => expect(ratio(t[fg]!, t[bg]!)).toBeGreaterThanOrEqual(4.5));
     }
   }
+  it("white text on the brand button, rest and hover", () => {
+    expect(ratio(t["--text-inverse"]!, t["--brand"]!)).toBeGreaterThanOrEqual(4.5);
+    expect(ratio(t["--text-inverse"]!, t["--brand-strong"]!)).toBeGreaterThanOrEqual(4.5);
+  });
+  it("brand text on brand-bg and on white", () => {
+    expect(ratio(t["--brand"]!, t["--brand-bg"]!)).toBeGreaterThanOrEqual(4.5);
+    expect(ratio(t["--brand"]!, t["--surface-2"]!)).toBeGreaterThanOrEqual(4.5);
+  });
+  it("accent text on accent-bg and on white", () => {
+    expect(ratio(t["--accent"]!, t["--accent-bg"]!)).toBeGreaterThanOrEqual(4.5);
+    expect(ratio(t["--accent"]!, t["--surface-2"]!)).toBeGreaterThanOrEqual(4.5);
+  });
   for (const c of ["teal", "amber", "coral", "green"]) {
     it(`--${c} on --${c}-bg`, () => expect(ratio(t[`--${c}`]!, t[`--${c}-bg`]!)).toBeGreaterThanOrEqual(4.5));
   }

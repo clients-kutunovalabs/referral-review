@@ -32,14 +32,22 @@ export function DesignSystem() {
       <p className="lead">Every colour, font, size and component used by the user site, the admin and ui-hub. It starts from the original prototypes and lives in <code>packages/ui</code>. Nothing else in the repo defines styles. In production this page is not deployed.</p>
 
       <h2>Colour</h2>
-      <h3>Surfaces</h3><Swatches group={colorTokens.surface} />
+      <h3>Neutrals: surfaces</h3><Swatches group={colorTokens.surface} />
       <h3>Text (contrast against white)</h3><Swatches group={colorTokens.text} against="--surface-2" />
       <h3>Borders</h3><Swatches group={colorTokens.border} />
-      <h3>Status: teal = active/success, amber = pending/partial, coral = rejected/flagged, green = money</h3>
-      <Swatches group={colorTokens.status} />
+      <h3>Brand: one colour for actions, active, success and money</h3>
+      <Swatches group={colorTokens.brand} against="--surface-2" />
+      <h3>Accent: one colour for reward highlights, processing and time pressure</h3>
+      <Swatches group={colorTokens.accent} against="--surface-2" />
+      <h3>Functional red: rejected, flagged, errors only (not a brand colour)</h3>
+      <Swatches group={{ "--coral": colorTokens.status["--coral"], "--coral-bg": colorTokens.status["--coral-bg"] }} against="--surface-2" />
+      <p className="lead">The palette is two colours plus neutrals. The older names stay as roles: <code>--teal</code> and <code>--green</code> are the brand, <code>--amber</code> is the accent.</p>
       <div className="specimen states">
-        <StatusPill tone="teal">Active</StatusPill><StatusPill tone="amber">Pending</StatusPill>
-        <StatusPill tone="coral">Rejected</StatusPill><StatusPill tone="green">+₹60 credited</StatusPill><StatusPill tone="gray">Closed</StatusPill>
+        <StatusPill tone="teal">Active</StatusPill><StatusPill tone="green">+₹60 earned</StatusPill><StatusPill tone="amber">Processing</StatusPill>
+        <StatusPill tone="coral">Rejected</StatusPill><StatusPill tone="gray">Closed</StatusPill>
+      </div>
+      <div className="specimen states">
+        <Button variant="primary">Brand action</Button><Button>Secondary</Button><Button variant="danger">Danger</Button>
       </div>
 
       <h2>Typography</h2>

@@ -50,6 +50,9 @@ Per task `text_mode`: `none | keywords | manual_pool | ai_generated` (keywords c
 - `apps/web` (user site + `/admin`) imports the same `@rr/ui`. No other app defines its own styles/components; CI lint bans it; Playwright visual-regression on ui-hub.
 - Production: ui-hub is not built or deployed; design system is internal only (default: removed from production, or behind admin auth with `design.view`).
 
+## Palette (decided)
+Green-tinted neutrals + ONE brand colour (deep emerald `--brand`: actions, active, success, money) + ONE accent (saffron `--accent`: reward highlights, processing, time pressure) + one functional red (errors, rejected). Contrast is enforced by tests (4.5:1). Layout: 12px above the top bar and 24px below the bottom nav on every screen (`--safe-top`, `--safe-bottom`, also honouring device safe areas).
+
 ## Admin roles and permissions
 Tables: `admin_members, roles, role_permissions, member_roles`. Permissions: `task.manage`, `task.assign`, `review.decide`, `payout.mark_paid`, `user.manage`, `role.manage`, `task_text.manage`, `ticket.manage`, `design.view`. Owner has all, cannot be removed; members can hold several roles; every route checks the DB per request; every admin action audit-logged.
 

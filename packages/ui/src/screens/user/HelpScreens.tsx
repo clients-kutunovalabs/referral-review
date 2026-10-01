@@ -15,7 +15,6 @@ export function HelpScreen({ tab, setTab, onOpen, onCreate }: { tab: HelpTab; se
   const list = tab === "open" ? open : closed;
   return (
     <div className="screen"><TopBar title="Help" />
-      <div className="content" style={{ paddingBottom: 0 }}><Button variant="primary" block onClick={onCreate}>Create ticket</Button></div>
       <Tabs<HelpTab> value={tab} onChange={setTab} tabs={[{ id: "open", label: `Open (${open.length})` }, { id: "closed", label: `Closed (${closed.length})` }]} />
       <div className="scrollarea"><div className="content">
         {list.length === 0 ? <EmptyState>{tab === "open" ? "No open tickets. Tap Create ticket if you need help." : "No closed tickets yet."}</EmptyState> : null}
@@ -24,6 +23,7 @@ export function HelpScreen({ tab, setTab, onOpen, onCreate }: { tab: HelpTab; se
             right={<span className="sub">#{t.number}</span>} sub={`Updated ${whenLabel(t.updatedAt)}`} />
         ))}
       </div></div>
+      <div className="screen-footer"><Button variant="primary" block onClick={onCreate}>Create ticket</Button></div>
     </div>
   );
 }

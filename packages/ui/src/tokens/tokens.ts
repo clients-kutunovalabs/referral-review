@@ -1,24 +1,28 @@
 /** Typed mirror of tokens.css, used by /design-system in ui-hub. tokens.test.ts keeps both in sync. */
 export const colorTokens = {
-  surface: { "--surface-2": "#ffffff", "--surface-1": "#f6f5f2", "--surface-0": "#efeee8" },
+  surface: { "--surface-2": "#ffffff", "--surface-1": "#f5f7f4", "--surface-0": "#e9eee9" },
   text: {
-    "--text-primary": "#1a1a18",
-    "--text-secondary": "#57564f",
-    "--text-muted": "#6a6862",
+    "--text-primary": "#16211b",
+    "--text-secondary": "#44524a",
+    "--text-muted": "#5a685f",
     "--text-inverse": "#ffffff"
   },
-  border: { "--border": "#dddddd", "--border-strong": "#b8b6ae" },
+  border: { "--border": "#dce3dd", "--border-strong": "#b3bdb5" },
+  brand: { "--brand": "#0c6a4e", "--brand-strong": "#08523d", "--brand-bg": "#e1f2ea" },
+  accent: { "--accent": "#8c5200", "--accent-bg": "#fdefd2" },
   status: {
-    "--teal": "#0f6e56",
-    "--teal-bg": "#e1f5ee",
-    "--amber": "#854f0b",
-    "--amber-bg": "#faeeda",
-    "--coral": "#993c1d",
-    "--coral-bg": "#faece7",
-    "--green": "#3b6d11",
-    "--green-bg": "#eaf3de"
+    "--teal": "#0c6a4e",
+    "--teal-bg": "#e1f2ea",
+    "--green": "#0c6a4e",
+    "--green-bg": "#e1f2ea",
+    "--amber": "#8c5200",
+    "--amber-bg": "#fdefd2",
+    "--coral": "#a13a22",
+    "--coral-bg": "#fbe9e3"
   }
 } as const;
+
+export const layoutTokens = { "--safe-top": "12px", "--safe-bottom": "24px" } as const;
 
 export const fontTokens = {
   "--font-body": '"Urbanist", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
@@ -62,9 +66,12 @@ export const allTokens: Record<string, string> = {
   ...colorTokens.surface,
   ...colorTokens.text,
   ...colorTokens.border,
+  ...colorTokens.brand,
+  ...colorTokens.accent,
   ...colorTokens.status,
   ...fontTokens,
   ...sizeTokens,
   ...radiusTokens,
-  ...spaceTokens
+  ...spaceTokens,
+  ...layoutTokens
 };

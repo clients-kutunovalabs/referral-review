@@ -455,7 +455,7 @@ function WalletScreen({ identities, earned, withdrawn, inProcess, available, pay
   ].sort((a, b) => (a.at < b.at ? 1 : -1));
   return (
     <div className="screen"><TopBar title="Wallet" /><div className="scrollarea"><div className="content">
-      <Card>
+      <Card hero>
         <div className="stat"><span>Total earned</span><span>{formatRupees(earned)}</span></div>
         <div className="stat"><span>Total withdrawn</span><span>{formatRupees(withdrawn)}</span></div>
         {inProcess > 0n ? <div className="stat" style={{ color: "var(--amber)" }}><span>Withdrawal in process</span><span>{formatRupees(inProcess)}</span></div> : null}
@@ -494,7 +494,7 @@ function PayoutScreen({ available, inProcess, payouts, onRequest, onFlagged, onD
   }
   return (
     <div className="screen"><TopBar title="Payout" right={<button className="identity-chip" onClick={onHelp}>Help</button>} /><div className="scrollarea"><div className="content">
-      <Card>
+      <Card hero>
         <p style={{ fontSize: 12, margin: "0 0 4px" }}>Withdrawable balance</p>
         <h3 style={{ fontSize: 20 }}>{formatRupees(available)}</h3>
         {pending ? <p className="small" style={{ marginTop: 4, color: "var(--amber)" }}>{formatRupees(inProcess)} is processing and blocked until it is paid.</p> : null}
