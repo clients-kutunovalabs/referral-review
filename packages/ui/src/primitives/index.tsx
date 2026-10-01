@@ -109,12 +109,31 @@ export function Chips({ items, hits, misses, onRemove }: { items: string[]; hits
   );
 }
 
-/** Screenshot upload: UI only; the real one validates type/size client and server side. */
-export function FileUpload({ label, filled, onPick }: { label: string; filled: boolean; onPick: () => void }) {
+/** Image picker with client-side checks (type, size). The server re-validates; never trust the browser. */
+export function FileUpload({ label, onFile, maxMb = 5 }: { label: string; onFile: (file: File | null) => void; maxMb?: number }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+  const [error, setError] = useState("");
+  useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
+  function pick(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    e.target.value = "";
+    if (!f) return;
+    if (!/^image\/(png|jpeg|webp)$/.test(f.type)) { setError("Use a JPG, PNG or WebP image."); return; }
+    if (f.size > maxMb * 1024 * 1024) { setError(`Image must be under ${maxMb} MB.`); return; }
+    setError(""); setFile(f); setPreview(URL.createObjectURL(f)); onFile(f);
+  }
   return (
-    <button type="button" className={`upload${filled ? " filled" : ""}`} onClick={onPick}>
-      {filled ? "✓ Screenshot attached (tap to replace)" : label}
-    </button>
+    <div>
+      <input ref={inputRef} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={pick} aria-label={label} />
+      <button type="button" className={`upload${file ? " filled" : ""}`} onClick={() => inputRef.current?.click()}>
+        {file && preview ? (
+          <span className="upload-row"><img src={preview} alt="" className="upload-thumb" /><span className="upload-name">{file.name}<small>Tap to replace</small></span></span>
+        ) : label}
+      </button>
+      {error ? <div className="field-error" role="alert">{error}</div> : null}
+    </div>
   );
 }
 

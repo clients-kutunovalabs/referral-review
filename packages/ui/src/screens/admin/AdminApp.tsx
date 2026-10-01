@@ -351,7 +351,7 @@ function ReviewItemScreen({ item, onBack, onDone }: { item: (typeof fixtures.rev
 }
 
 function PayoutItemScreen({ payout, adminName, onBack, onPaid }: { payout: (typeof fixtures.adminPayouts)[number]; adminName: string; onBack: () => void; onPaid: () => void }) {
-  const [proof, setProof] = useState(false); const [busy, setBusy] = useState(false);
+  const [proof, setProof] = useState<File | null>(null); const [busy, setBusy] = useState(false);
   const paid = payout.status === "paid";
   return (
     <div className="screen"><TopBar title="Payout request" onBack={onBack} /><div className="scrollarea"><div className="content">
@@ -363,7 +363,7 @@ function PayoutItemScreen({ payout, adminName, onBack, onPaid }: { payout: (type
       </Card>
       {paid ? <p className="muted">Paid by {payout.paidBy}. The payment proof is stored with this record.</p> : (<>
         <p className="muted">After you transfer the money, attach the payment screenshot. It is required and is saved with your name.</p>
-        <FileUpload label="Tap to upload payment screenshot" filled={proof} onPick={() => setProof(true)} />
+        <FileUpload label="Tap to upload payment screenshot" onFile={setProof} />
         <Button variant="primary" block disabled={!proof || busy} onClick={() => { setBusy(true); onPaid(); }}>Mark as paid by {adminName}</Button>
       </>)}
     </div></div></div>

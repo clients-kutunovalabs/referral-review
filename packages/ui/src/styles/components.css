@@ -38,6 +38,14 @@
 .info-value a { color: var(--teal); font-weight: var(--weight-medium); }
 .info-value.time { font-weight: var(--weight-regular); }
 
+.info-cell.white { background: var(--surface-2); border: var(--border-width) solid var(--border); }
+.upload-row { display: flex; align-items: center; gap: var(--space-5); text-align: left; }
+.upload-thumb { width: 56px; height: 56px; object-fit: cover; border-radius: var(--radius-sm); border: var(--border-width) solid var(--border); flex-shrink: 0; }
+.upload-name { display: flex; flex-direction: column; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: var(--weight-medium); }
+.upload-name small { font-weight: var(--weight-regular); color: var(--text-secondary); font-size: var(--text-sm); }
+.script-box { width: 100%; margin-top: var(--space-3); background: var(--surface-2); line-height: 1.5; resize: none; }
+.task-text .section-label { margin-top: var(--space-6); }
+
 .chips { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-3); }
 .chip { font-size: var(--text-sm); padding: 4px 10px; border-radius: var(--radius-pill); background: var(--surface-2); border: var(--border-width) solid var(--border-strong); color: var(--text-primary); }
 .chip.hit { background: var(--green-bg); border-color: var(--green); color: var(--green); }

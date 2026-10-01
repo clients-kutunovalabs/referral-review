@@ -98,7 +98,19 @@ export function UserApp({ initialScreen = "board", initialTab = "active", logged
       <MyTasksScreen tab={tab} setTab={setTab} claims={claims} identities={identities}
         onSubmit={(id) => { setSubmitClaimId(id); show("submit"); }} />
     ); break;
-    case "submit": body = <SubmitScreen task={fixtures.tasks.find((t) => t.id === claims.find((c) => c.id === submitClaimId)?.taskId) ?? task} onBack={() => show("mytasks")} onSubmit={() => submitProof(submitClaimId)} />; break;
+    case "submit": {
+      const sc = claims.find((c) => c.id === submitClaimId);
+      const st = fixtures.tasks.find((t) => t.id === sc?.taskId) ?? task;
+      body = (
+        <>
+          <MyTasksScreen tab="active" setTab={setTab} claims={claims} identities={identities} onSubmit={(id) => { setSubmitClaimId(id); show("submit"); }} />
+          <Sheet title="Submit proof" onClose={() => show("mytasks")}>
+            <SubmitBody task={st} onSubmit={() => submitProof(submitClaimId)} />
+          </Sheet>
+        </>
+      );
+      break;
+    }
     case "submitted": body = (
       <div className="screen"><TopBar title="Submitted" /><div className="scrollarea"><div className="content">
         <div className="center-icon">&#10003;</div>
@@ -255,7 +267,6 @@ function ClaimedScreen({ task, minutes, text, onGo, notify }: { task: Task; minu
 function MyTasksScreen({ tab, setTab, claims, identities, onSubmit }: {
   tab: MyTab; setTab: (t: MyTab) => void; claims: Claim[]; identities: Identity[]; onSubmit: (id: string) => void;
 }) {
-  const [open, setOpen] = useState<string | null>(null);
   const title = (c: Claim) => fixtures.tasks.find((t) => t.id === c.taskId)?.title ?? "Task";
   const email = (c: Claim) => identities.find((i) => i.id === c.identityId)?.email ?? "";
   const list = useMemo(() => claims.filter((c) =>
@@ -275,14 +286,20 @@ function MyTasksScreen({ tab, setTab, claims, identities, onSubmit }: {
             <Card key={c.id}>
               <h3>{title(c)}</h3>
               <p className="muted">{email(c)}</p>
-              {c.status === "claimed" ? (<>
+              {c.status === "claimed" && t ? (<>
+                <div className="info-cell white" style={{ marginTop: 10 }}>
+                  <span className="info-label">Task site &#8599;</span>
+                  <span className="info-value"><a href={t.siteUrl} target="_blank" rel="noreferrer noopener" title={t.siteUrl}>{t.siteUrl.replace("https://", "")}</a></span>
+                </div>
                 <div className="row"><Countdown minutes={c.minutesLeft ?? 0} /><Button onClick={() => onSubmit(c.id)}>Submit proof</Button></div>
-                {t ? <div className="linkrow">Task site: <a href={t.siteUrl} target="_blank" rel="noreferrer noopener">{t.siteUrl.replace("https://", "")} &#8599;</a></div> : null}
-                {t?.keywords.length ? <Chips items={t.keywords} /> : null}
-                {c.assignedText ? (<>
-                  <button className="expander" onClick={() => setOpen(open === c.id ? null : c.id)}>{open === c.id ? "Hide pitch" : "Show my pitch"}</button>
-                  {open === c.id ? (<><div className="pitch">{c.assignedText}</div><div className="row"><span /><CopyButton text={c.assignedText} /></div></>) : null}
-                </>) : null}
+                <div className="task-text">
+                  {t.keywords.length ? (<><div className="section-label">Keywords</div><Chips items={t.keywords} /></>) : null}
+                  {c.assignedText ? (<>
+                    <textarea className="script-box" readOnly aria-label="Script to use" rows={Math.min(9, Math.ceil(c.assignedText.length / 38))} value={c.assignedText} />
+                    <div className="row"><span /><CopyButton text={c.assignedText} /></div>
+                  </>) : null}
+                  {!t.keywords.length && !c.assignedText ? <p className="hint" style={{ marginTop: 12 }}>You are free to use your own script.</p> : null}
+                </div>
               </>) : null}
               {c.status === "under_review" ? (<><p>Submitted {c.submittedLabel} &middot; waiting for admin review</p><div className="row"><StatusPill tone="teal">Under review</StatusPill></div></>) : null}
               {(c.status === "approved" || c.status === "partial") ? (<>
@@ -301,8 +318,8 @@ function MyTasksScreen({ tab, setTab, claims, identities, onSubmit }: {
   );
 }
 
-function SubmitScreen({ task, onBack, onSubmit }: { task: Task; onBack: () => void; onSubmit: () => void }) {
-  const [file, setFile] = useState(false); const [link, setLink] = useState(""); const [note, setNote] = useState(""); const [err, setErr] = useState("");
+function SubmitBody({ task, onSubmit }: { task: Task; onSubmit: () => void }) {
+  const [file, setFile] = useState<File | null>(null); const [link, setLink] = useState(""); const [note, setNote] = useState(""); const [err, setErr] = useState("");
   const needsLink = task.proofType === "screenshot_link";
   const go = () => {
     if (!file) return setErr("Attach a screenshot first.");
@@ -310,16 +327,14 @@ function SubmitScreen({ task, onBack, onSubmit }: { task: Task; onBack: () => vo
     onSubmit();
   };
   return (
-    <div className="screen"><TopBar title="Submit proof" onBack={onBack} /><div className="scrollarea"><div className="content">
-      <p className="muted" style={{ fontSize: 13 }}>Upload a screenshot proving you completed the task. JPG or PNG, up to 5 MB.</p>
-      <FileUpload label="Tap to upload screenshot" filled={file} onPick={() => setFile(true)} />
+    <>
+      <p className="muted" style={{ fontSize: 13, marginTop: 0 }}>Upload a screenshot proving you completed "{task.title}". JPG, PNG or WebP, up to 5 MB.</p>
+      <FileUpload label="Tap to upload screenshot" onFile={(f) => { setFile(f); setErr(""); }} />
       {needsLink ? <Field label="Link (required)"><Input value={link} onChange={(e) => setLink(e.target.value)} placeholder="https://" /></Field> : null}
-      <Field label={task.proofType === "screenshot_note" ? "Note (recommended: mention the features you highlighted)" : "Note (optional)"}>
-        <Textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Anything the reviewer should know" />
-      </Field>
-      {err ? <div className="field-error" role="alert">{err}</div> : null}
-      <Button variant="primary" block style={{ marginTop: 14 }} onClick={go}>Submit for review</Button>
-    </div></div></div>
+      <Field label="Note (optional)"><Textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Anything the reviewer should know" /></Field>
+      {err ? <div className="field-error" role="alert" style={{ marginBottom: 8 }}>{err}</div> : null}
+      <Button variant="primary" block onClick={go}>Submit for review</Button>
+    </>
   );
 }
 

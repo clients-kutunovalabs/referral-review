@@ -26,7 +26,6 @@ function Swatches({ group, against }: { group: Record<string, string>; against?:
 
 export function DesignSystem() {
   const [tab, setTab] = useState("a");
-  const [up, setUp] = useState(false);
   return (
     <main className="ds">
       <h1>Design system</h1>
@@ -74,7 +73,7 @@ export function DesignSystem() {
         <Field label="With error" error="This field is required."><Input defaultValue="oops" /></Field>
         <Field label="Textarea"><Textarea rows={3} placeholder="Note" /></Field>
         <Field label="Select"><Select><option>Screenshot only</option><option>Screenshot + link</option></Select></Field>
-        <FileUpload label="Tap to upload screenshot" filled={up} onPick={() => setUp(!up)} />
+        <FileUpload label="Tap to upload screenshot" onFile={() => undefined} />
       </div>
 
       <h2>Cards, rows, chips</h2>

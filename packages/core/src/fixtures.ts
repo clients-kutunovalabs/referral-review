@@ -4,6 +4,12 @@ import type {
   AdminMember, AdminUserRow, Claim, Identity, PayoutRequest, ReviewQueueItem, Role, Task, Wallet
 } from "./contracts";
 
+export const pitchPool: string[] = [
+  "Hi Dr. Rao, I help clinics cut no-shows with automatic appointment reminders. Can I show you a 10-minute demo this week?",
+  "Hello, quick question: how do you keep patient records today? Our CRM puts them in one place and has a free 14-day trial.",
+  "Hi, we're helping clinics in your area save 5 hours a week on scheduling. Would a short call on Thursday work?"
+];
+
 export const tasks: Task[] = [
   {
     id: "t1",
@@ -54,6 +60,39 @@ export const tasks: Task[] = [
   }
 ];
 
+tasks.push(
+  {
+    id: "t4",
+    title: "Walk a prospect through the pricing page",
+    description: "Explain the pricing page to a prospect in your own words and screenshot the conversation.",
+    siteUrl: "https://kutunovalabs.com/pricing",
+    reward: rupees(30),
+    slotsTotal: 50,
+    slotsRemaining: 21,
+    timerMinutes: 20,
+    proofType: "screenshot",
+    status: "active",
+    keywords: ["simple pricing", "no setup fee"],
+    textMode: "keywords",
+    maxClaimsPerAccount: null
+  },
+  {
+    id: "t5",
+    title: "Send the intro script to a lead",
+    description: "Send the provided script to a new lead on WhatsApp or email and screenshot it.",
+    siteUrl: "https://kutunovalabs.com/intro",
+    reward: rupees(25),
+    slotsTotal: 80,
+    slotsRemaining: 60,
+    timerMinutes: 25,
+    proofType: "screenshot",
+    status: "active",
+    keywords: [],
+    textMode: "manual_pool",
+    maxClaimsPerAccount: null
+  }
+);
+
 export const identities: Identity[] = [
   { id: "i1", email: "priya@gmail.com", isPrimary: true, earned: rupees(310) },
   { id: "i2", email: "priya.sales@outlook.com", isPrimary: false, earned: rupees(110) }
@@ -71,6 +110,9 @@ export const activeClaim: Claim = {
 
 export const claims: Claim[] = [
   activeClaim,
+  { id: "c6", taskId: "t2", identityId: "i2", status: "claimed", minutesLeft: 14 },
+  { id: "c7", taskId: "t4", identityId: "i1", status: "claimed", minutesLeft: 11 },
+  { id: "c8", taskId: "t5", identityId: "i1", status: "claimed", minutesLeft: 22, assignedText: pitchPool[1] },
   { id: "c2", taskId: "t2", identityId: "i1", status: "under_review", submittedLabel: "2 hours ago" },
   { id: "c3", taskId: "t3", identityId: "i2", status: "approved", outcome: 100, credited: rupees(60), reviewerNote: "Email sent, screenshot clear." },
   { id: "c4", taskId: "t2", identityId: "i1", status: "partial", outcome: 50, credited: rupees(10), reviewerNote: "Only two of three signups visible." },
@@ -135,10 +177,4 @@ export const members: AdminMember[] = [
   { id: "m1", name: "Hrishabh (owner)", isOwner: true, roleIds: ["role-owner"] },
   { id: "m2", name: "Anil", isOwner: false, roleIds: ["role-payments"] },
   { id: "m3", name: "Sneha", isOwner: false, roleIds: ["role-tasks", "role-reviewer"] }
-];
-
-export const pitchPool: string[] = [
-  "Hi Dr. Rao, I help clinics cut no-shows with automatic appointment reminders. Can I show you a 10-minute demo this week?",
-  "Hello, quick question: how do you keep patient records today? Our CRM puts them in one place and has a free 14-day trial.",
-  "Hi, we're helping clinics in your area save 5 hours a week on scheduling. Would a short call on Thursday work?"
 ];
