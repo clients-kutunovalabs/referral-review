@@ -205,9 +205,9 @@ function DetailBody({ task, identities, identityId, setIdentityId, claims, logge
       <h3 style={{ fontSize: 17, margin: "0 0 6px", fontFamily: "var(--font-body)", fontWeight: 500 }}>{task.title}</h3>
       <p className="note-text" style={{ margin: 0 }}>{task.description}</p>
       <div className="info-grid">
-        <div className="info-cell plain">
-          <span className="info-label">Task site</span>
-          <span className="info-value"><a href={task.siteUrl} target="_blank" rel="noreferrer noopener" title={task.siteUrl}>{task.siteUrl.replace("https://", "")} &#8599;</a></span>
+        <div className="info-cell neutral">
+          <span className="info-label">Task site &#8599;</span>
+          <span className="info-value"><a href={task.siteUrl} target="_blank" rel="noreferrer noopener" title={task.siteUrl}>{task.siteUrl.replace("https://", "")}</a></span>
         </div>
         <div className="info-cell amber">
           <span className="info-label">Time limit</span>
