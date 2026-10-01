@@ -10,6 +10,8 @@ export const pitchPool: string[] = [
   "Hi, we're helping clinics in your area save 5 hours a week on scheduling. Would a short call on Thursday work?"
 ];
 
+const fromNow = (hours: number): string => new Date(Date.now() + hours * 3_600_000).toISOString();
+
 export const tasks: Task[] = [
   {
     id: "t1",
@@ -21,6 +23,7 @@ export const tasks: Task[] = [
     slotsTotal: 100,
     slotsRemaining: 32,
     timerMinutes: 30,
+    activeUntil: fromNow(24 * 9),
     proofType: "screenshot_note",
     status: "active",
     keywords: ["appointment reminders", "patient records", "free 14-day trial"],
@@ -36,6 +39,7 @@ export const tasks: Task[] = [
     slotsTotal: null,
     slotsRemaining: null,
     timerMinutes: 15,
+    activeUntil: null,
     proofType: "screenshot",
     status: "active",
     keywords: [],
@@ -51,6 +55,7 @@ export const tasks: Task[] = [
     slotsTotal: 20,
     slotsRemaining: 4,
     timerMinutes: 45,
+    activeUntil: fromNow(5.4),
     proofType: "screenshot_link",
     status: "closing_soon",
     keywords: ["pricing", "onboarding support"],
@@ -70,6 +75,7 @@ tasks.push(
     slotsTotal: 50,
     slotsRemaining: 21,
     timerMinutes: 20,
+    activeUntil: fromNow(24 * 3),
     proofType: "screenshot",
     status: "active",
     keywords: ["simple pricing", "no setup fee"],
@@ -85,6 +91,7 @@ tasks.push(
     slotsTotal: 80,
     slotsRemaining: 60,
     timerMinutes: 25,
+    activeUntil: fromNow(24 * 30),
     proofType: "screenshot",
     status: "active",
     keywords: [],
@@ -92,6 +99,23 @@ tasks.push(
     maxClaimsPerAccount: null
   }
 );
+
+tasks.push({
+  id: "t6",
+  title: "Follow-up call script for warm leads",
+  description: "Call a warm lead using the script and screenshot the call log.",
+  siteUrl: "https://kutunovalabs.com/calls",
+  reward: rupees(45),
+  slotsTotal: 40,
+  slotsRemaining: 0,
+  timerMinutes: 30,
+  activeUntil: fromNow(-2),
+  proofType: "screenshot",
+  status: "closed",
+  keywords: [],
+  textMode: "none",
+  maxClaimsPerAccount: null
+});
 
 export const identities: Identity[] = [
   { id: "i1", email: "priya@gmail.com", isPrimary: true, earned: rupees(310) },

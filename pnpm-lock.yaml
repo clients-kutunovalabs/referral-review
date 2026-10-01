@@ -70,6 +70,10 @@ importers:
       '@rr/money':
         specifier: workspace:*
         version: link:../money
+    devDependencies:
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.4)
 
   packages/db: {}
 

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { fixtures, type Claim, type Identity, type Task } from "@rr/core";
+import { activeTill, fixtures, type Claim, type Identity, type Task } from "@rr/core";
 import { formatRupees, parseRupees, rupees, type Paise } from "@rr/money";
 import {
   BottomNav, Button, Card, Chips, CopyButton, Countdown, EmptyState, Field, FileUpload, Input, Select,
@@ -192,16 +192,21 @@ function BoardScreen({ identity, onIdentity, onOpen }: { identity: Identity; onI
     <div className="screen">
       <TopBar title="Tasks" right={<button className="identity-chip" onClick={onIdentity} aria-label="Switch email">{identity.email} &#9662;</button>} />
       <div className="scrollarea"><div className="content">
-        {fixtures.tasks.map((t) => (
-          <Card key={t.id} onClick={() => onOpen(t.id)}>
-            <h3>{t.title}</h3>
-            <p>Reward {formatRupees(t.reward)} &middot; {t.slotsTotal === null ? "unlimited slots" : `${t.slotsRemaining} of ${t.slotsTotal} slots left`}</p>
-            <div className="row">
-              <StatusPill tone={t.status === "closing_soon" ? "amber" : "teal"}>{t.status === "closing_soon" ? "closing soon" : `${t.timerMinutes} min timer`}</StatusPill>
-              <Button>View</Button>
-            </div>
-          </Card>
-        ))}
+        {fixtures.tasks.map((t) => {
+          const till = activeTill(t.activeUntil);
+          const closed = till.kind === "closed" || t.status === "closed" || t.status === "removed";
+          const tone = closed ? "coral" : till.kind === "left" ? "amber" : "teal";
+          return (
+            <Card key={t.id} {...(closed ? {} : { onClick: () => onOpen(t.id) })}>
+              <h3>{t.title}</h3>
+              <p>Reward {formatRupees(t.reward)} &middot; {t.slotsTotal === null ? "unlimited slots" : `${t.slotsRemaining} of ${t.slotsTotal} slots left`}</p>
+              <div className="row tight">
+                <StatusPill tone={tone}>{closed ? "Closed" : till.kind === "none" ? "Active · no end date" : `Active till: ${till.label}`}</StatusPill>
+                <Button compact disabled={closed}>View</Button>
+              </div>
+            </Card>
+          );
+        })}
       </div></div>
     </div>
   );

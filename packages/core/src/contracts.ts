@@ -24,7 +24,8 @@ export interface Task {
   reward: Paise;
   slotsTotal: number | null; // null = unlimited
   slotsRemaining: number | null;
-  timerMinutes: number;
+  timerMinutes: number; // time limit once claimed
+  activeUntil: string | null; // ISO date-time the task stops accepting claims; null = no end date
   proofType: ProofType;
   status: TaskStatus;
   keywords: string[];

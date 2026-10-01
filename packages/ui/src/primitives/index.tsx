@@ -11,9 +11,10 @@ type BtnProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: "default" | "primary" | "danger";
   block?: boolean;
   small?: boolean;
+  compact?: boolean;
 };
-export function Button({ variant = "default", block, small, className = "", type = "button", ...rest }: BtnProps) {
-  const cls = ["btn", variant === "default" ? "" : variant, block ? "block" : "", small ? "sm" : "", className].filter(Boolean).join(" ");
+export function Button({ variant = "default", block, small, compact, className = "", type = "button", ...rest }: BtnProps) {
+  const cls = ["btn", variant === "default" ? "" : variant, block ? "block" : "", small ? "sm" : "", compact ? "compact" : "", className].filter(Boolean).join(" ");
   return <button type={type} className={cls} {...rest} />;
 }
 

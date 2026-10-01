@@ -205,7 +205,7 @@ export function AdminApp({ initialScreen = "dashboard", viewerRoleIds = ["role-o
 /* ---------- Screens ---------- */
 
 function NewTaskScreen({ onBack, onPublish }: { onBack: () => void; onPublish: () => void }) {
-  const [f, setF] = useState({ title: "", instructions: "", siteUrl: "", proof: "screenshot", reward: "", slots: "", timer: "", cap: "" });
+  const [f, setF] = useState({ title: "", instructions: "", siteUrl: "", proof: "screenshot", reward: "", slots: "", timer: "", cap: "", till: "" });
   const [mode, setMode] = useState<TextMode>("none");
   const [keywords, setKeywords] = useState<string[]>([]); const [kw, setKw] = useState("");
   const [pool, setPool] = useState("");
@@ -223,6 +223,7 @@ function NewTaskScreen({ onBack, onPublish }: { onBack: () => void; onPublish: (
     if (!/^\d+(\.\d{1,2})?$/.test(f.reward)) e.push("Reward must be an amount in rupees.");
     if (f.slots && !/^\d+$/.test(f.slots)) e.push("Total slots must be a whole number or blank.");
     if (!/^\d+$/.test(f.timer) || Number(f.timer) < 1) e.push("Timer must be minutes, 1 or more.");
+    if (f.till && Date.parse(f.till) <= Date.now()) e.push("Active till must be in the future.");
     if (mode === "keywords" && keywords.length === 0) e.push("Add at least one keyword.");
     if (mode === "manual_pool" && pitches.length === 0) e.push("Add at least one pitch.");
     if (mode === "ai_generated") {
@@ -247,6 +248,7 @@ function NewTaskScreen({ onBack, onPublish }: { onBack: () => void; onPublish: (
       <Field label="Reward amount (₹)"><Input value={f.reward} onChange={set("reward")} placeholder="40" inputMode="decimal" /></Field>
       <Field label="Total slots" hint="Leave blank for unlimited"><Input value={f.slots} onChange={set("slots")} placeholder="100" inputMode="numeric" /></Field>
       <Field label="Timer duration (minutes)"><Input value={f.timer} onChange={set("timer")} placeholder="30" inputMode="numeric" /></Field>
+      <Field label="Active till (optional)" hint="Date and time the task stops accepting claims. Blank = no end date."><Input type="datetime-local" value={f.till} onChange={set("till")} /></Field>
       <Field label="Max claims per account" hint="Across all of one person's emails. Blank = unlimited."><Input value={f.cap} onChange={set("cap")} placeholder="e.g. 3" inputMode="numeric" /></Field>
 
       <hr className="divider" />

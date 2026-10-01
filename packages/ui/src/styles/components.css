@@ -18,6 +18,7 @@
 .card p.small { font-size: var(--text-sm); }
 .row { display: flex; justify-content: space-between; align-items: center; margin-top: var(--space-4); flex-wrap: wrap; gap: var(--space-2); }
 
+.row.tight { margin-top: var(--space-2); }
 .pill { font-size: var(--text-xs); padding: 3px 9px; border-radius: var(--radius-pill); font-weight: var(--weight-medium); white-space: nowrap; display: inline-block; }
 .pill.teal { background: var(--teal-bg); color: var(--teal); }
 .pill.amber { background: var(--amber-bg); color: var(--amber); }
@@ -61,6 +62,7 @@
 .btn.primary:hover:not(:disabled) { background: #33332f; }
 .btn.danger { color: var(--coral); border-color: var(--coral); }
 .btn.block { width: 100%; padding: 12px; display: block; }
+.btn.compact { min-height: 36px; padding: 4px 16px; }
 .btn.sm { min-height: 36px; padding: 3px 9px; font-size: var(--text-xs); }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; }
 
