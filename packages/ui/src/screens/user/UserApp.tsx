@@ -458,7 +458,7 @@ function WalletScreen({ identities, earned, withdrawn, inProcess, available, pay
       <Card>
         <div className="stat"><span>Total earned</span><span>{formatRupees(earned)}</span></div>
         <div className="stat"><span>Total withdrawn</span><span>{formatRupees(withdrawn)}</span></div>
-        {inProcess > 0n ? <div className="stat" style={{ color: "var(--amber)" }}><span>Processing</span><span>{formatRupees(inProcess)}</span></div> : null}
+        {inProcess > 0n ? <div className="stat" style={{ color: "var(--amber)" }}><span>Withdrawal in process</span><span>{formatRupees(inProcess)}</span></div> : null}
         <div className="stat last"><span>Withdrawable balance</span><span>{formatRupees(available)}</span></div>
         <button className="expander" aria-expanded={open} onClick={() => setOpen(!open)}>{open ? "Hide" : "Show"} earnings by email</button>
         {open ? identities.map((i) => <div key={i.id} className="stat"><span>{i.email}</span><span>{formatRupees(i.earned)}</span></div>) : null}
@@ -505,20 +505,11 @@ function PayoutScreen({ available, inProcess, payouts, onRequest, onFlagged, onD
       <Button variant="primary" block disabled={pending} onClick={submit}>Request payout</Button>
       <h2 className="section-title">Payout requests</h2>
       {payouts.length === 0 ? <EmptyState>No payout requests yet.</EmptyState> : null}
-      {(["pending", "paid"] as const).map((status) => {
-        const group = payouts.filter((p) => p.status === status);
-        if (group.length === 0) return null;
-        return (
-          <div key={status} aria-label={status === "pending" ? "Processing" : "Completed"}>
-            <p className="section-label" style={{ marginBottom: 0 }}>{status === "pending" ? "Processing" : "Completed"}</p>
-            {group.map((p) => (
-              <TxRow key={p.id} id={`po-${p.id}`} at={p.at ?? ""} title="Payout request" sub={p.upiMasked} amount={formatRupees(p.amount)}
-                badge={<StatusPill tone={status === "paid" ? "green" : "amber"}>{status === "paid" ? "Paid" : "Processing"}</StatusPill>}
-                details={payoutDetails(p)} open={openTx === p.id} onToggle={() => setOpenTx(openTx === p.id ? null : p.id)} />
-            ))}
-          </div>
-        );
-      })}
+      {[...payouts].sort((a, b) => ((a.at ?? "") < (b.at ?? "") ? 1 : -1)).map((p) => (
+        <TxRow key={p.id} id={`po-${p.id}`} at={p.at ?? ""} title="Payout request" sub={p.upiMasked} amount={formatRupees(p.amount)}
+          badge={<StatusPill tone={p.status === "paid" ? "green" : "amber"}>{p.status === "paid" ? "Paid" : "Processing"}</StatusPill>}
+          details={payoutDetails(p)} open={openTx === p.id} onToggle={() => setOpenTx(openTx === p.id ? null : p.id)} />
+      ))}
       <p className="hint" style={{ marginTop: 20 }}>Demo: enter <span className="mono">taken@upi</span> to see the "UPI belongs to another account" state.</p>
       {pending ? <p className="hint">Demo: <button className="expander" style={{ padding: 0, minHeight: 0 }} onClick={onDemoPaid}>admin marks the request as paid</button></p> : null}
     </div></div></div>
