@@ -93,7 +93,7 @@ export function UserApp({ initialScreen = "board", initialTab = "active", logged
         </Sheet>
       </>
     ); break;
-    case "claimed": body = <ClaimedScreen task={task} minutes={task.timerMinutes} onGo={() => { setTab("active"); show("mytasks"); }} text={claims.find((c) => c.taskId === task.id && c.identityId === identityId)?.assignedText} notify={notify} />; break;
+    case "claimed": body = <ClaimedScreen minutes={task.timerMinutes} onGo={() => { setTab("active"); show("mytasks"); }} onMore={() => show("board")} />; break;
     case "mytasks": body = (
       <MyTasksScreen tab={tab} setTab={setTab} claims={claims} identities={identities}
         onSubmit={(id) => { setSubmitClaimId(id); show("submit"); }} />
@@ -251,20 +251,14 @@ function DetailBody({ task, identities, identityId, setIdentityId, claims, logge
   );
 }
 
-function ClaimedScreen({ task, minutes, text, onGo, notify }: { task: Task; minutes: number; text: string | undefined; onGo: () => void; notify: (m: string) => void }) {
+function ClaimedScreen({ minutes, onGo, onMore }: { minutes: number; onGo: () => void; onMore: () => void }) {
   return (
-    <div className="screen"><TopBar title="Task claimed" /><div className="scrollarea"><div className="content">
+    <div className="screen"><TopBar title="Task accepted" /><div className="scrollarea"><div className="content">
       <div className="center-icon">&#10003;</div>
-      <p className="center-text">Task added to your list. Complete it within {minutes} minutes.</p>
-      {text ? (
-        <Card>
-          <h3>Your pitch</h3>
-          <div className="pitch">{text}</div>
-          <div className="row"><span className="muted">{task.textMode === "ai_generated" ? "Written for you" : "Assigned to you"}</span><CopyButton text={text} /></div>
-        </Card>
-      ) : null}
-      <p className="muted" style={{ textAlign: "center" }}>Find it under My tasks &rarr; Active</p>
-      <Button block style={{ marginTop: 20 }} onClick={() => { notify("Task added"); onGo(); }}>Go to My tasks</Button>
+      <p className="center-text" style={{ fontWeight: 500 }}>Task accepted</p>
+      <p className="center-text note-text">Complete it within {minutes} minutes. Find it under My tasks &rarr; Active.</p>
+      <Button variant="primary" block style={{ marginTop: 20 }} onClick={onGo}>Go to My tasks</Button>
+      <Button block style={{ marginTop: 8 }} onClick={onMore}>Select more tasks</Button>
     </div></div></div>
   );
 }

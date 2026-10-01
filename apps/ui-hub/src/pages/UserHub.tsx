@@ -8,7 +8,7 @@ const JUMPS: Record<string, Jump & { label: string }> = {
   register: { screen: "register", label: "Create account" },
   board: { screen: "board", label: "Task board" },
   detail: { screen: "detail", label: "Task detail (overlay)" },
-  claimed: { screen: "claimed", label: "Task claimed (+ pitch)" },
+  claimed: { screen: "claimed", label: "Task accepted" },
   active: { screen: "mytasks", tab: "active", label: "My tasks: Active" },
   review: { screen: "mytasks", tab: "review", label: "My tasks: Under review" },
   completed: { screen: "mytasks", tab: "completed", label: "My tasks: Completed" },
