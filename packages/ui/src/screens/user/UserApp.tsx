@@ -411,8 +411,7 @@ function WalletScreen({ identities, earned, withdrawn, inProcess, available, pay
         ["Result", e.outcome === 100 ? "Approved 100%" : `Partial approval ${e.outcome}%`],
         ["Task amount", formatRupees(e.reward)],
         ["Added to wallet", e.outcome === 100 ? formatRupees(e.credited) : `${formatRupees(e.credited)} of ${formatRupees(e.reward)}`],
-        ["Email used", email(e.identityId)],
-        ...(e.reviewerNote ? [["Reviewer note", e.reviewerNote] as [string, string]] : [])
+        ["Email used", email(e.identityId)]
       ]
     })),
     ...payouts.filter((p) => p.status === "paid").map((p): Tx => ({
@@ -471,11 +470,20 @@ function PayoutScreen({ available, inProcess, payouts, onRequest, onFlagged, onD
       <Button variant="primary" block disabled={pending} onClick={submit}>Request payout</Button>
       <h2 className="section-title">Payout requests</h2>
       {payouts.length === 0 ? <EmptyState>No payout requests yet.</EmptyState> : null}
-      {payouts.map((p) => (
-        <TxRow key={p.id} id={`po-${p.id}`} at={p.at ?? ""} title="Payout request" sub={p.upiMasked} amount={formatRupees(p.amount)}
-          badge={<StatusPill tone={p.status === "paid" ? "green" : "amber"}>{p.status === "paid" ? "Paid" : "In process"}</StatusPill>}
-          details={payoutDetails(p)} open={openTx === p.id} onToggle={() => setOpenTx(openTx === p.id ? null : p.id)} />
-      ))}
+      {(["pending", "paid"] as const).map((status) => {
+        const group = payouts.filter((p) => p.status === status);
+        if (group.length === 0) return null;
+        return (
+          <div key={status} aria-label={status === "pending" ? "In process" : "Completed"}>
+            <p className="section-label" style={{ marginBottom: 0 }}>{status === "pending" ? "In process" : "Completed"}</p>
+            {group.map((p) => (
+              <TxRow key={p.id} id={`po-${p.id}`} at={p.at ?? ""} title="Payout request" sub={p.upiMasked} amount={formatRupees(p.amount)}
+                badge={<StatusPill tone={status === "paid" ? "green" : "amber"}>{status === "paid" ? "Paid" : "In process"}</StatusPill>}
+                details={payoutDetails(p)} open={openTx === p.id} onToggle={() => setOpenTx(openTx === p.id ? null : p.id)} />
+            ))}
+          </div>
+        );
+      })}
       <p className="hint" style={{ marginTop: 20 }}>Demo: enter <span className="mono">taken@upi</span> to see the "UPI belongs to another account" state.</p>
       {pending ? <p className="hint">Demo: <button className="expander" style={{ padding: 0, minHeight: 0 }} onClick={onDemoPaid}>admin marks the request as paid</button></p> : null}
     </div></div></div>
