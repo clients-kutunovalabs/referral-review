@@ -141,13 +141,25 @@ export function UserApp({ initialScreen = "board", initialTab = "active", logged
         onFlagged={() => show("payoutFlagged")}
         onDemoPaid={() => { setPayouts(payouts.map((p) => (p.status === "pending" ? { ...p, status: "paid", paidBy: "Anil (Payments)", paidAt: new Date().toISOString() } : p))); notify("Demo: admin marked it paid"); }} />
     ); break;
-    case "payoutSent": body = (
-      <div className="screen"><TopBar title="Request sent" /><div className="scrollarea"><div className="content">
-        <div className="center-icon">&#10003;</div>
-        <p className="center-text">Payout request submitted. We'll settle it manually within a few days.</p>
-        <Button block style={{ marginTop: 20 }} onClick={() => show("payout")}>Back to payout</Button>
-      </div></div></div>
-    ); break;
+    case "payoutSent": {
+      const req = payouts.find((p) => p.status === "pending");
+      body = (
+        <div className="screen"><TopBar title="Request sent" /><div className="scrollarea"><div className="content">
+          <div className="center-icon">&#10003;</div>
+          <p className="center-text" style={{ fontWeight: 500 }}>Payout requested</p>
+          {req ? (
+            <Card>
+              <div className="stat"><span>Amount</span><span>{formatRupees(req.amount)}</span></div>
+              <div className="stat"><span>UPI ID</span><span>{req.upiMasked}</span></div>
+              <div className="stat last"><span>Status</span><StatusPill tone="amber">In process</StatusPill></div>
+            </Card>
+          ) : null}
+          <p className="center-text note-text">That amount is blocked from your balance now. We settle it manually within a few days. Once it is paid it moves to Completed and shows in your wallet transactions.</p>
+          <Button variant="primary" block style={{ marginTop: 20 }} onClick={() => show("payout")}>View payout requests</Button>
+        </div></div></div>
+      );
+      break;
+    }
     case "payoutFlagged": body = (
       <div className="screen"><TopBar title="Payout rejected" onBack={() => show("payout")} /><div className="scrollarea"><div className="content">
         <Card alert><p style={{ color: "var(--coral)" }}>This UPI ID is already linked to another account. Enter a different UPI ID to continue.</p></Card>

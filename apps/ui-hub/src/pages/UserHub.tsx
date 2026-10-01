@@ -19,7 +19,7 @@ const JUMPS: Record<string, Jump & { label: string }> = {
   submitted: { screen: "submitted", label: "Submitted" },
   wallet: { screen: "wallet", label: "Wallet + transactions" },
   payout: { screen: "payout", label: "Payout (amount + UPI)" },
-  payoutSent: { screen: "payoutSent", label: "Payout requested" },
+  payoutSent: { screen: "payoutSent", scenario: "inProcess", label: "Payout requested" },
   payoutFlagged: { screen: "payoutFlagged", label: "Payout: UPI flagged" },
   identities: { screen: "identities", label: "My emails" },
   walletNone: { screen: "wallet", scenario: "none", label: "Wallet: never withdrawn" },
