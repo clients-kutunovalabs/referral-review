@@ -4,7 +4,7 @@ import {
 } from "@rr/core";
 import { OUTCOME_PERCENTS, formatRupees, outcomeAmount, type OutcomePercent } from "@rr/money";
 import {
-  BottomNav, Button, Card, Chips, CopyButton, EmptyState, Field, FileUpload, Input, ListRow, Select,
+  BottomNav, type IconName, Button, Card, Chips, CopyButton, EmptyState, Field, FileUpload, Input, ListRow, Select,
   StatusPill, Tabs, Textarea, Toast, TopBar
 } from "../../primitives";
 import { AdminTicketChat, AdminTicketList, type SupportTab } from "./SupportScreens";
@@ -25,13 +25,13 @@ const NEEDS: Partial<Record<AdminScreen, PermissionKey[]>> = {
   users: ["user.manage", "role.manage"], userdetail: ["user.manage"],
   tickets: ["ticket.manage"], ticket: ["ticket.manage"]
 };
-const NAV_DEF: { id: AdminScreen; tab: string; label: string }[] = [
-  { id: "dashboard", tab: "dashboard", label: "Home" },
-  { id: "tasks", tab: "tasks", label: "Tasks" },
-  { id: "reviewqueue", tab: "review", label: "Review" },
-  { id: "payouts", tab: "payouts", label: "Payouts" },
-  { id: "users", tab: "users", label: "People" },
-  { id: "tickets", tab: "support", label: "Support" }
+const NAV_DEF: { id: AdminScreen; tab: string; label: string; icon: IconName }[] = [
+  { id: "dashboard", tab: "dashboard", label: "Home", icon: "home" },
+  { id: "tasks", tab: "tasks", label: "Tasks", icon: "tasks" },
+  { id: "reviewqueue", tab: "review", label: "Review", icon: "review" },
+  { id: "payouts", tab: "payouts", label: "Payouts", icon: "payout" },
+  { id: "users", tab: "users", label: "People", icon: "people" },
+  { id: "tickets", tab: "support", label: "Support", icon: "support" }
 ];
 const TAB_OF: Partial<Record<AdminScreen, string>> = {
   dashboard: "dashboard", tasks: "tasks", newtask: "tasks", taskdetail: "tasks", removeconfirm: "tasks",
@@ -75,7 +75,7 @@ export function AdminApp({ initialScreen = "dashboard", viewerRoleIds = ["role-o
   const perms = new Set(roles.filter((r) => viewerRoleIds.includes(r.id)).flatMap((r) => r.permissions));
   const can = (s: AdminScreen) => { const n = NEEDS[s]; return !n || n.some((p) => perms.has(p)); };
   const navItems = NAV_DEF.filter((n) => can(n.id)).map((n) => ({
-    id: n.tab, label: n.label, ...(n.id === "reviewqueue" && queue.length ? { badge: queue.length } : {}),
+    id: n.tab, label: n.label, icon: n.icon, ...(n.id === "reviewqueue" && queue.length ? { badge: queue.length } : {}),
     ...(n.id === "tickets" && allTickets.some(needsReply) ? { badge: allTickets.filter(needsReply).length } : {})
   }));
   const show = (s: AdminScreen) => setScreen(s);

@@ -59,7 +59,7 @@ export function resolveTicket(id: string, by: string) {
   patch(id, (x) => {
     if (x.status === "closed") return x;
     const m = msg({ sender: "system", senderName: "System", body: `Marked as resolved by ${by}` });
-    return { ...x, status: "closed", messages: [...x.messages, m], updatedAt: m.at };
+    return { ...x, status: "closed", messages: [...x.messages, m], updatedAt: m.at, resolvedAt: m.at };
   });
 }
 

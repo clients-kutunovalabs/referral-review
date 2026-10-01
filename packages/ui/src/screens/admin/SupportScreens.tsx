@@ -19,7 +19,7 @@ export function AdminTicketList({ tab, setTab, onOpen }: { tab: SupportTab; setT
         {list.map((t) => (
           <ListRow key={t.id} onClick={() => onOpen(t.id)} title={<strong style={{ fontWeight: 500 }}>{t.title}</strong>}
             right={tab === "open" && needsReply(t) ? <StatusPill tone="coral">Needs reply</StatusPill> : <span className="sub">#{t.number}</span>}
-            sub={`${t.customerName} · ${t.assignee ? `Assigned to ${t.assignee}` : "Unassigned"} · ${whenLabel(t.updatedAt)}`} />
+            sub={`${t.customerName} · ${t.assignee ? `Assigned to ${t.assignee}` : "Unassigned"} · ${t.status === "closed" ? `Resolved ${whenLabel(t.resolvedAt ?? t.updatedAt)}` : `Updated ${whenLabel(t.updatedAt)}`}`} />
         ))}
       </div></div>
     </div>

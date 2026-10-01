@@ -234,7 +234,7 @@ export const tickets: Ticket[] = [
   },
   {
     id: "tk1029", number: 1029, title: "Wrong amount credited for a task", status: "closed",
-    customerName: "Priya S.", customerEmail: "priya@gmail.com", assignee: "Anil", createdAt: day(12, 14, 0), updatedAt: day(13, 12, 30),
+    customerName: "Priya S.", customerEmail: "priya@gmail.com", assignee: "Anil", createdAt: day(12, 14, 0), updatedAt: day(13, 12, 30), resolvedAt: day(13, 12, 30),
     messages: [
       { id: "m1", sender: "customer", senderName: "Priya S.", at: day(12, 14, 0), body: "The task said ₹60 but I was credited ₹45." },
       { id: "m2", sender: "system", senderName: "System", at: day(12, 14, 30), body: "Assigned to Anil" },
@@ -244,7 +244,7 @@ export const tickets: Ticket[] = [
   },
   {
     id: "tk1011", number: 1011, title: "How do I add another email?", status: "closed",
-    customerName: "Priya S.", customerEmail: "priya@gmail.com", assignee: "Sneha", createdAt: day(3, 18, 20), updatedAt: day(3, 19, 0),
+    customerName: "Priya S.", customerEmail: "priya@gmail.com", assignee: "Sneha", createdAt: day(3, 18, 20), updatedAt: day(3, 19, 0), resolvedAt: day(3, 19, 0),
     messages: [
       { id: "m1", sender: "customer", senderName: "Priya S.", at: day(3, 18, 20), body: "Where can I add a second email to claim the same task?" },
       { id: "m2", sender: "admin", senderName: "Sneha (Support)", at: day(3, 18, 50), body: "Tap your email at the top of the Tasks page, then My emails, then Add an email. We send one code to confirm it." },

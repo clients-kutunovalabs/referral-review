@@ -165,5 +165,6 @@ export interface Ticket {
   assignee: string | null;
   createdAt: string; // ISO
   updatedAt: string; // ISO
+  resolvedAt?: string; // ISO, set when an admin marks it resolved
   messages: TicketMessage[];
 }

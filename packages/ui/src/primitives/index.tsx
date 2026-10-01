@@ -65,14 +65,37 @@ export function TopBar({ title, onBack, right }: { title: string; onBack?: () =>
   );
 }
 
-export interface NavItem { id: string; label: string; badge?: number }
+export type IconName = "tasks" | "mytasks" | "wallet" | "payout" | "help" | "home" | "review" | "people" | "support";
+
+const ICON_PATHS: Record<IconName, ReactNode> = {
+  tasks: <><path d="M9 6h11M9 12h11M9 18h11" /><path d="M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2" /></>,
+  mytasks: <><rect x="6" y="4" width="12" height="17" rx="2" /><path d="M9 4h6v3H9zM9 12h6M9 16h4" /></>,
+  wallet: <><path d="M4 8V6a2 2 0 0 1 2-2h11v4" /><rect x="4" y="8" width="16" height="12" rx="2" /><circle cx="16" cy="14" r="1" /></>,
+  payout: <><path d="M12 15V4M7 9l5-5 5 5" /><path d="M5 20h14" /></>,
+  help: <><circle cx="12" cy="12" r="9" /><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 1-1 1.7" /><circle cx="12" cy="17" r=".6" /></>,
+  home: <path d="M4 11l8-7 8 7v9a1 1 0 0 1-1 1h-4v-6h-6v6H5a1 1 0 0 1-1-1z" />,
+  review: <><circle cx="12" cy="12" r="9" /><path d="M8 12.5l2.7 2.7L16 9.8" /></>,
+  people: <><circle cx="9" cy="8" r="3.2" /><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6M16 5.2a3 3 0 0 1 0 5.6M18 14.3c1.8.8 3 2.6 3 4.7" /></>,
+  support: <path d="M5 5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-7l-5 4v-4H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z" />
+};
+
+/** Line icon drawn in currentColor, so it follows the text colour of whatever contains it. */
+export function Icon({ name }: { name: IconName }) {
+  return (
+    <svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+      {ICON_PATHS[name]}
+    </svg>
+  );
+}
+
+export interface NavItem { id: string; label: string; badge?: number; icon?: IconName }
 export function BottomNav({ items, active, onSelect }: { items: NavItem[]; active: string; onSelect: (id: string) => void }) {
   return (
     <nav className={`bottomnav${items.length > 5 ? " dense" : ""}`} aria-label="Main">
       {items.map((i) => (
         <button key={i.id} className={`navitem${i.id === active ? " on" : ""}`} aria-current={i.id === active ? "page" : undefined} onClick={() => onSelect(i.id)}>
-          <span className="navdot" />
-          <span>{i.label}{i.badge ? <span className="badge">{i.badge}</span> : null}</span>
+          {i.icon ? <span className="navicon"><Icon name={i.icon} />{i.badge ? <span className="badge">{i.badge}</span> : null}</span> : <span className="navdot" />}
+          <span>{i.label}{!i.icon && i.badge ? <span className="badge">{i.badge}</span> : null}</span>
         </button>
       ))}
     </nav>

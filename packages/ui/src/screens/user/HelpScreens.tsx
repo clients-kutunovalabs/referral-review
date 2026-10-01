@@ -20,7 +20,7 @@ export function HelpScreen({ tab, setTab, onOpen, onCreate }: { tab: HelpTab; se
         {list.length === 0 ? <EmptyState>{tab === "open" ? "No open tickets. Tap Create ticket if you need help." : "No closed tickets yet."}</EmptyState> : null}
         {list.map((t) => (
           <ListRow key={t.id} onClick={() => onOpen(t.id)} title={<strong style={{ fontWeight: 500 }}>{t.title}</strong>}
-            right={<span className="sub">#{t.number}</span>} sub={`Updated ${whenLabel(t.updatedAt)}`} />
+            right={<span className="sub">#{t.number}</span>} sub={t.status === "closed" ? `Resolved ${whenLabel(t.resolvedAt ?? t.updatedAt)}` : `Updated ${whenLabel(t.updatedAt)}`} />
         ))}
       </div></div>
       <div className="screen-footer"><Button variant="primary" block onClick={onCreate}>Create ticket</Button></div>
@@ -61,7 +61,7 @@ export function TicketChatScreen({ ticketId, onBack, onNew }: { ticketId: string
       <div className="ticket-meta">
         <span>#{t.number}</span>
         <StatusPill tone={closed ? "gray" : "teal"}>{closed ? "Resolved" : "Open"}</StatusPill>
-        <span className="muted">{t.assignee ? `Support: ${t.assignee}` : "Waiting for support"}</span>
+        <span className="muted">{closed ? `Resolved ${whenLabel(t.resolvedAt ?? t.updatedAt)}` : t.assignee ? `Support: ${t.assignee}` : "Waiting for support"}</span>
       </div>
       <Conversation messages={t.messages} me="customer" />
       {closed ? (

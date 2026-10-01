@@ -14,11 +14,11 @@ export type UserScreen =
 export type MyTab = "active" | "review" | "completed" | "rejected";
 
 const NAV = [
-  { id: "board", label: "Tasks" },
-  { id: "mytasks", label: "My tasks" },
-  { id: "wallet", label: "Wallet" },
-  { id: "payout", label: "Payout" },
-  { id: "help", label: "Help" }
+  { id: "board", label: "Tasks", icon: "tasks" as const },
+  { id: "mytasks", label: "My tasks", icon: "mytasks" as const },
+  { id: "wallet", label: "Wallet", icon: "wallet" as const },
+  { id: "payout", label: "Payout", icon: "payout" as const },
+  { id: "help", label: "Help", icon: "help" as const }
 ];
 const TAB_OF: Partial<Record<UserScreen, string>> = {
   board: "board", detail: "board", claimed: "board",
