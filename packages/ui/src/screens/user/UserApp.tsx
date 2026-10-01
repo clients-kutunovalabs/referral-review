@@ -285,7 +285,7 @@ function MyTasksScreen({ tab, setTab, claims, identities, onSubmit }: {
           return (
             <Card key={c.id}>
               <h3>{title(c)}</h3>
-              <p className="muted">{email(c)}</p>
+              {c.status !== "under_review" ? <p className="muted">{email(c)}</p> : null}
               {c.status === "claimed" && t ? (<>
                 <div className="info-cell white" style={{ marginTop: 10 }}>
                   <span className="info-label">Task site &#8599;</span>
@@ -301,7 +301,10 @@ function MyTasksScreen({ tab, setTab, claims, identities, onSubmit }: {
                   {!t.keywords.length && !c.assignedText ? <p className="hint" style={{ marginTop: 12 }}>You are free to use your own script.</p> : null}
                 </div>
               </>) : null}
-              {c.status === "under_review" ? (<><p>Submitted {c.submittedLabel} &middot; waiting for admin review</p><div className="row"><StatusPill tone="teal">Under review</StatusPill></div></>) : null}
+              {c.status === "under_review" ? (<>
+                <div className="tagrow"><StatusPill tone="gray">{email(c)}</StatusPill><StatusPill tone="teal">Under review</StatusPill></div>
+                <p className="small" style={{ marginTop: 8 }}>Submitted {c.submittedLabel}</p>
+              </>) : null}
               {(c.status === "approved" || c.status === "partial") ? (<>
                 <p>Paid {formatRupees(c.credited ?? 0n)}{c.status === "partial" ? ` of ${formatRupees(t?.reward ?? 0n)}` : ""} &middot; approved {c.outcome}%{c.reviewerNote ? ` · "${c.reviewerNote}"` : ""}</p>
                 <div className="row"><StatusPill tone={c.status === "approved" ? "green" : "amber"}>{c.status === "approved" ? "Approved" : `Partial · ${c.outcome}%`}</StatusPill></div>

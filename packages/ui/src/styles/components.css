@@ -15,6 +15,7 @@
 .card.alert { border-color: var(--coral); }
 .card h3 { margin: 0 0 var(--space-1); font-size: var(--text-xl); font-weight: var(--weight-medium); font-family: var(--font-body); }
 .card p { margin: 0; font-size: var(--text-md); color: var(--text-secondary); }
+.card p.small { font-size: var(--text-sm); }
 .row { display: flex; justify-content: space-between; align-items: center; margin-top: var(--space-4); flex-wrap: wrap; gap: var(--space-2); }
 
 .pill { font-size: var(--text-xs); padding: 3px 9px; border-radius: var(--radius-pill); font-weight: var(--weight-medium); white-space: nowrap; display: inline-block; }
@@ -45,6 +46,8 @@
 .upload-name small { font-weight: var(--weight-regular); color: var(--text-secondary); font-size: var(--text-sm); }
 .script-box { width: 100%; margin-top: var(--space-3); background: var(--surface-2); line-height: 1.5; resize: none; }
 .task-text .section-label { margin-top: var(--space-6); }
+
+.tagrow { display: flex; flex-wrap: wrap; gap: var(--space-3); margin-top: var(--space-4); }
 
 .chips { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-3); }
 .chip { font-size: var(--text-sm); padding: 4px 10px; border-radius: var(--radius-pill); background: var(--surface-2); border: var(--border-width) solid var(--border-strong); color: var(--text-primary); }
