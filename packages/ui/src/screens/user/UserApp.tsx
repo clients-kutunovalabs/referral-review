@@ -204,9 +204,9 @@ function DetailBody({ task, identities, identityId, setIdentityId, claims, logge
     <>
       <h3 style={{ fontSize: 17, margin: "0 0 6px", fontFamily: "var(--font-body)", fontWeight: 500 }}>{task.title}</h3>
       <p className="note-text" style={{ margin: 0 }}>{task.description}</p>
-      <div className="row" style={{ marginTop: 12 }}>
-        <StatusPill tone="teal">{formatRupees(task.reward)} reward</StatusPill>
-        <StatusPill tone="amber">{task.timerMinutes} min time limit</StatusPill>
+      <div className="price-row">
+        <div className="price"><span className="price-label">Reward</span><span className="price-amount">{formatRupees(task.reward)}</span></div>
+        <StatusPill tone="amber" large>{task.timerMinutes} min time limit</StatusPill>
       </div>
       <div className="linkrow">Task site: <a href={task.siteUrl} target="_blank" rel="noreferrer noopener">{task.siteUrl.replace("https://", "")} &#8599;</a></div>
       <div className="slots-line" style={{ marginTop: 12 }}>

@@ -24,6 +24,12 @@
 .pill.green { background: var(--green-bg); color: var(--green); }
 .pill.gray { background: var(--surface-1); color: var(--text-secondary); border: var(--border-width) solid var(--border); }
 
+.pill.lg { font-size: var(--text-md); padding: 6px 14px; }
+.price-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); margin-top: var(--space-6); flex-wrap: wrap; }
+.price { background: var(--green-bg); color: var(--green); border-radius: var(--radius-md); padding: var(--space-3) var(--space-6); display: flex; flex-direction: column; line-height: 1.1; }
+.price-label { font-size: var(--text-sm); font-weight: var(--weight-medium); }
+.price-amount { font-size: var(--text-price); font-weight: var(--weight-medium); }
+
 .chips { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-3); }
 .chip { font-size: var(--text-sm); padding: 4px 10px; border-radius: var(--radius-pill); background: var(--surface-2); border: var(--border-width) solid var(--border-strong); color: var(--text-primary); }
 .chip.hit { background: var(--green-bg); border-color: var(--green); color: var(--green); }
