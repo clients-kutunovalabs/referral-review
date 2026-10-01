@@ -149,25 +149,23 @@ export const wallet: Wallet = {
 const ago = (hours: number): string => new Date(Date.now() - hours * 3_600_000).toISOString();
 const paidEarlier: PayoutRequest = { id: "p1", who: "You", amount: rupees(250), status: "paid", upiMasked: "pri••@okhdfc", upiFull: "priya@okhdfc", whenLabel: "6 Sep, 2:15 PM", at: "2026-09-06T14:15:00", paidAt: "2026-09-07T17:30:00", paidBy: "Anil (Payments)" };
 
-/** Payout lifecycle scenarios for ui-hub. Wallet numbers are derived: earned - paid - in process. */
+/** Payout lifecycle scenarios for ui-hub. Wallet numbers are derived (see walletTotals): earned - paid - processing. */
 export const payoutScenarios: Record<PayoutScenario, PayoutRequest[]> = {
   /** never withdrawn: all of the earnings are withdrawable */
-  none: [] as PayoutRequest[],
-  /** one old paid payout; the rest is withdrawable (the default demo) */
-  default: [paidEarlier],
-  /** a request is in process: its amount is blocked at once, and it is not yet in wallet transactions */
-  inProcess: [
-    { id: "p2", who: "You", amount: rupees(100), status: "pending", upiMasked: "pri••@okhdfc", upiFull: "priya@okhdfc", whenLabel: "today", at: ago(3) } as PayoutRequest,
+  none: [],
+  /** the default demo: one request is Processing (its amount is blocked, it is not yet in wallet transactions) next to an old paid one */
+  processing: [
+    { id: "p2", who: "You", amount: rupees(100), status: "pending", upiMasked: "pri••@okhdfc", upiFull: "priya@okhdfc", whenLabel: "today", at: ago(3) },
     paidEarlier
   ],
-  /** the request was paid: it moved from in process to withdrawn and appears in wallet transactions */
+  /** the admin paid and confirmed it: it moved from Processing into Total withdrawn and shows in wallet transactions */
   paid: [
-    { id: "p2", who: "You", amount: rupees(100), status: "paid", upiMasked: "pri••@okhdfc", upiFull: "priya@okhdfc", whenLabel: "yesterday", at: ago(30), paidAt: ago(5), paidBy: "Sneha (Payments)" } as PayoutRequest,
+    { id: "p2", who: "You", amount: rupees(100), status: "paid", upiMasked: "pri••@okhdfc", upiFull: "priya@okhdfc", whenLabel: "yesterday", at: ago(30), paidAt: ago(5), paidBy: "Sneha (Payments)" },
     paidEarlier
   ]
 };
 
-export const userPayouts: PayoutRequest[] = payoutScenarios.default;
+export const userPayouts: PayoutRequest[] = payoutScenarios.processing;
 
 export const adminPayouts: PayoutRequest[] = [
   { id: "a1", who: "Rahul K.", amount: rupees(170), status: "pending", upiMasked: "rahul••@upi", upiFull: "rahul.kumar@okhdfc", whenLabel: "1 hour ago" },

@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { activeTill, dateParts, fixtures, type Claim, type Identity, type PayoutRequest, type PayoutScenario, type Task } from "@rr/core";
+import { activeTill, dateParts, fixtures, walletTotals, type Claim, type Identity, type PayoutRequest, type PayoutScenario, type Task } from "@rr/core";
 import { formatRupees, parseRupees, rupees, type Paise } from "@rr/money";
 import {
   BottomNav, Button, Card, Chips, CopyButton, Countdown, EmptyState, Field, FileUpload, Input, Notice, Select,
   Sheet, StatusPill, Tabs, Textarea, Toast, TopBar
 } from "../../primitives";
+import { markPaid, maskUpi, requestPayout, usePayouts } from "../../demo/payoutStore";
 import { CreateTicketBody, HelpScreen, TicketChatScreen, type HelpTab } from "./HelpScreens";
 
 export type UserScreen =
@@ -28,11 +29,6 @@ const TAB_OF: Partial<Record<UserScreen, string>> = {
 };
 const MIN_PAYOUT = rupees(10);
 
-function maskUpi(upi: string): string {
-  const [name = "", bank = ""] = upi.split("@");
-  return `${name.slice(0, 3)}••@${bank}`;
-}
-
 /** Demo-only text assignment. The real balanced random bag lives on the server (step 6). */
 function demoText(task: Task, n: number): string | undefined {
   if (task.textMode === "manual_pool") return fixtures.pitchPool[n % fixtures.pitchPool.length];
@@ -46,13 +42,13 @@ export interface UserAppProps {
   initialScreen?: UserScreen;
   initialTab?: MyTab;
   loggedIn?: boolean;
-  /** which payout lifecycle state to start in (ui-hub scenarios) */
+  /** start in an isolated payout scenario (ui-hub). Without it the app shares its payouts with the admin app, so an admin confirming a payment shows up here. */
   payoutScenario?: PayoutScenario;
   initialTicketId?: string;
   initialHelpTab?: HelpTab;
 }
 
-export function UserApp({ initialScreen = "board", initialTab = "active", loggedIn: initialLoggedIn = true, payoutScenario = "default", initialTicketId = "tk1042", initialHelpTab = "open" }: UserAppProps) {
+export function UserApp({ initialScreen = "board", initialTab = "active", loggedIn: initialLoggedIn = true, payoutScenario, initialTicketId = "tk1042", initialHelpTab = "open" }: UserAppProps) {
   const [screen, setScreen] = useState<UserScreen>(initialScreen);
   const [tab, setTab] = useState<MyTab>(initialTab);
   const [loggedIn, setLoggedIn] = useState(initialLoggedIn);
@@ -65,7 +61,9 @@ export function UserApp({ initialScreen = "board", initialTab = "active", logged
   const [ticketId, setTicketId] = useState(initialTicketId);
   const [helpTab, setHelpTab] = useState<HelpTab>(initialHelpTab);
   const [registerEmail, setRegisterEmail] = useState("you@example.com");
-  const [payouts, setPayouts] = useState<PayoutRequest[]>(fixtures.payoutScenarios[payoutScenario]);
+  const shared = usePayouts();
+  const [local, setLocal] = useState<PayoutRequest[] | null>(() => (payoutScenario ? fixtures.payoutScenarios[payoutScenario] : null));
+  const payouts = local ?? shared;
 
   const task = fixtures.tasks.find((t) => t.id === taskId) ?? fixtures.tasks[0]!;
   const identity = identities.find((i) => i.id === identityId) ?? identities[0]!;
@@ -90,10 +88,7 @@ export function UserApp({ initialScreen = "board", initialTab = "active", logged
   const [submitClaimId, setSubmitClaimId] = useState("c1");
   const wallet = fixtures.wallet;
   // Wallet numbers are always derived, never stored. A request blocks its amount the moment it is made.
-  const sumBy = (status: PayoutRequest["status"]) => payouts.filter((p) => p.status === status).reduce((a, p) => a + p.amount, 0n);
-  const withdrawn = sumBy("paid");
-  const inProcess = sumBy("pending");
-  const available = wallet.earned - withdrawn - inProcess > 0n ? wallet.earned - withdrawn - inProcess : 0n;
+  const { withdrawn, processing: inProcess, available } = walletTotals(wallet.earned, payouts);
 
   let body: JSX.Element;
   switch (screen) {
@@ -144,10 +139,20 @@ export function UserApp({ initialScreen = "board", initialTab = "active", logged
     case "wallet": body = <WalletScreen identities={identities} earned={wallet.earned} withdrawn={withdrawn} inProcess={inProcess} available={available} payouts={payouts} />; break;
     case "payout": body = (
       <PayoutScreen available={available} inProcess={inProcess} payouts={payouts}
-        onRequest={(amt, upi) => { setPayouts([{ id: `p${payouts.length + 1}`, who: "You", amount: amt, status: "pending", upiMasked: maskUpi(upi), upiFull: upi, whenLabel: "just now", at: new Date().toISOString() }, ...payouts]); show("payoutSent"); }}
+        onRequest={(amt, upi) => {
+          if (local) setLocal([{ id: `p${local.length + 10}`, who: "You", amount: amt, status: "pending", upiMasked: maskUpi(upi), upiFull: upi, whenLabel: "just now", at: new Date().toISOString() }, ...local]);
+          else requestPayout(amt, upi);
+          show("payoutSent");
+        }}
         onFlagged={() => show("payoutFlagged")}
         onHelp={() => show("help")}
-        onDemoPaid={() => { setPayouts(payouts.map((p) => (p.status === "pending" ? { ...p, status: "paid", paidBy: "Anil (Payments)", paidAt: new Date().toISOString() } : p))); notify("Demo: admin marked it paid"); }} />
+        onDemoPaid={() => {
+          const pending = payouts.find((p) => p.status === "pending");
+          if (!pending) return;
+          if (local) setLocal(local.map((p) => (p.id === pending.id ? { ...p, status: "paid", paidBy: "Anil (Payments)", paidAt: new Date().toISOString() } : p)));
+          else markPaid(pending.id, "Anil (Payments)");
+          notify("Demo: admin marked it paid");
+        }} />
     ); break;
     case "payoutSent": {
       const req = payouts.find((p) => p.status === "pending");
@@ -159,10 +164,10 @@ export function UserApp({ initialScreen = "board", initialTab = "active", logged
             <Card>
               <div className="stat"><span>Amount</span><span>{formatRupees(req.amount)}</span></div>
               <div className="stat"><span>UPI ID</span><span>{req.upiMasked}</span></div>
-              <div className="stat last"><span>Status</span><StatusPill tone="amber">In process</StatusPill></div>
+              <div className="stat last"><span>Status</span><StatusPill tone="amber">Processing</StatusPill></div>
             </Card>
           ) : null}
-          <p className="center-text note-text">That amount is blocked from your balance now. We settle it manually within a few days. Once it is paid it moves to Completed and shows in your wallet transactions.</p>
+          <p className="center-text note-text">That amount is blocked from your balance now. We settle it manually within a few days. Once an admin pays and confirms it, it moves to Completed, is added to Total withdrawn and shows in your wallet transactions.</p>
           <Button variant="primary" block style={{ marginTop: 20 }} onClick={() => show("payout")}>View payout requests</Button>
         </div></div></div>
       );
@@ -417,7 +422,7 @@ function TxRow({ id, at, title, sub, amount, income, badge, details, open, onTog
 
 function payoutDetails(p: PayoutRequest): [string, string][] {
   return [
-    ["Status", p.status === "paid" ? "Paid" : "In process. The amount is blocked until it is paid."],
+    ["Status", p.status === "paid" ? "Paid" : "Processing. The amount is blocked until an admin pays and confirms it."],
     ["Amount", formatRupees(p.amount)],
     ["UPI ID", p.upiMasked],
     ["Requested", when(p.at)],
@@ -433,7 +438,7 @@ function WalletScreen({ identities, earned, withdrawn, inProcess, available, pay
   const w = fixtures.wallet;
   const email = (id: string) => identities.find((i) => i.id === id)?.email ?? "";
   type Tx = { id: string; at: string; title: string; sub: string; amount: string; income: boolean; details: [string, string][] };
-  // Only approved and paid withdrawals appear here. A request still in process shows on the Payout page.
+  // Only approved and paid withdrawals appear here. A request still processing shows on the Payout page.
   const txns: Tx[] = [
     ...w.entries.map((e): Tx => ({
       id: e.id, at: e.at, title: e.title, sub: email(e.identityId), amount: `+${formatRupees(e.credited)}`, income: true,
@@ -453,7 +458,7 @@ function WalletScreen({ identities, earned, withdrawn, inProcess, available, pay
       <Card>
         <div className="stat"><span>Total earned</span><span>{formatRupees(earned)}</span></div>
         <div className="stat"><span>Total withdrawn</span><span>{formatRupees(withdrawn)}</span></div>
-        {inProcess > 0n ? <div className="stat" style={{ color: "var(--amber)" }}><span>In process</span><span>{formatRupees(inProcess)}</span></div> : null}
+        {inProcess > 0n ? <div className="stat" style={{ color: "var(--amber)" }}><span>Processing</span><span>{formatRupees(inProcess)}</span></div> : null}
         <div className="stat last"><span>Withdrawable balance</span><span>{formatRupees(available)}</span></div>
         <button className="expander" aria-expanded={open} onClick={() => setOpen(!open)}>{open ? "Hide" : "Show"} earnings by email</button>
         {open ? identities.map((i) => <div key={i.id} className="stat"><span>{i.email}</span><span>{formatRupees(i.earned)}</span></div>) : null}
@@ -492,9 +497,9 @@ function PayoutScreen({ available, inProcess, payouts, onRequest, onFlagged, onD
       <Card>
         <p style={{ fontSize: 12, margin: "0 0 4px" }}>Withdrawable balance</p>
         <h3 style={{ fontSize: 20 }}>{formatRupees(available)}</h3>
-        {pending ? <p className="small" style={{ marginTop: 4, color: "var(--amber)" }}>{formatRupees(inProcess)} is in process and blocked until it is paid.</p> : null}
+        {pending ? <p className="small" style={{ marginTop: 4, color: "var(--amber)" }}>{formatRupees(inProcess)} is processing and blocked until it is paid.</p> : null}
       </Card>
-      {pending ? <div className="banner">You already have a payout request in process. You can request again once it's paid.</div> : null}
+      {pending ? <div className="banner">You already have a payout request processing. You can request again once it's paid.</div> : null}
       <Field label="Amount (₹)" error={errs.amount} hint={`Minimum ${formatRupees(MIN_PAYOUT)}`}><Input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="10" disabled={pending} /></Field>
       <Field label="UPI ID" error={errs.upi} hint="You'll enter this each time. It isn't saved as a payment method."><Input id="upi-input" value={upi} onChange={(e) => setUpi(e.target.value)} placeholder="yourname@upi" disabled={pending} autoComplete="off" /></Field>
       <Button variant="primary" block disabled={pending} onClick={submit}>Request payout</Button>
@@ -504,11 +509,11 @@ function PayoutScreen({ available, inProcess, payouts, onRequest, onFlagged, onD
         const group = payouts.filter((p) => p.status === status);
         if (group.length === 0) return null;
         return (
-          <div key={status} aria-label={status === "pending" ? "In process" : "Completed"}>
-            <p className="section-label" style={{ marginBottom: 0 }}>{status === "pending" ? "In process" : "Completed"}</p>
+          <div key={status} aria-label={status === "pending" ? "Processing" : "Completed"}>
+            <p className="section-label" style={{ marginBottom: 0 }}>{status === "pending" ? "Processing" : "Completed"}</p>
             {group.map((p) => (
               <TxRow key={p.id} id={`po-${p.id}`} at={p.at ?? ""} title="Payout request" sub={p.upiMasked} amount={formatRupees(p.amount)}
-                badge={<StatusPill tone={status === "paid" ? "green" : "amber"}>{status === "paid" ? "Paid" : "In process"}</StatusPill>}
+                badge={<StatusPill tone={status === "paid" ? "green" : "amber"}>{status === "paid" ? "Paid" : "Processing"}</StatusPill>}
                 details={payoutDetails(p)} open={openTx === p.id} onToggle={() => setOpenTx(openTx === p.id ? null : p.id)} />
             ))}
           </div>

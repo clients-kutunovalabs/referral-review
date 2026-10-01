@@ -19,7 +19,7 @@ const JUMPS: Record<string, Jump & { label: string }> = {
   submitted: { screen: "submitted", label: "Submitted" },
   wallet: { screen: "wallet", label: "Wallet + transactions" },
   payout: { screen: "payout", label: "Payout (amount + UPI)" },
-  payoutSent: { screen: "payoutSent", scenario: "inProcess", label: "Payout requested" },
+  payoutSent: { screen: "payoutSent", scenario: "processing", label: "Payout requested" },
   payoutFlagged: { screen: "payoutFlagged", label: "Payout: UPI flagged" },
   identities: { screen: "identities", label: "My emails" },
   help: { screen: "help", label: "Help: tickets (open)" },
@@ -29,10 +29,10 @@ const JUMPS: Record<string, Jump & { label: string }> = {
   ticketNew: { screen: "ticket", ticketId: "tk1038", label: "Ticket: waiting for support" },
   ticketClosed: { screen: "ticket", ticketId: "tk1029", helpTab: "closed", label: "Ticket: resolved (read-only)" },
   walletNone: { screen: "wallet", scenario: "none", label: "Wallet: never withdrawn" },
-  walletProcess: { screen: "wallet", scenario: "inProcess", label: "Wallet: payout in process" },
+  walletProcess: { screen: "wallet", scenario: "processing", label: "Wallet: payout processing" },
   walletPaid: { screen: "wallet", scenario: "paid", label: "Wallet: payout paid" },
   payoutNone: { screen: "payout", scenario: "none", label: "Payout: no requests yet" },
-  payoutProcess: { screen: "payout", scenario: "inProcess", label: "Payout: request in process" },
+  payoutProcess: { screen: "payout", scenario: "processing", label: "Payout: request processing" },
   payoutPaid: { screen: "payout", scenario: "paid", label: "Payout: request paid" }
 };
 const GROUPS: JumpGroup<string>[] = [

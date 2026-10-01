@@ -9,6 +9,7 @@ import {
 } from "../../primitives";
 import { AdminTicketChat, AdminTicketList, type SupportTab } from "./SupportScreens";
 import { needsReply, useTickets } from "../../demo/ticketStore";
+import { markPaid, usePayouts } from "../../demo/payoutStore";
 
 export type AdminScreen =
   | "dashboard" | "tasks" | "newtask" | "taskdetail" | "removeconfirm"
@@ -59,7 +60,11 @@ export function AdminApp({ initialScreen = "dashboard", viewerRoleIds = ["role-o
   const [toast, setToast] = useState<string | null>(null);
   const [queue, setQueue] = useState(fixtures.reviewQueue);
   const [reviewId, setReviewId] = useState("r1");
-  const [payouts, setPayouts] = useState(fixtures.adminPayouts);
+  // Priya's requests come from the same store as the user app: paying one here updates her wallet there.
+  const stored = usePayouts();
+  const [others, setOthers] = useState(fixtures.adminPayouts);
+  const rank = { pending: 0, flagged: 1, paid: 2 } as const;
+  const payouts = [...stored.map((p) => ({ ...p, who: "Priya S." })), ...others].sort((a, b) => rank[a.status] - rank[b.status]);
   const [payoutId, setPayoutId] = useState("a1");
   const [userId, setUserId] = useState("u1");
   const [userStatus, setUserStatus] = useState<Record<string, string>>({});
@@ -145,19 +150,19 @@ export function AdminApp({ initialScreen = "dashboard", viewerRoleIds = ["role-o
       </div></div></div>
     ); break;
     case "payoutitem": {
-      const p = payouts.find((x) => x.id === payoutId) ?? payouts[0]!;
+      const p = payouts.find((x) => x.id === payoutId) ?? payouts.find((x) => x.status === "pending") ?? payouts[0]!;
       body = <PayoutItemScreen key={p.id} payout={p} adminName={adminName} onBack={() => show("payouts")}
-        onPaid={() => { setPayouts(payouts.map((x) => (x.id === p.id ? { ...x, status: "paid", paidBy: adminName } : x))); notify(`Recorded: paid by ${adminName}`); show("payouts"); }} />;
+        onPaid={() => { if (stored.some((x) => x.id === p.id)) markPaid(p.id, adminName); else setOthers(others.map((x) => (x.id === p.id ? { ...x, status: "paid", paidBy: adminName } : x))); notify(`Recorded: paid by ${adminName}`); show("payouts"); }} />;
       break;
     }
     case "payoutflagged": {
-      const p = payouts.find((x) => x.id === payoutId) ?? payouts[2]!;
+      const p = payouts.find((x) => x.id === payoutId) ?? payouts.find((x) => x.status === "flagged") ?? payouts[0]!;
       body = (
         <div className="screen"><TopBar title="Flagged payout" onBack={() => show("payouts")} /><div className="scrollarea"><div className="content">
           <Card alert><p style={{ color: "var(--coral)", margin: "0 0 8px" }}>{p.flagReason}</p><p className="muted">{p.who} &middot; {formatRupees(p.amount)} &middot; requested {p.whenLabel}</p></Card>
           <Button variant="danger" block style={{ marginBottom: 8 }} onClick={() => { notify("Both accounts suspended (records kept)"); show("payouts"); }}>Ban both accounts</Button>
           <Button block style={{ marginBottom: 8 }} onClick={() => { notify("Frozen for investigation"); show("payouts"); }}>Freeze and investigate</Button>
-          <Button block onClick={() => { setPayouts(payouts.map((x) => (x.id === p.id ? { ...x, status: "pending" } : x))); notify("Allowed once"); show("payouts"); }}>Ignore &middot; allow this once</Button>
+          <Button block onClick={() => { setOthers(others.map((x) => (x.id === p.id ? { ...x, status: "pending" } : x))); notify("Allowed once"); show("payouts"); }}>Ignore &middot; allow this once</Button>
           <p className="hint" style={{ marginTop: 12 }}>Every choice is written to the audit log with your name.</p>
         </div></div></div>
       );

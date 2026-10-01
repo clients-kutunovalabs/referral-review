@@ -143,7 +143,7 @@ export const TEXT_MODE_LABEL: Record<TextMode, string> = {
 };
 
 /** Payout lifecycle states used by ui-hub scenarios. */
-export type PayoutScenario = "none" | "default" | "inProcess" | "paid";
+export type PayoutScenario = "none" | "processing" | "paid";
 
 /** Support tickets: a customer opens one, an admin is assigned, they chat, the admin marks it resolved. */
 export type TicketStatus = "open" | "closed";
