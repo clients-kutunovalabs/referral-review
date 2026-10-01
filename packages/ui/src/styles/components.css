@@ -16,6 +16,7 @@
 .card.alert { border-color: var(--coral); }
 .card.hero { background: var(--brand-bg); border-color: transparent; }
 .card.hero h3 { color: var(--brand); }
+.card.hero .pill.teal { background: var(--surface-2); border: var(--border-width) solid var(--brand); }
 .card h3 { margin: 0 0 var(--space-1); font-size: var(--text-xl); font-weight: var(--weight-medium); font-family: var(--font-body); }
 .card p { margin: 0; font-size: var(--text-md); color: var(--text-secondary); }
 .card p.small { font-size: var(--text-sm); }
@@ -163,13 +164,18 @@ input[type="checkbox"] { width: 20px; height: 20px; min-height: 0; margin: 0; }
 .outcomebtn.picked { background: var(--brand); color: var(--text-inverse); border-color: var(--brand); }
 
 .metricrow { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: var(--space-3); margin-bottom: var(--space-7); }
-.perm-list { margin: var(--space-4) 0 0; padding-left: 18px; font-size: var(--text-md); line-height: 1.6; }
+.card-split { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-5); }
+.card-split-main { flex: 1; min-width: 0; }
+.card-split > .btn { flex-shrink: 0; }
+.role-tags { margin-top: 0; justify-content: flex-end; flex-shrink: 0; max-width: 55%; }
+.perm-chips { width: 100%; }
 .metric-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); margin-bottom: var(--space-7); }
 button.metric { border: var(--border-width) solid transparent; width: 100%; font-family: inherit; color: var(--text-primary); cursor: pointer; }
 button.metric:hover { border-color: var(--border-strong); }
 .metric .sub { font-size: var(--text-xs); color: var(--accent); margin-top: 2px; }
-.profile-btn { display: inline-flex; align-items: center; gap: var(--space-3); background: none; border: 0; padding: 0 var(--space-3) 0 0; min-height: var(--tap-min); font-family: inherit; font-size: var(--text-xl); font-weight: var(--weight-medium); color: var(--text-primary); cursor: pointer; border-radius: var(--radius-sm); }
-.profile-btn .icon { width: 24px; height: 24px; }
+.profile-btn { display: inline-flex; align-items: center; gap: var(--space-3); background: var(--surface-1); border: var(--border-width) solid var(--border-strong); padding: 0 var(--space-5) 0 var(--space-4); min-height: var(--tap-min); font-family: inherit; font-size: var(--text-md); font-weight: var(--weight-medium); color: var(--text-primary); cursor: pointer; border-radius: var(--radius-pill); }
+.profile-btn:hover { background: var(--surface-0); }
+.profile-btn .icon { width: 20px; height: 20px; }
 .profile-btn .chev { font-size: var(--text-xs); color: var(--text-muted); }
 .metric { background: var(--surface-1); border-radius: var(--radius-md); padding: var(--space-5) var(--space-3); text-align: center; }
 .metric .num { font-size: 18px; font-weight: var(--weight-medium); }

@@ -103,7 +103,8 @@ export function AdminApp({ initialScreen = "dashboard", viewerRoleIds = ["role-o
       ];
       body = (
         <div className="screen">
-          <div className="topbar">
+          <div className="topbar" style={{ paddingBlock: 8 }}>
+            <span className="grow">Admin panel</span>
             <button className="profile-btn" aria-label="Roles and permissions" onClick={() => show("access")}>
               <Icon name="user" /><span>{adminName}</span><span className="chev" aria-hidden="true">&#9656;</span>
             </button>
@@ -208,11 +209,12 @@ export function AdminApp({ initialScreen = "dashboard", viewerRoleIds = ["role-o
         <div className="screen"><TopBar title="Roles and permissions" onBack={() => show("dashboard")} />
           <div className="scrollarea"><div className="content">
             <Card hero>
-              <h3>{adminName}</h3>
-              <p className="muted" style={{ marginBottom: 8 }}>Your role{mine.length === 1 ? "" : "s"}</p>
-              <div className="chips" style={{ marginTop: 0 }}>{mine.map((r) => <StatusPill key={r.id} tone="teal">{r.name}</StatusPill>)}</div>
-              <p className="muted" style={{ margin: "12px 0 0" }}>What you can do</p>
-              <ul className="perm-list">{myPerms.map((p) => <li key={p.key}>{p.label}</li>)}</ul>
+              <div className="card-split">
+                <div className="card-split-main"><h3>{adminName}</h3></div>
+                <div className="chips role-tags">{mine.map((r) => <StatusPill key={r.id} tone="teal">{r.name}</StatusPill>)}</div>
+              </div>
+              <p className="section-label" style={{ margin: "14px 0 0" }}>Permissions</p>
+              <div className="chips perm-chips">{myPerms.map((p) => <span key={p.key} className="chip">{p.label}</span>)}</div>
             </Card>
             {tabs.length ? <div style={{ margin: "0 calc(var(--space-7) * -1)" }}><Tabs<AccessTab> value={tab as AccessTab} onChange={setAccessTab} tabs={tabs} /></div> : <p className="hint">Your roles do not include managing users or roles.</p>}
             <div style={{ paddingTop: 12 }}>
@@ -436,9 +438,13 @@ function TeamPanel({ members, roles, setMembers, notify }: { members: AdminMembe
     <p className="note-text" style={{ marginBottom: 10 }}>Members can hold several roles. Owner has everything.</p>
     {members.map((m) => (
       <Card key={m.id}>
-        <h3>{m.name}</h3>
-        <div className="chips">{m.roleIds.map((id) => <StatusPill key={id} tone={id === "role-owner" ? "teal" : "gray"}>{roles.find((r) => r.id === id)?.name}</StatusPill>)}</div>
-        {!m.isOwner ? <div className="row"><span /><Button onClick={() => setEditing(editing === m.id ? null : m.id)}>{editing === m.id ? "Done" : "Edit roles"}</Button></div> : null}
+        <div className="card-split">
+          <div className="card-split-main">
+            <h3>{m.name}</h3>
+            <div className="chips">{m.roleIds.map((id) => <StatusPill key={id} tone={id === "role-owner" ? "teal" : "gray"}>{roles.find((r) => r.id === id)?.name}</StatusPill>)}</div>
+          </div>
+          {!m.isOwner ? <Button compact onClick={() => setEditing(editing === m.id ? null : m.id)}>{editing === m.id ? "Done" : "Edit roles"}</Button> : null}
+        </div>
         {editing === m.id ? roles.filter((r) => r.id !== "role-owner").map((r) => (
           <label key={r.id} className="check">
             <input type="checkbox" checked={m.roleIds.includes(r.id)}
@@ -475,9 +481,13 @@ function RolesPanel({ roles, setRoles, members, setMembers, notify }: {
       const holders = members.filter((m) => m.roleIds.includes(r.id)).length;
       return (
         <Card key={r.id}>
-          <h3>{r.name}</h3>
-          <p>{r.permissions.length} permission{r.permissions.length === 1 ? "" : "s"} &middot; {holders} member{holders === 1 ? "" : "s"}</p>
-          {r.id !== "role-owner" ? <div className="row"><span /><Button onClick={() => { setEditing(editing === r.id ? null : r.id); setConfirmDelete(null); }}>{editing === r.id ? "Done" : "Edit"}</Button></div> : null}
+          <div className="card-split">
+            <div className="card-split-main">
+              <h3>{r.name}</h3>
+              <p>{r.permissions.length} permission{r.permissions.length === 1 ? "" : "s"} &middot; {holders} member{holders === 1 ? "" : "s"}</p>
+            </div>
+            {r.id !== "role-owner" ? <Button compact onClick={() => { setEditing(editing === r.id ? null : r.id); setConfirmDelete(null); }}>{editing === r.id ? "Done" : "Edit"}</Button> : null}
+          </div>
           {editing === r.id ? (<>
             {PERMISSIONS.map((p) => (
               <label key={p.key} className="check">
