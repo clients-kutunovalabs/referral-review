@@ -6,6 +6,7 @@ interface Jump { screen: UserScreen; tab?: MyTab }
 const JUMPS: Record<string, Jump & { label: string }> = {
   login: { screen: "login", label: "Log in" },
   register: { screen: "register", label: "Create account" },
+  verifyEmail: { screen: "verifyEmail", label: "Verify email (one-time code)" },
   board: { screen: "board", label: "Task board" },
   detail: { screen: "detail", label: "Task detail (overlay)" },
   claimed: { screen: "claimed", label: "Task accepted" },
@@ -15,17 +16,16 @@ const JUMPS: Record<string, Jump & { label: string }> = {
   rejected: { screen: "mytasks", tab: "rejected", label: "My tasks: Rejected" },
   submit: { screen: "submit", label: "Submit proof" },
   submitted: { screen: "submitted", label: "Submitted" },
-  wallet: { screen: "wallet", label: "Wallet (per-email)" },
-  txn: { screen: "txn", label: "Earning detail" },
+  wallet: { screen: "wallet", label: "Wallet + transactions" },
   payout: { screen: "payout", label: "Payout (amount + UPI)" },
   payoutSent: { screen: "payoutSent", label: "Payout requested" },
   payoutFlagged: { screen: "payoutFlagged", label: "Payout: UPI flagged" },
   identities: { screen: "identities", label: "My emails" }
 };
 const GROUPS: JumpGroup<string>[] = [
-  { label: "Account", items: ["login", "register", "identities"].map((id) => ({ id, label: JUMPS[id]!.label })) },
+  { label: "Account", items: ["login", "register", "verifyEmail", "identities"].map((id) => ({ id, label: JUMPS[id]!.label })) },
   { label: "Tasks", items: ["board", "detail", "claimed", "active", "review", "completed", "rejected", "submit", "submitted"].map((id) => ({ id, label: JUMPS[id]!.label })) },
-  { label: "Money", items: ["wallet", "txn", "payout", "payoutSent", "payoutFlagged"].map((id) => ({ id, label: JUMPS[id]!.label })) }
+  { label: "Money", items: ["wallet", "payout", "payoutSent", "payoutFlagged"].map((id) => ({ id, label: JUMPS[id]!.label })) }
 ];
 
 export function UserHub() {
@@ -42,12 +42,12 @@ export function UserHub() {
         <Gallery>
           {Object.entries(JUMPS).map(([id, s]) => (
             <GalleryItem key={id} caption={s.label}>
-              <PhoneFrame><UserApp initialScreen={s.screen} {...(s.tab ? { initialTab: s.tab } : {})} loggedIn={id !== "login" && id !== "register"} /></PhoneFrame>
+              <PhoneFrame><UserApp initialScreen={s.screen} {...(s.tab ? { initialTab: s.tab } : {})} loggedIn={id !== "login" && id !== "register" && id !== "verifyEmail"} /></PhoneFrame>
             </GalleryItem>
           ))}
         </Gallery>
       ) : (
-        <PhoneFrame><UserApp key={`${jump}-${rev}`} initialScreen={j.screen} {...(j.tab ? { initialTab: j.tab } : {})} loggedIn={jump !== "login" && jump !== "register"} /></PhoneFrame>
+        <PhoneFrame><UserApp key={`${jump}-${rev}`} initialScreen={j.screen} {...(j.tab ? { initialTab: j.tab } : {})} loggedIn={jump !== "login" && jump !== "register" && jump !== "verifyEmail"} /></PhoneFrame>
       )}
     </HubPage>
   );

@@ -4,3 +4,5 @@
 - Flagged payout (UPI already on another account): admin options are ban both, freeze and investigate, allow once. Pick the default and put it in the ToS.
 - Minimum payout, payout cadence, TDS and entity structure: decide with a CA before real money moves.
 - Terms of Service and Privacy Policy (DPDP Act) need review before launch.
+
+- Email: we send no emails except a one-time verification code (OTP) when an email is registered or added. Workers see review results, payments and status in the app only.

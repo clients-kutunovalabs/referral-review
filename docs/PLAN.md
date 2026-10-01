@@ -12,6 +12,7 @@ Built in the cloud session and pushed to the branch; the user pulls it in VS Cod
 - Keep the current HTML structure: every screen, class and flow ported 1:1 into React components. Originals copied unchanged to `packages/ui/reference/`.
 - Workflow unchanged: worker claims task -> timer -> uploads a screenshot + optional note (no link) -> admin reviews manually (100/75/50/25/0%, mandatory note) -> credit to wallet. Task price is fixed per task template.
 - Multi-email: one login, several identities (emails), one wallet. Claim uniqueness = `(identity_id, template_id)`: one email can claim a task once, and the same account may claim the same task from each of its emails. Farming control: optional `max_claims_per_account` per template (NULL = unlimited), plus admin flag when one account claims the same template from many identities.
+- Email policy: the system sends NO emails except one one-time verification code (OTP), sent once when an email is registered or added as an identity. No notifications, receipts or marketing emails. OTP: 6 digits, stored hashed, expires in 10 minutes, max 5 wrong attempts, resend cooldown 30s, rate limited per email and per IP.
 - Wallet: one total; every ledger row carries `identity_id`; the wallet screen expands to per-email earnings.
 - Payout: worker enters the amount and UPI ID each time (nothing else saved). Available = credits - debits - amount held by pending requests. Amount >= configurable minimum and <= available. One pending request at a time. `payment_method` enum (`upi` only now) for later methods.
 - Payment: an admin with `payout.mark_paid` transfers manually, then uploads a REQUIRED payment screenshot and marks it paid. Debit row + `payout_payments` row (paid_by, proof_file_key NOT NULL) written in one transaction. No maker-checker.
@@ -74,7 +75,7 @@ referral-review/
 ```
 
 ## Data model additions
-`workspaces`; `users`(status), `identities`(user_id, email unique); `task_templates` += `workspace_id, site_url, text_mode, keywords[], ai_config jsonb, max_claims_per_account`; `task_claims` unique `(identity_id, template_id)`; `task_texts`, `template_text_bag`, `claim_task_texts`; `submissions` += `keywords_matched`; `payout_requests`(amount, payment_method, upi encrypted); `payout_payments`(payout_request_id unique, paid_by, proof_file_key NOT NULL); RBAC tables above.
+`workspaces`; `users`(status), `identities`(user_id, email unique, verified_at), `email_otps`(email, code_hash, expires_at, attempts); `task_templates` += `workspace_id, site_url, text_mode, keywords[], ai_config jsonb, max_claims_per_account`; `task_claims` unique `(identity_id, template_id)`; `task_texts`, `template_text_bag`, `claim_task_texts`; `submissions` += `keywords_matched`; `payout_requests`(amount, payment_method, upi encrypted); `payout_payments`(payout_request_id unique, paid_by, proof_file_key NOT NULL); RBAC tables above.
 
 ## Build order (each step waits for your go-ahead)
 UI first, backend after the UI flow is signed off:
