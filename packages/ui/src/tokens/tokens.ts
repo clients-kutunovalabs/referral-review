@@ -34,7 +34,7 @@ export const sizeTokens = {
   "--text-lg": "14px",
   "--text-xl": "15px",
   "--text-2xl": "20px",
-  "--text-price": "26px",
+  "--text-stat": "16px",
   "--text-display": "40px"
 } as const;
 

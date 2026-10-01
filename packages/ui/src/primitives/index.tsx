@@ -3,8 +3,8 @@ import { copyText } from "../lib/clipboard";
 
 export type Tone = "teal" | "amber" | "coral" | "green" | "gray";
 
-export function StatusPill({ tone, large, children }: { tone: Tone; large?: boolean; children: ReactNode }) {
-  return <span className={`pill ${tone}${large ? " lg" : ""}`}>{children}</span>;
+export function StatusPill({ tone, children }: { tone: Tone; children: ReactNode }) {
+  return <span className={`pill ${tone}`}>{children}</span>;
 }
 
 type BtnProps = ButtonHTMLAttributes<HTMLButtonElement> & {

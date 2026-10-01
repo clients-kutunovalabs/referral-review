@@ -24,11 +24,20 @@
 .pill.green { background: var(--green-bg); color: var(--green); }
 .pill.gray { background: var(--surface-1); color: var(--text-secondary); border: var(--border-width) solid var(--border); }
 
-.pill.lg { font-size: var(--text-md); padding: 6px 14px; }
-.price-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); margin-top: var(--space-6); flex-wrap: wrap; }
-.price { background: var(--green-bg); color: var(--green); border-radius: var(--radius-md); padding: var(--space-3) var(--space-6); display: flex; flex-direction: column; line-height: 1.1; }
-.price-label { font-size: var(--text-sm); font-weight: var(--weight-medium); }
-.price-amount { font-size: var(--text-price); font-weight: var(--weight-medium); }
+
+/* Two-line info cells, laid out 2 x 2 (link | time, reward | slots) */
+.info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); margin-top: var(--space-6); margin-bottom: var(--space-5); }
+.info-cell { min-width: 0; min-height: 60px; padding: var(--space-3) var(--space-5); border-radius: var(--radius-md); display: flex; flex-direction: column; justify-content: center; gap: 2px; }
+.info-cell.plain { padding-left: 0; }
+.info-cell.amber { background: var(--amber-bg); color: var(--amber); }
+.info-cell.green { background: var(--green-bg); color: var(--green); }
+.info-cell.neutral { background: var(--surface-1); border: var(--border-width) solid var(--border); }
+.info-label { font-size: var(--text-sm); color: var(--text-secondary); line-height: 1.2; }
+.info-cell.amber .info-label, .info-cell.green .info-label { color: inherit; }
+.info-value { font-size: var(--text-md); line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.info-value.big { font-size: var(--text-stat); font-weight: var(--weight-medium); }
+.info-value a { color: var(--teal); font-weight: var(--weight-medium); }
+.info-value.time { font-weight: var(--weight-regular); }
 
 .chips { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-3); }
 .chip { font-size: var(--text-sm); padding: 4px 10px; border-radius: var(--radius-pill); background: var(--surface-2); border: var(--border-width) solid var(--border-strong); color: var(--text-primary); }
@@ -109,7 +118,6 @@ input[type="checkbox"] { width: 20px; height: 20px; min-height: 0; margin: 0; }
 .sheet-head .grow { flex: 1; }
 .sheet-close { background: none; border: 0; font-size: 24px; line-height: 1; cursor: pointer; color: var(--text-secondary); min-width: var(--tap-min); min-height: var(--tap-min); margin-right: -12px; }
 .sheet-body { overflow-y: auto; padding: var(--space-6) var(--space-7) var(--space-8); }
-.slots-line { display: flex; justify-content: space-between; align-items: center; padding: var(--space-4) 0; border-bottom: var(--border-width) solid var(--border); font-size: var(--text-md); margin-bottom: var(--space-5); }
 @keyframes sheet-up { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .sheet { animation: none; } }
 
