@@ -4,7 +4,7 @@ import {
 } from "@rr/core";
 import { OUTCOME_PERCENTS, formatRupees, outcomeAmount, type OutcomePercent } from "@rr/money";
 import {
-  BottomNav, type IconName, Button, Card, Chips, CopyButton, EmptyState, Field, FileUpload, Input, ListRow, Select,
+  BottomNav, Icon, type IconName, Button, Card, Chips, CopyButton, EmptyState, Field, FileUpload, Input, ListRow, Select,
   StatusPill, Tabs, Textarea, Toast, TopBar
 } from "../../primitives";
 import { AdminTicketChat, AdminTicketList, type SupportTab } from "./SupportScreens";
@@ -14,15 +14,15 @@ import { markPaid, usePayouts } from "../../demo/payoutStore";
 export type AdminScreen =
   | "dashboard" | "tasks" | "newtask" | "taskdetail" | "removeconfirm"
   | "reviewqueue" | "reviewitem" | "payouts" | "payoutitem" | "payoutflagged"
-  | "users" | "userdetail" | "tickets" | "ticket";
-type PeopleTab = "users" | "team" | "roles";
+  | "users" | "userdetail" | "tickets" | "ticket" | "access";
+type AccessTab = "team" | "roles";
 
 /** Screen -> permission needed. Mirrors the server, which checks the database on every request. */
 const NEEDS: Partial<Record<AdminScreen, PermissionKey[]>> = {
   tasks: ["task.manage", "task.assign"], newtask: ["task.manage"], taskdetail: ["task.manage", "task.assign"], removeconfirm: ["task.manage"],
   reviewqueue: ["review.decide"], reviewitem: ["review.decide"],
   payouts: ["payout.mark_paid"], payoutitem: ["payout.mark_paid"], payoutflagged: ["payout.mark_paid"],
-  users: ["user.manage", "role.manage"], userdetail: ["user.manage"],
+  users: ["user.manage"], userdetail: ["user.manage"],
   tickets: ["ticket.manage"], ticket: ["ticket.manage"]
 };
 const NAV_DEF: { id: AdminScreen; tab: string; label: string; icon: IconName }[] = [
@@ -30,13 +30,13 @@ const NAV_DEF: { id: AdminScreen; tab: string; label: string; icon: IconName }[]
   { id: "tasks", tab: "tasks", label: "Tasks", icon: "tasks" },
   { id: "reviewqueue", tab: "review", label: "Review", icon: "review" },
   { id: "payouts", tab: "payouts", label: "Payouts", icon: "payout" },
-  { id: "users", tab: "users", label: "People", icon: "people" },
+  { id: "users", tab: "users", label: "Users", icon: "people" },
   { id: "tickets", tab: "support", label: "Support", icon: "support" }
 ];
 const TAB_OF: Partial<Record<AdminScreen, string>> = {
   dashboard: "dashboard", tasks: "tasks", newtask: "tasks", taskdetail: "tasks", removeconfirm: "tasks",
   reviewqueue: "review", reviewitem: "review", payouts: "payouts", payoutitem: "payouts", payoutflagged: "payouts",
-  users: "users", userdetail: "users", tickets: "support", ticket: "support"
+  users: "users", userdetail: "users", tickets: "support", ticket: "support", access: "dashboard"
 };
 
 const extraTasks: { title: string; status: "closed" | "removed"; meta: string }[] = [
@@ -56,7 +56,7 @@ export function AdminApp({ initialScreen = "dashboard", viewerRoleIds = ["role-o
   const [screen, setScreen] = useState<AdminScreen>(initialScreen);
   const [roles, setRoles] = useState<Role[]>(fixtures.roles);
   const [members, setMembers] = useState<AdminMember[]>(fixtures.members);
-  const [peopleTab, setPeopleTab] = useState<PeopleTab>("users");
+  const [accessTab, setAccessTab] = useState<AccessTab>("team");
   const [toast, setToast] = useState<string | null>(null);
   const [queue, setQueue] = useState(fixtures.reviewQueue);
   const [reviewId, setReviewId] = useState("r1");
@@ -90,19 +90,42 @@ export function AdminApp({ initialScreen = "dashboard", viewerRoleIds = ["role-o
       </div></div></div>
     );
   } else switch (screen) {
-    case "dashboard": body = (
-      <div className="screen"><TopBar title="Admin panel" right={<span className="muted">{adminName}</span>} /><div className="scrollarea"><div className="content">
-        <div className="metricrow">
-          <div className="metric"><div className="num">{queue.length}</div><div className="lbl">Pending review</div></div>
-          <div className="metric"><div className="num">12</div><div className="lbl">Active tasks</div></div>
-          <div className="metric"><div className="num">{payouts.filter((p) => p.status !== "paid").length}</div><div className="lbl">Payouts due</div></div>
+    case "dashboard": {
+      const payoutsDue = payouts.filter((p) => p.status !== "paid").length;
+      const openTickets = allTickets.filter((t) => t.status === "open");
+      const waiting = openTickets.filter(needsReply).length;
+      const activeTasks = fixtures.tasks.filter((t) => t.status === "active" || t.status === "closing_soon").length;
+      const cards: { go: AdminScreen; label: string; value: number; sub?: string }[] = [
+        { go: "reviewqueue", label: "Pending review", value: queue.length },
+        { go: "tasks", label: "Active tasks", value: activeTasks },
+        { go: "payouts", label: "Payouts due", value: payoutsDue },
+        { go: "tickets", label: "Open tickets", value: openTickets.length, ...(waiting ? { sub: `${waiting} need a reply` } : {}) }
+      ];
+      body = (
+        <div className="screen">
+          <div className="topbar">
+            <button className="profile-btn" aria-label="Roles and permissions" onClick={() => show("access")}>
+              <Icon name="user" /><span>{adminName}</span><span className="chev" aria-hidden="true">&#9656;</span>
+            </button>
+          </div>
+          <div className="scrollarea"><div className="content">
+            <div className="metric-grid">
+              {cards.filter((c) => can(c.go)).map((c) => (
+                <button key={c.go} className="metric" onClick={() => show(c.go)}>
+                  <div className="num">{c.value}</div><div className="lbl">{c.label}</div>{c.sub ? <div className="sub">{c.sub}</div> : null}
+                </button>
+              ))}
+            </div>
+            <p className="section-label">Recent activity</p>
+            <Card><p>Priya S. submitted proof for "Pitch our CRM to a local clinic" &middot; 12 min ago</p></Card>
+            <Card><p>Priya S. opened a ticket: "Screenshot upload fails on my phone" &middot; yesterday</p></Card>
+            <Card><p>Rahul K. requested a payout of {formatRupees(17000n)} &middot; 1 hour ago</p></Card>
+            <Card><p>"Rate us on the App Store" reached its slot limit &middot; 3 hours ago</p></Card>
+          </div></div>
         </div>
-        <p className="section-label">Recent activity</p>
-        <Card><p>Priya S. submitted proof for "Pitch our CRM to a local clinic" &middot; 12 min ago</p></Card>
-        <Card><p>Rahul K. requested a payout of {formatRupees(17000n)} &middot; 1 hour ago</p></Card>
-        <Card><p>"Rate us on the App Store" reached its slot limit &middot; 3 hours ago</p></Card>
-      </div></div></div>
-    ); break;
+      );
+      break;
+    }
     case "tasks": body = (
       <div className="screen"><TopBar title="Tasks" /><div className="scrollarea"><div className="content">
         {perms.has("task.manage") ? <Button variant="primary" block style={{ marginBottom: 14 }} onClick={() => show("newtask")}>New task</Button> : null}
@@ -174,25 +197,39 @@ export function AdminApp({ initialScreen = "dashboard", viewerRoleIds = ["role-o
         agents={members.filter((m) => roles.some((r) => m.roleIds.includes(r.id) && r.permissions.includes("ticket.manage"))).map((m) => m.name.replace(" (owner)", ""))} />
     ); break;
     case "users": body = (
-      <div className="screen"><TopBar title="People" />
-        <Tabs<PeopleTab> value={peopleTab} onChange={setPeopleTab} tabs={[
-          ...(perms.has("user.manage") ? [{ id: "users" as const, label: "Users" }] : []),
-          ...(perms.has("role.manage") ? [{ id: "team" as const, label: "Team" }, { id: "roles" as const, label: "Roles" }] : [])]} />
+      <div className="screen"><TopBar title="Users" />
         <div className="scrollarea"><div className="content">
-          {peopleTab === "users" && perms.has("user.manage") ? (<>
-            <p className="note-text" style={{ marginBottom: 10 }}>142 total.</p>
-            {fixtures.adminUsers.map((u) => {
-              const st = userStatus[u.id] ?? u.status;
-              return <ListRow key={u.id} onClick={() => { setUserId(u.id); show("userdetail"); }} title={u.name}
-                right={<StatusPill tone={st === "active" ? "teal" : st === "suspended" ? "amber" : st === "deleted" ? "gray" : "coral"}>{st[0]!.toUpperCase() + st.slice(1)}</StatusPill>}
-                sub={`${u.emailMasked} · ${formatRupees(u.lifetime)} lifetime · ${u.identityCount} email${u.identityCount > 1 ? "s" : ""}`} />;
-            })}
-          </>) : null}
-          {peopleTab === "team" && perms.has("role.manage") ? <TeamPanel members={members} roles={roles} setMembers={setMembers} notify={notify} /> : null}
-          {peopleTab === "roles" && perms.has("role.manage") ? <RolesPanel roles={roles} setRoles={setRoles} notify={notify} /> : null}
+          <p className="note-text" style={{ marginBottom: 10 }}>142 total.</p>
+          {fixtures.adminUsers.map((u) => {
+            const st = userStatus[u.id] ?? u.status;
+            return <ListRow key={u.id} onClick={() => { setUserId(u.id); show("userdetail"); }} title={u.name}
+              right={<StatusPill tone={st === "active" ? "teal" : st === "suspended" ? "amber" : st === "deleted" ? "gray" : "coral"}>{st[0]!.toUpperCase() + st.slice(1)}</StatusPill>}
+              sub={`${u.emailMasked} · ${formatRupees(u.lifetime)} lifetime · ${u.identityCount} email${u.identityCount > 1 ? "s" : ""}`} />;
+          })}
         </div></div>
       </div>
     ); break;
+    case "access": {
+      const mine = roles.filter((r) => viewerRoleIds.includes(r.id));
+      const myPerms = PERMISSIONS.filter((p) => perms.has(p.key));
+      body = (
+        <div className="screen"><TopBar title="Roles and permissions" onBack={() => show("dashboard")} />
+          {perms.has("role.manage") ? <Tabs<AccessTab> value={accessTab} onChange={setAccessTab} tabs={[{ id: "team", label: "Team" }, { id: "roles", label: "Roles" }]} /> : null}
+          <div className="scrollarea"><div className="content">
+            <Card hero>
+              <h3>{adminName}</h3>
+              <p className="muted" style={{ marginBottom: 8 }}>Your access</p>
+              <div className="chips" style={{ marginTop: 0 }}>{mine.map((r) => <StatusPill key={r.id} tone="teal">{r.name}</StatusPill>)}</div>
+              <ul className="perm-list">{myPerms.map((p) => <li key={p.key}>{p.label}</li>)}</ul>
+            </Card>
+            {perms.has("role.manage") && accessTab === "team" ? <TeamPanel members={members} roles={roles} setMembers={setMembers} notify={notify} /> : null}
+            {perms.has("role.manage") && accessTab === "roles" ? <RolesPanel roles={roles} setRoles={setRoles} notify={notify} /> : null}
+            {!perms.has("role.manage") ? <p className="hint">Only an owner or a member with "Manage roles" can change roles and permissions.</p> : null}
+          </div></div>
+        </div>
+      );
+      break;
+    }
     case "userdetail": {
       const u = fixtures.adminUsers.find((x) => x.id === userId) ?? fixtures.adminUsers[0]!;
       const st = userStatus[u.id] ?? u.status;

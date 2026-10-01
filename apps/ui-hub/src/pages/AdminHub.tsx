@@ -14,18 +14,19 @@ const JUMPS: Record<string, { screen: AdminScreen; label: string }> = {
   payouts: { screen: "payouts", label: "Payouts" },
   payoutitem: { screen: "payoutitem", label: "Payout: mark paid + proof" },
   payoutflagged: { screen: "payoutflagged", label: "Payout: flagged" },
-  users: { screen: "users", label: "People (users / team / roles)" },
+  users: { screen: "users", label: "Users" },
+  access: { screen: "access", label: "Roles and permissions (admin name)" },
   userdetail: { screen: "userdetail", label: "User detail" },
   tickets: { screen: "tickets", label: "Support: tickets" },
   ticket: { screen: "ticket", label: "Support: ticket chat" }
 };
 const GROUPS: JumpGroup<string>[] = [
-  { label: "Overview", items: [{ id: "dashboard", label: JUMPS.dashboard!.label }] },
+  { label: "Overview", items: ["dashboard", "access"].map((id) => ({ id, label: JUMPS[id]!.label })) },
   { label: "Tasks", items: ["tasks", "newtask", "taskdetail", "removeconfirm"].map((id) => ({ id, label: JUMPS[id]!.label })) },
   { label: "Review", items: ["reviewqueue", "reviewitem"].map((id) => ({ id, label: JUMPS[id]!.label })) },
   { label: "Payments", items: ["payouts", "payoutitem", "payoutflagged"].map((id) => ({ id, label: JUMPS[id]!.label })) },
   { label: "Support", items: ["tickets", "ticket"].map((id) => ({ id, label: JUMPS[id]!.label })) },
-  { label: "People", items: ["users", "userdetail"].map((id) => ({ id, label: JUMPS[id]!.label })) }
+  { label: "Users", items: ["users", "userdetail"].map((id) => ({ id, label: JUMPS[id]!.label })) }
 ];
 
 export function AdminHub() {
