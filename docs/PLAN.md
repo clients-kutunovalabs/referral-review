@@ -26,6 +26,11 @@ Per task `text_mode`: `none | keywords | manual_pool | ai_generated` (keywords c
 - The assigned text is shown to the worker with a copy button.
 - Site link: `site_url` per task (validated https), shown on the task page (where the work happens).
 
+## Help and support tickets
+- Users: a Help tab (and a Help button on the Payout page) opens two lists, Open and Closed (no status on rows). "Create ticket" opens an overlay: title, description, one optional image. Tapping a ticket opens a chat view (customer messages, admin replies, system lines for assign/resolve).
+- Admins with `ticket.manage`: Support list (Open/Closed, "Needs reply"), assign a ticket to a team member, reply, and Mark resolved (confirm). When resolved the customer can still read the chat but the composer is gone (enforced on the server too); a new ticket is needed for further help. Nothing is emailed: replies are read in the app.
+- Data model: `tickets`(workspace_id, number, user_id, title, status, assignee_id, created_at, updated_at), `ticket_messages`(ticket_id, sender_type customer|admin|system, sender_id, body, attachment_key, created_at). Server rejects customer messages on closed tickets. Every assign/resolve is audit-logged.
+
 ## Records are never lost (active, suspended or deleted)
 - `users.status` = `active | suspended | deleted`; delete is soft. PII may be anonymised on request; the user row, identities' ids, claims, submissions, reviews, ledger, payout requests, payments and audit log stay.
 - All financial FKs `ON DELETE RESTRICT`; triggers reject UPDATE/DELETE on `wallet_transactions`, `payout_payments`, `admin_audit_log`.
@@ -46,7 +51,7 @@ Per task `text_mode`: `none | keywords | manual_pool | ai_generated` (keywords c
 - Production: ui-hub is not built or deployed; design system is internal only (default: removed from production, or behind admin auth with `design.view`).
 
 ## Admin roles and permissions
-Tables: `admin_members, roles, role_permissions, member_roles`. Permissions: `task.manage`, `task.assign`, `review.decide`, `payout.mark_paid`, `user.manage`, `role.manage`, `task_text.manage`, `design.view`. Owner has all, cannot be removed; members can hold several roles; every route checks the DB per request; every admin action audit-logged.
+Tables: `admin_members, roles, role_permissions, member_roles`. Permissions: `task.manage`, `task.assign`, `review.decide`, `payout.mark_paid`, `user.manage`, `role.manage`, `task_text.manage`, `ticket.manage`, `design.view`. Owner has all, cannot be removed; members can hold several roles; every route checks the DB per request; every admin action audit-logged.
 
 ## Security (realistic)
 Frontend code can't be made uncopyable. Protection = server-side authz and logic, no secrets/prices/rules in client, CSP and security headers, minified bundles without public source maps, CSRF, rate limiting, uploads validated and served from a separate domain, UPI encrypted at rest and masked outside the payout screen, dependency audit in CI. Sales screenshots may contain customer data: private bucket, signed short-lived URLs, retention policy.

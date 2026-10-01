@@ -5,23 +5,26 @@ import {
   BottomNav, Button, Card, Chips, CopyButton, Countdown, EmptyState, Field, FileUpload, Input, Notice, Select,
   Sheet, StatusPill, Tabs, Textarea, Toast, TopBar
 } from "../../primitives";
+import { CreateTicketBody, HelpScreen, TicketChatScreen, type HelpTab } from "./HelpScreens";
 
 export type UserScreen =
   | "login" | "register" | "verifyEmail" | "board" | "detail" | "claimed" | "mytasks" | "submit" | "submitted"
-  | "wallet" | "payout" | "payoutSent" | "payoutFlagged" | "identities";
+  | "wallet" | "payout" | "payoutSent" | "payoutFlagged" | "identities" | "help" | "createTicket" | "ticket";
 export type MyTab = "active" | "review" | "completed" | "rejected";
 
 const NAV = [
   { id: "board", label: "Tasks" },
   { id: "mytasks", label: "My tasks" },
   { id: "wallet", label: "Wallet" },
-  { id: "payout", label: "Payout" }
+  { id: "payout", label: "Payout" },
+  { id: "help", label: "Help" }
 ];
 const TAB_OF: Partial<Record<UserScreen, string>> = {
   board: "board", detail: "board", claimed: "board",
   mytasks: "mytasks", submit: "mytasks", submitted: "mytasks",
   wallet: "wallet",
-  payout: "payout", payoutSent: "payout", payoutFlagged: "payout"
+  payout: "payout", payoutSent: "payout", payoutFlagged: "payout",
+  help: "help", createTicket: "help"
 };
 const MIN_PAYOUT = rupees(10);
 
@@ -45,9 +48,11 @@ export interface UserAppProps {
   loggedIn?: boolean;
   /** which payout lifecycle state to start in (ui-hub scenarios) */
   payoutScenario?: PayoutScenario;
+  initialTicketId?: string;
+  initialHelpTab?: HelpTab;
 }
 
-export function UserApp({ initialScreen = "board", initialTab = "active", loggedIn: initialLoggedIn = true, payoutScenario = "default" }: UserAppProps) {
+export function UserApp({ initialScreen = "board", initialTab = "active", loggedIn: initialLoggedIn = true, payoutScenario = "default", initialTicketId = "tk1042", initialHelpTab = "open" }: UserAppProps) {
   const [screen, setScreen] = useState<UserScreen>(initialScreen);
   const [tab, setTab] = useState<MyTab>(initialTab);
   const [loggedIn, setLoggedIn] = useState(initialLoggedIn);
@@ -57,6 +62,8 @@ export function UserApp({ initialScreen = "board", initialTab = "active", logged
   const [identities, setIdentities] = useState<Identity[]>(fixtures.identities);
   const [identityId, setIdentityId] = useState("i1");
   const [toast, setToast] = useState<string | null>(null);
+  const [ticketId, setTicketId] = useState(initialTicketId);
+  const [helpTab, setHelpTab] = useState<HelpTab>(initialHelpTab);
   const [registerEmail, setRegisterEmail] = useState("you@example.com");
   const [payouts, setPayouts] = useState<PayoutRequest[]>(fixtures.payoutScenarios[payoutScenario]);
 
@@ -139,6 +146,7 @@ export function UserApp({ initialScreen = "board", initialTab = "active", logged
       <PayoutScreen available={available} inProcess={inProcess} payouts={payouts}
         onRequest={(amt, upi) => { setPayouts([{ id: `p${payouts.length + 1}`, who: "You", amount: amt, status: "pending", upiMasked: maskUpi(upi), upiFull: upi, whenLabel: "just now", at: new Date().toISOString() }, ...payouts]); show("payoutSent"); }}
         onFlagged={() => show("payoutFlagged")}
+        onHelp={() => show("help")}
         onDemoPaid={() => { setPayouts(payouts.map((p) => (p.status === "pending" ? { ...p, status: "paid", paidBy: "Anil (Payments)", paidAt: new Date().toISOString() } : p))); notify("Demo: admin marked it paid"); }} />
     ); break;
     case "payoutSent": {
@@ -167,6 +175,16 @@ export function UserApp({ initialScreen = "board", initialTab = "active", logged
         <Button variant="primary" block style={{ marginTop: 14 }} onClick={() => show("payout")}>Try a different UPI ID</Button>
       </div></div></div>
     ); break;
+    case "help": body = <HelpScreen tab={helpTab} setTab={setHelpTab} onOpen={(id) => { setTicketId(id); show("ticket"); }} onCreate={() => show("createTicket")} />; break;
+    case "createTicket": body = (
+      <>
+        <HelpScreen tab={helpTab} setTab={setHelpTab} onOpen={(id) => { setTicketId(id); show("ticket"); }} onCreate={() => show("createTicket")} />
+        <Sheet title="Create ticket" onClose={() => show("help")}>
+          <CreateTicketBody onCreated={() => { setHelpTab("open"); notify("Ticket created. Support will reply here."); show("help"); }} />
+        </Sheet>
+      </>
+    ); break;
+    case "ticket": body = <TicketChatScreen ticketId={ticketId} onBack={() => show("help")} onNew={() => show("createTicket")} />; break;
     case "identities": body = (
       <IdentitiesScreen identities={identities} activeId={identityId} onSwitch={(id) => { setIdentityId(id); notify("Switched email"); }}
         onAdd={(email) => { setIdentities([...identities, { id: `i${identities.length + 1}`, email, isPrimary: false, earned: 0n }]); notify("Email verified and added"); }}
@@ -450,8 +468,8 @@ function WalletScreen({ identities, earned, withdrawn, inProcess, available, pay
   );
 }
 
-function PayoutScreen({ available, inProcess, payouts, onRequest, onFlagged, onDemoPaid }: {
-  available: Paise; inProcess: Paise; payouts: PayoutRequest[]; onRequest: (amt: Paise, upi: string) => void; onFlagged: () => void; onDemoPaid: () => void;
+function PayoutScreen({ available, inProcess, payouts, onRequest, onFlagged, onDemoPaid, onHelp }: {
+  available: Paise; inProcess: Paise; payouts: PayoutRequest[]; onRequest: (amt: Paise, upi: string) => void; onFlagged: () => void; onDemoPaid: () => void; onHelp: () => void;
 }) {
   const [amount, setAmount] = useState(""); const [upi, setUpi] = useState(""); const [errs, setErrs] = useState<{ amount?: string; upi?: string }>({});
   const [openTx, setOpenTx] = useState<string | null>(null);
@@ -470,7 +488,7 @@ function PayoutScreen({ available, inProcess, payouts, onRequest, onFlagged, onD
     }
   }
   return (
-    <div className="screen"><TopBar title="Payout" /><div className="scrollarea"><div className="content">
+    <div className="screen"><TopBar title="Payout" right={<button className="identity-chip" onClick={onHelp}>Help</button>} /><div className="scrollarea"><div className="content">
       <Card>
         <p style={{ fontSize: 12, margin: "0 0 4px" }}>Withdrawable balance</p>
         <h3 style={{ fontSize: 20 }}>{formatRupees(available)}</h3>

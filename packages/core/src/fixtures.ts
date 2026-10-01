@@ -1,7 +1,7 @@
 /** Mock data for ui-hub and design review. Not used in production builds of the real apps. */
 import { outcomeAmount, rupees } from "@rr/money";
 import type {
-  AdminMember, AdminUserRow, Claim, Identity, PayoutRequest, PayoutScenario, ReviewQueueItem, Role, Task, Wallet
+  AdminMember, AdminUserRow, Claim, Identity, PayoutRequest, PayoutScenario, ReviewQueueItem, Role, Task, Ticket, Wallet
 } from "./contracts";
 
 export const pitchPool: string[] = [
@@ -200,14 +200,57 @@ export const adminUsers: AdminUserRow[] = [
 ];
 
 export const roles: Role[] = [
-  { id: "role-owner", name: "Owner", permissions: ["task.manage", "task.assign", "task_text.manage", "review.decide", "payout.mark_paid", "user.manage", "role.manage", "design.view"] },
+  { id: "role-owner", name: "Owner", permissions: ["task.manage", "task.assign", "task_text.manage", "review.decide", "payout.mark_paid", "user.manage", "ticket.manage", "role.manage", "design.view"] },
   { id: "role-payments", name: "Payments", permissions: ["payout.mark_paid"] },
   { id: "role-tasks", name: "Task manager", permissions: ["task.manage", "task.assign", "task_text.manage"] },
-  { id: "role-reviewer", name: "Reviewer", permissions: ["review.decide"] }
+  { id: "role-reviewer", name: "Reviewer", permissions: ["review.decide"] },
+  { id: "role-support", name: "Support", permissions: ["ticket.manage"] }
 ];
 
 export const members: AdminMember[] = [
   { id: "m1", name: "Hrishabh (owner)", isOwner: true, roleIds: ["role-owner"] },
   { id: "m2", name: "Anil", isOwner: false, roleIds: ["role-payments"] },
-  { id: "m3", name: "Sneha", isOwner: false, roleIds: ["role-tasks", "role-reviewer"] }
+  { id: "m3", name: "Sneha", isOwner: false, roleIds: ["role-tasks", "role-reviewer", "role-support"] }
+];
+
+const day = (d: number, h: number, m: number): string => new Date(2026, 8, d, h, m).toISOString(); // Sep 2026, local time
+
+/** Seed tickets for the ui-hub demo. The customer is the demo user (Priya S.). */
+export const tickets: Ticket[] = [
+  {
+    id: "tk1042", number: 1042, title: "Payout still in process after 3 days", status: "open",
+    customerName: "Priya S.", customerEmail: "priya@gmail.com", assignee: "Sneha", createdAt: day(27, 10, 5), updatedAt: day(28, 16, 40),
+    messages: [
+      { id: "m1", sender: "customer", senderName: "Priya S.", at: day(27, 10, 5), body: "I requested a payout of ₹250 on 24 Sep and it still shows In process. Can you check it?" },
+      { id: "m2", sender: "system", senderName: "System", at: day(27, 10, 20), body: "Assigned to Sneha" },
+      { id: "m3", sender: "admin", senderName: "Sneha (Support)", at: day(27, 11, 2), body: "Hi Priya, thanks for writing. Payouts are paid by hand on Fridays. Yours is in this week's batch." },
+      { id: "m4", sender: "customer", senderName: "Priya S.", at: day(28, 16, 40), body: "Okay, thank you. Will I see it in my wallet once it's paid?" }
+    ]
+  },
+  {
+    id: "tk1038", number: 1038, title: "Screenshot upload fails on my phone", status: "open",
+    customerName: "Priya S.", customerEmail: "priya@gmail.com", assignee: null, createdAt: day(29, 9, 12), updatedAt: day(29, 9, 12),
+    messages: [
+      { id: "m1", sender: "customer", senderName: "Priya S.", at: day(29, 9, 12), body: "When I try to attach a screenshot it says the image is too big, but it is only 2 MB." }
+    ]
+  },
+  {
+    id: "tk1029", number: 1029, title: "Wrong amount credited for a task", status: "closed",
+    customerName: "Priya S.", customerEmail: "priya@gmail.com", assignee: "Anil", createdAt: day(12, 14, 0), updatedAt: day(13, 12, 30),
+    messages: [
+      { id: "m1", sender: "customer", senderName: "Priya S.", at: day(12, 14, 0), body: "The task said ₹60 but I was credited ₹45." },
+      { id: "m2", sender: "system", senderName: "System", at: day(12, 14, 30), body: "Assigned to Anil" },
+      { id: "m3", sender: "admin", senderName: "Anil (Support)", at: day(13, 12, 10), body: "That task was approved at 75% because the call duration was missing in the screenshot, so ₹45 is correct." },
+      { id: "m4", sender: "system", senderName: "System", at: day(13, 12, 30), body: "Marked as resolved by Anil" }
+    ]
+  },
+  {
+    id: "tk1011", number: 1011, title: "How do I add another email?", status: "closed",
+    customerName: "Priya S.", customerEmail: "priya@gmail.com", assignee: "Sneha", createdAt: day(3, 18, 20), updatedAt: day(3, 19, 0),
+    messages: [
+      { id: "m1", sender: "customer", senderName: "Priya S.", at: day(3, 18, 20), body: "Where can I add a second email to claim the same task?" },
+      { id: "m2", sender: "admin", senderName: "Sneha (Support)", at: day(3, 18, 50), body: "Tap your email at the top of the Tasks page, then My emails, then Add an email. We send one code to confirm it." },
+      { id: "m3", sender: "system", senderName: "System", at: day(3, 19, 0), body: "Marked as resolved by Sneha" }
+    ]
+  }
 ];

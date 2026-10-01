@@ -68,7 +68,7 @@ export function TopBar({ title, onBack, right }: { title: string; onBack?: () =>
 export interface NavItem { id: string; label: string; badge?: number }
 export function BottomNav({ items, active, onSelect }: { items: NavItem[]; active: string; onSelect: (id: string) => void }) {
   return (
-    <nav className="bottomnav" aria-label="Main">
+    <nav className={`bottomnav${items.length > 5 ? " dense" : ""}`} aria-label="Main">
       {items.map((i) => (
         <button key={i.id} className={`navitem${i.id === active ? " on" : ""}`} aria-current={i.id === active ? "page" : undefined} onClick={() => onSelect(i.id)}>
           <span className="navdot" />

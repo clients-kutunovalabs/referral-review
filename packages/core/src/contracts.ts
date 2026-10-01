@@ -116,6 +116,7 @@ export const PERMISSIONS = [
   { key: "review.decide", label: "Review submissions" },
   { key: "payout.mark_paid", label: "Make payments" },
   { key: "user.manage", label: "Manage users" },
+  { key: "ticket.manage", label: "Handle support tickets" },
   { key: "role.manage", label: "Manage roles" },
   { key: "design.view", label: "View design system" }
 ] as const;
@@ -143,3 +144,26 @@ export const TEXT_MODE_LABEL: Record<TextMode, string> = {
 
 /** Payout lifecycle states used by ui-hub scenarios. */
 export type PayoutScenario = "none" | "default" | "inProcess" | "paid";
+
+/** Support tickets: a customer opens one, an admin is assigned, they chat, the admin marks it resolved. */
+export type TicketStatus = "open" | "closed";
+export interface TicketMessage {
+  id: string;
+  sender: "customer" | "admin" | "system"; // system = "Assigned to ...", "Marked as resolved ..."
+  senderName: string;
+  body: string;
+  at: string; // ISO
+  attachment?: { name: string; url: string }; // image, one per ticket for now
+}
+export interface Ticket {
+  id: string;
+  number: number;
+  title: string;
+  status: TicketStatus;
+  customerName: string;
+  customerEmail: string;
+  assignee: string | null;
+  createdAt: string; // ISO
+  updatedAt: string; // ISO
+  messages: TicketMessage[];
+}

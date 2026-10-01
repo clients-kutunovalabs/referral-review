@@ -7,11 +7,13 @@ import {
   BottomNav, Button, Card, Chips, CopyButton, EmptyState, Field, FileUpload, Input, ListRow, Select,
   StatusPill, Tabs, Textarea, Toast, TopBar
 } from "../../primitives";
+import { AdminTicketChat, AdminTicketList, type SupportTab } from "./SupportScreens";
+import { needsReply, useTickets } from "../../demo/ticketStore";
 
 export type AdminScreen =
   | "dashboard" | "tasks" | "newtask" | "taskdetail" | "removeconfirm"
   | "reviewqueue" | "reviewitem" | "payouts" | "payoutitem" | "payoutflagged"
-  | "users" | "userdetail";
+  | "users" | "userdetail" | "tickets" | "ticket";
 type PeopleTab = "users" | "team" | "roles";
 
 /** Screen -> permission needed. Mirrors the server, which checks the database on every request. */
@@ -19,19 +21,21 @@ const NEEDS: Partial<Record<AdminScreen, PermissionKey[]>> = {
   tasks: ["task.manage", "task.assign"], newtask: ["task.manage"], taskdetail: ["task.manage", "task.assign"], removeconfirm: ["task.manage"],
   reviewqueue: ["review.decide"], reviewitem: ["review.decide"],
   payouts: ["payout.mark_paid"], payoutitem: ["payout.mark_paid"], payoutflagged: ["payout.mark_paid"],
-  users: ["user.manage", "role.manage"], userdetail: ["user.manage"]
+  users: ["user.manage", "role.manage"], userdetail: ["user.manage"],
+  tickets: ["ticket.manage"], ticket: ["ticket.manage"]
 };
 const NAV_DEF: { id: AdminScreen; tab: string; label: string }[] = [
   { id: "dashboard", tab: "dashboard", label: "Home" },
   { id: "tasks", tab: "tasks", label: "Tasks" },
   { id: "reviewqueue", tab: "review", label: "Review" },
   { id: "payouts", tab: "payouts", label: "Payouts" },
-  { id: "users", tab: "users", label: "People" }
+  { id: "users", tab: "users", label: "People" },
+  { id: "tickets", tab: "support", label: "Support" }
 ];
 const TAB_OF: Partial<Record<AdminScreen, string>> = {
   dashboard: "dashboard", tasks: "tasks", newtask: "tasks", taskdetail: "tasks", removeconfirm: "tasks",
   reviewqueue: "review", reviewitem: "review", payouts: "payouts", payoutitem: "payouts", payoutflagged: "payouts",
-  users: "users", userdetail: "users"
+  users: "users", userdetail: "users", tickets: "support", ticket: "support"
 };
 
 const extraTasks: { title: string; status: "closed" | "removed"; meta: string }[] = [
@@ -44,9 +48,10 @@ export interface AdminAppProps {
   /** Roles held by the viewing admin. Drives which nav items and screens are allowed. */
   viewerRoleIds?: string[];
   adminName?: string;
+  initialTicketId?: string;
 }
 
-export function AdminApp({ initialScreen = "dashboard", viewerRoleIds = ["role-owner"], adminName = "Hrishabh" }: AdminAppProps) {
+export function AdminApp({ initialScreen = "dashboard", viewerRoleIds = ["role-owner"], adminName = "Hrishabh", initialTicketId = "tk1042" }: AdminAppProps) {
   const [screen, setScreen] = useState<AdminScreen>(initialScreen);
   const [roles, setRoles] = useState<Role[]>(fixtures.roles);
   const [members, setMembers] = useState<AdminMember[]>(fixtures.members);
@@ -58,11 +63,15 @@ export function AdminApp({ initialScreen = "dashboard", viewerRoleIds = ["role-o
   const [payoutId, setPayoutId] = useState("a1");
   const [userId, setUserId] = useState("u1");
   const [userStatus, setUserStatus] = useState<Record<string, string>>({});
+  const [ticketId, setTicketId] = useState(initialTicketId);
+  const [supportTab, setSupportTab] = useState<SupportTab>("open");
+  const allTickets = useTickets();
 
   const perms = new Set(roles.filter((r) => viewerRoleIds.includes(r.id)).flatMap((r) => r.permissions));
   const can = (s: AdminScreen) => { const n = NEEDS[s]; return !n || n.some((p) => perms.has(p)); };
   const navItems = NAV_DEF.filter((n) => can(n.id)).map((n) => ({
-    id: n.tab, label: n.label, ...(n.id === "reviewqueue" && queue.length ? { badge: queue.length } : {})
+    id: n.tab, label: n.label, ...(n.id === "reviewqueue" && queue.length ? { badge: queue.length } : {}),
+    ...(n.id === "tickets" && allTickets.some(needsReply) ? { badge: allTickets.filter(needsReply).length } : {})
   }));
   const show = (s: AdminScreen) => setScreen(s);
   const notify = (m: string) => setToast(m);
@@ -154,6 +163,11 @@ export function AdminApp({ initialScreen = "dashboard", viewerRoleIds = ["role-o
       );
       break;
     }
+    case "tickets": body = <AdminTicketList tab={supportTab} setTab={setSupportTab} onOpen={(id) => { setTicketId(id); show("ticket"); }} />; break;
+    case "ticket": body = (
+      <AdminTicketChat ticketId={ticketId} adminName={adminName} canAssign={perms.has("ticket.manage")} onBack={() => show("tickets")}
+        agents={members.filter((m) => roles.some((r) => m.roleIds.includes(r.id) && r.permissions.includes("ticket.manage"))).map((m) => m.name.replace(" (owner)", ""))} />
+    ); break;
     case "users": body = (
       <div className="screen"><TopBar title="People" />
         <Tabs<PeopleTab> value={peopleTab} onChange={setPeopleTab} tabs={[
@@ -197,7 +211,7 @@ export function AdminApp({ initialScreen = "dashboard", viewerRoleIds = ["role-o
     <>
       {body}
       {toast ? <Toast message={toast} onDone={() => setToast(null)} /> : null}
-      <BottomNav items={navItems} active={tab} onSelect={(t) => show(NAV_DEF.find((n) => n.tab === t)!.id)} />
+      {screen === "ticket" && can(screen) ? null : <BottomNav items={navItems} active={tab} onSelect={(t) => show(NAV_DEF.find((n) => n.tab === t)!.id)} />}
     </>
   );
 }

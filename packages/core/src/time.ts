@@ -44,3 +44,10 @@ export function dateParts(iso: string, now: Date = new Date()): { date: string; 
   if (Number.isNaN(d.getTime())) return { date: "", time: "" };
   return { date: shortDate(d, now), time: shortTime(d) };
 }
+
+/** "4 Sep, 6:12 PM" */
+export function whenLabel(iso: string | undefined, now: Date = new Date()): string {
+  if (!iso) return "";
+  const { date, time } = dateParts(iso, now);
+  return date ? `${date}, ${time}` : "";
+}
