@@ -23,7 +23,7 @@ const TAB_OF: Partial<Record<UserScreen, string>> = {
   wallet: "wallet",
   payout: "payout", payoutSent: "payout", payoutFlagged: "payout"
 };
-const MIN_PAYOUT = rupees(100);
+const MIN_PAYOUT = rupees(10);
 
 function maskUpi(upi: string): string {
   const [name = "", bank = ""] = upi.split("@");
@@ -439,7 +439,7 @@ function PayoutScreen({ available, pending, payouts, onRequest, onFlagged }: { a
     <div className="screen"><TopBar title="Payout" /><div className="scrollarea"><div className="content">
       <Card><p style={{ fontSize: 12, margin: "0 0 4px" }}>Withdrawable balance</p><h3 style={{ fontSize: 20 }}>{formatRupees(available)}</h3></Card>
       {pending ? <div className="banner">You already have a payout request pending. You can request again once it's paid.</div> : null}
-      <Field label="Amount (₹)" error={errs.amount} hint={`Minimum ${formatRupees(MIN_PAYOUT)}`}><Input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="100" disabled={pending} /></Field>
+      <Field label="Amount (₹)" error={errs.amount} hint={`Minimum ${formatRupees(MIN_PAYOUT)}`}><Input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="10" disabled={pending} /></Field>
       <Field label="UPI ID" error={errs.upi} hint="You'll enter this each time. It isn't saved as a payment method."><Input id="upi-input" value={upi} onChange={(e) => setUpi(e.target.value)} placeholder="yourname@upi" disabled={pending} autoComplete="off" /></Field>
       <Button variant="primary" block disabled={pending} onClick={submit}>Request payout</Button>
       <p className="section-label">Payout history</p>
