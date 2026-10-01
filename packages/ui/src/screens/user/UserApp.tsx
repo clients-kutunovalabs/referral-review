@@ -292,11 +292,14 @@ function MyTasksScreen({ tab, setTab, claims, identities, onSubmit }: {
               <h3>{title(c)}</h3>
               {c.status === "claimed" ? <p className="muted">{email(c)}</p> : null}
               {c.status === "claimed" && t ? (<>
-                <div className="info-cell white" style={{ marginTop: 10 }}>
-                  <span className="info-label">Task site &#8599;</span>
-                  <span className="info-value"><a href={t.siteUrl} target="_blank" rel="noreferrer noopener" title={t.siteUrl}>{t.siteUrl.replace("https://", "")}</a></span>
+                <div className="active-grid">
+                  <div className="info-cell white">
+                    <span className="info-label">Task site &#8599;</span>
+                    <span className="info-value"><a href={t.siteUrl} target="_blank" rel="noreferrer noopener" title={t.siteUrl}>{t.siteUrl.replace("https://", "")}</a></span>
+                  </div>
+                  <span className="timer"><Countdown minutes={c.minutesLeft ?? 0} /></span>
+                  <Button onClick={() => onSubmit(c.id)}>Submit proof</Button>
                 </div>
-                <div className="row"><Countdown minutes={c.minutesLeft ?? 0} /><Button onClick={() => onSubmit(c.id)}>Submit proof</Button></div>
                 <div className="task-text">
                   {t.keywords.length ? (<><div className="section-label">Keywords</div><Chips items={t.keywords} /></>) : null}
                   {c.assignedText ? (<>

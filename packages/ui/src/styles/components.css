@@ -55,6 +55,12 @@
 .notice.amber { background: var(--amber-bg); color: var(--amber); }
 .notice.coral { background: var(--coral-bg); color: var(--coral); }
 
+/* Active task card: link and timer stacked on the left, Submit proof as one tall block on the right */
+.active-grid { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: auto auto; gap: var(--space-3); margin-top: var(--space-4); align-items: center; }
+.active-grid .info-cell { grid-column: 1; grid-row: 1; }
+.active-grid .timer { grid-column: 1; grid-row: 2; justify-self: start; }
+.active-grid > .btn { grid-column: 2; grid-row: 1 / span 2; align-self: stretch; }
+
 .chips { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-3); }
 .chip { font-size: var(--text-sm); padding: 4px 10px; border-radius: var(--radius-pill); background: var(--surface-2); border: var(--border-width) solid var(--border-strong); color: var(--text-primary); }
 .chip.hit { background: var(--green-bg); border-color: var(--green); color: var(--green); }
