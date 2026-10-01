@@ -289,15 +289,16 @@ function MyTasksScreen({ tab, setTab, claims, identities, onSubmit }: {
           const t = fixtures.tasks.find((x) => x.id === c.taskId);
           return (
             <Card key={c.id}>
-              <h3>{title(c)}</h3>
+              {c.status === "claimed" ? (
+                <div className="card-head"><h3>{title(c)}</h3><Countdown minutes={c.minutesLeft ?? 0} /></div>
+              ) : <h3>{title(c)}</h3>}
               {c.status === "claimed" ? <p className="muted">{email(c)}</p> : null}
               {c.status === "claimed" && t ? (<>
-                <div className="active-grid">
+                <div className="active-row">
                   <div className="info-cell white">
                     <span className="info-label">Task site &#8599;</span>
                     <span className="info-value"><a href={t.siteUrl} target="_blank" rel="noreferrer noopener" title={t.siteUrl}>{t.siteUrl.replace("https://", "")}</a></span>
                   </div>
-                  <span className="timer"><Countdown minutes={c.minutesLeft ?? 0} /></span>
                   <Button onClick={() => onSubmit(c.id)}>Submit proof</Button>
                 </div>
                 <div className="task-text">
