@@ -14,15 +14,15 @@ import { markPaid, usePayouts } from "../../demo/payoutStore";
 export type AdminScreen =
   | "dashboard" | "tasks" | "newtask" | "taskdetail" | "removeconfirm"
   | "reviewqueue" | "reviewitem" | "payouts" | "payoutitem" | "payoutflagged"
-  | "users" | "userdetail" | "tickets" | "ticket" | "access";
-type AccessTab = "team" | "roles";
+  | "userdetail" | "tickets" | "ticket" | "access";
+type AccessTab = "users" | "team" | "roles";
 
 /** Screen -> permission needed. Mirrors the server, which checks the database on every request. */
 const NEEDS: Partial<Record<AdminScreen, PermissionKey[]>> = {
   tasks: ["task.manage", "task.assign"], newtask: ["task.manage"], taskdetail: ["task.manage", "task.assign"], removeconfirm: ["task.manage"],
   reviewqueue: ["review.decide"], reviewitem: ["review.decide"],
   payouts: ["payout.mark_paid"], payoutitem: ["payout.mark_paid"], payoutflagged: ["payout.mark_paid"],
-  users: ["user.manage"], userdetail: ["user.manage"],
+  userdetail: ["user.manage"],
   tickets: ["ticket.manage"], ticket: ["ticket.manage"]
 };
 const NAV_DEF: { id: AdminScreen; tab: string; label: string; icon: IconName }[] = [
@@ -30,13 +30,12 @@ const NAV_DEF: { id: AdminScreen; tab: string; label: string; icon: IconName }[]
   { id: "tasks", tab: "tasks", label: "Tasks", icon: "tasks" },
   { id: "reviewqueue", tab: "review", label: "Review", icon: "review" },
   { id: "payouts", tab: "payouts", label: "Payouts", icon: "payout" },
-  { id: "users", tab: "users", label: "Users", icon: "people" },
   { id: "tickets", tab: "support", label: "Support", icon: "support" }
 ];
 const TAB_OF: Partial<Record<AdminScreen, string>> = {
   dashboard: "dashboard", tasks: "tasks", newtask: "tasks", taskdetail: "tasks", removeconfirm: "tasks",
   reviewqueue: "review", reviewitem: "review", payouts: "payouts", payoutitem: "payouts", payoutflagged: "payouts",
-  users: "users", userdetail: "users", tickets: "support", ticket: "support", access: "dashboard"
+  userdetail: "dashboard", tickets: "support", ticket: "support", access: "dashboard"
 };
 
 const extraTasks: { title: string; status: "closed" | "removed"; meta: string }[] = [
@@ -50,13 +49,14 @@ export interface AdminAppProps {
   viewerRoleIds?: string[];
   adminName?: string;
   initialTicketId?: string;
+  initialAccessTab?: "users" | "team" | "roles";
 }
 
-export function AdminApp({ initialScreen = "dashboard", viewerRoleIds = ["role-owner"], adminName = "Hrishabh", initialTicketId = "tk1042" }: AdminAppProps) {
+export function AdminApp({ initialScreen = "dashboard", viewerRoleIds = ["role-owner"], adminName = "Hrishabh", initialTicketId = "tk1042", initialAccessTab = "users" }: AdminAppProps) {
   const [screen, setScreen] = useState<AdminScreen>(initialScreen);
   const [roles, setRoles] = useState<Role[]>(fixtures.roles);
   const [members, setMembers] = useState<AdminMember[]>(fixtures.members);
-  const [accessTab, setAccessTab] = useState<AccessTab>("team");
+  const [accessTab, setAccessTab] = useState<AccessTab>(initialAccessTab);
   const [toast, setToast] = useState<string | null>(null);
   const [queue, setQueue] = useState(fixtures.reviewQueue);
   const [reviewId, setReviewId] = useState("r1");
@@ -196,35 +196,38 @@ export function AdminApp({ initialScreen = "dashboard", viewerRoleIds = ["role-o
       <AdminTicketChat ticketId={ticketId} adminName={adminName} canAssign={perms.has("ticket.manage")} onBack={() => show("tickets")}
         agents={members.filter((m) => roles.some((r) => m.roleIds.includes(r.id) && r.permissions.includes("ticket.manage"))).map((m) => m.name.replace(" (owner)", ""))} />
     ); break;
-    case "users": body = (
-      <div className="screen"><TopBar title="Users" />
-        <div className="scrollarea"><div className="content">
-          <p className="note-text" style={{ marginBottom: 10 }}>142 total.</p>
-          {fixtures.adminUsers.map((u) => {
-            const st = userStatus[u.id] ?? u.status;
-            return <ListRow key={u.id} onClick={() => { setUserId(u.id); show("userdetail"); }} title={u.name}
-              right={<StatusPill tone={st === "active" ? "teal" : st === "suspended" ? "amber" : st === "deleted" ? "gray" : "coral"}>{st[0]!.toUpperCase() + st.slice(1)}</StatusPill>}
-              sub={`${u.emailMasked} · ${formatRupees(u.lifetime)} lifetime · ${u.identityCount} email${u.identityCount > 1 ? "s" : ""}`} />;
-          })}
-        </div></div>
-      </div>
-    ); break;
     case "access": {
       const mine = roles.filter((r) => viewerRoleIds.includes(r.id));
       const myPerms = PERMISSIONS.filter((p) => perms.has(p.key));
+      const tabs: { id: AccessTab; label: string }[] = [
+        ...(perms.has("user.manage") ? [{ id: "users" as const, label: "Users" }] : []),
+        ...(perms.has("role.manage") ? [{ id: "team" as const, label: "Team" }, { id: "roles" as const, label: "Roles" }] : [])
+      ];
+      const tab = tabs.some((t) => t.id === accessTab) ? accessTab : tabs[0]?.id;
       body = (
         <div className="screen"><TopBar title="Roles and permissions" onBack={() => show("dashboard")} />
-          {perms.has("role.manage") ? <Tabs<AccessTab> value={accessTab} onChange={setAccessTab} tabs={[{ id: "team", label: "Team" }, { id: "roles", label: "Roles" }]} /> : null}
           <div className="scrollarea"><div className="content">
             <Card hero>
               <h3>{adminName}</h3>
-              <p className="muted" style={{ marginBottom: 8 }}>Your access</p>
+              <p className="muted" style={{ marginBottom: 8 }}>Your role{mine.length === 1 ? "" : "s"}</p>
               <div className="chips" style={{ marginTop: 0 }}>{mine.map((r) => <StatusPill key={r.id} tone="teal">{r.name}</StatusPill>)}</div>
+              <p className="muted" style={{ margin: "12px 0 0" }}>What you can do</p>
               <ul className="perm-list">{myPerms.map((p) => <li key={p.key}>{p.label}</li>)}</ul>
             </Card>
-            {perms.has("role.manage") && accessTab === "team" ? <TeamPanel members={members} roles={roles} setMembers={setMembers} notify={notify} /> : null}
-            {perms.has("role.manage") && accessTab === "roles" ? <RolesPanel roles={roles} setRoles={setRoles} notify={notify} /> : null}
-            {!perms.has("role.manage") ? <p className="hint">Only an owner or a member with "Manage roles" can change roles and permissions.</p> : null}
+            {tabs.length ? <div style={{ margin: "0 calc(var(--space-7) * -1)" }}><Tabs<AccessTab> value={tab as AccessTab} onChange={setAccessTab} tabs={tabs} /></div> : <p className="hint">Your roles do not include managing users or roles.</p>}
+            <div style={{ paddingTop: 12 }}>
+              {tab === "users" ? (<>
+                <p className="note-text" style={{ marginBottom: 10 }}>People who use the app. 142 total.</p>
+                {fixtures.adminUsers.map((u) => {
+                  const st = userStatus[u.id] ?? u.status;
+                  return <ListRow key={u.id} onClick={() => { setUserId(u.id); show("userdetail"); }} title={u.name}
+                    right={<StatusPill tone={st === "active" ? "teal" : st === "suspended" ? "amber" : st === "deleted" ? "gray" : "coral"}>{st[0]!.toUpperCase() + st.slice(1)}</StatusPill>}
+                    sub={`${u.emailMasked} · ${formatRupees(u.lifetime)} lifetime · ${u.identityCount} email${u.identityCount > 1 ? "s" : ""}`} />;
+                })}
+              </>) : null}
+              {tab === "team" ? <TeamPanel members={members} roles={roles} setMembers={setMembers} notify={notify} /> : null}
+              {tab === "roles" ? <RolesPanel roles={roles} setRoles={setRoles} members={members} setMembers={setMembers} notify={notify} /> : null}
+            </div>
           </div></div>
         </div>
       );
@@ -235,7 +238,7 @@ export function AdminApp({ initialScreen = "dashboard", viewerRoleIds = ["role-o
       const st = userStatus[u.id] ?? u.status;
       const set = (s: string, m: string) => { setUserStatus({ ...userStatus, [u.id]: s }); notify(m); };
       body = (
-        <div className="screen"><TopBar title={u.name} onBack={() => show("users")} /><div className="scrollarea"><div className="content">
+        <div className="screen"><TopBar title={u.name} onBack={() => { setAccessTab("users"); show("access"); }} /><div className="scrollarea"><div className="content">
           <Card><h3>{u.name}</h3><p>{u.emailMasked} &middot; {u.identityCount} email{u.identityCount > 1 ? "s" : ""} &middot; {formatRupees(u.lifetime)} lifetime</p>
             <div className="row"><StatusPill tone={st === "active" ? "teal" : st === "suspended" ? "amber" : st === "deleted" ? "gray" : "coral"}>{st}</StatusPill></div></Card>
           <p className="hint" style={{ marginBottom: 12 }}>Suspending or deleting never removes records. Claims, ledger, payouts and payment proofs are kept for audit.</p>
@@ -448,25 +451,52 @@ function TeamPanel({ members, roles, setMembers, notify }: { members: AdminMembe
   </>);
 }
 
-function RolesPanel({ roles, setRoles, notify }: { roles: Role[]; setRoles: (r: Role[]) => void; notify: (m: string) => void }) {
-  const [editing, setEditing] = useState<string | null>(null); const [name, setName] = useState("");
+let nextRoleId = 100;
+
+function RolesPanel({ roles, setRoles, members, setMembers, notify }: {
+  roles: Role[]; setRoles: (r: Role[]) => void; members: AdminMember[]; setMembers: (m: AdminMember[]) => void; notify: (m: string) => void;
+}) {
+  const [editing, setEditing] = useState<string | null>(null); const [name, setName] = useState(""); const [err, setErr] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  function create() {
+    const n = name.trim();
+    if (!n) return setErr("Give the role a name.");
+    if (roles.some((r) => r.name.toLowerCase() === n.toLowerCase())) return setErr("A role with that name already exists.");
+    setErr(""); setRoles([...roles, { id: `role-${nextRoleId++}`, name: n, permissions: [] }]); setName(""); notify("Role created. Open Edit to choose its permissions.");
+  }
+  function remove(id: string) {
+    setRoles(roles.filter((r) => r.id !== id));
+    setMembers(members.map((m) => ({ ...m, roleIds: m.roleIds.filter((x) => x !== id) })));
+    setConfirmDelete(null); setEditing(null); notify("Role deleted");
+  }
   return (<>
-    <p className="note-text" style={{ marginBottom: 10 }}>A role is a bundle of permissions. Owner can't be edited.</p>
-    {roles.map((r) => (
-      <Card key={r.id}>
-        <h3>{r.name}</h3>
-        <p>{r.permissions.length} permission{r.permissions.length === 1 ? "" : "s"}</p>
-        {r.id !== "role-owner" ? <div className="row"><span /><Button onClick={() => setEditing(editing === r.id ? null : r.id)}>{editing === r.id ? "Done" : "Edit"}</Button></div> : null}
-        {editing === r.id ? PERMISSIONS.map((p) => (
-          <label key={p.key} className="check">
-            <input type="checkbox" checked={r.permissions.includes(p.key)}
-              onChange={(e) => { setRoles(roles.map((x) => x.id === r.id ? { ...x, permissions: e.target.checked ? [...x.permissions, p.key] : x.permissions.filter((k) => k !== p.key) } : x)); notify("Role updated"); }} />
-            {p.label}
-          </label>
-        )) : null}
-      </Card>
-    ))}
-    <Field label="New role name"><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Support" /></Field>
-    <Button block onClick={() => { if (name.trim()) { setRoles([...roles, { id: `role-${roles.length + 1}`, name: name.trim(), permissions: [] }]); setName(""); notify("Role created"); } }}>Create role</Button>
+    <p className="note-text" style={{ marginBottom: 10 }}>A role is a bundle of permissions. Add or remove roles, and tick the permissions each role gets. Owner can't be edited or deleted.</p>
+    {roles.map((r) => {
+      const holders = members.filter((m) => m.roleIds.includes(r.id)).length;
+      return (
+        <Card key={r.id}>
+          <h3>{r.name}</h3>
+          <p>{r.permissions.length} permission{r.permissions.length === 1 ? "" : "s"} &middot; {holders} member{holders === 1 ? "" : "s"}</p>
+          {r.id !== "role-owner" ? <div className="row"><span /><Button onClick={() => { setEditing(editing === r.id ? null : r.id); setConfirmDelete(null); }}>{editing === r.id ? "Done" : "Edit"}</Button></div> : null}
+          {editing === r.id ? (<>
+            {PERMISSIONS.map((p) => (
+              <label key={p.key} className="check">
+                <input type="checkbox" checked={r.permissions.includes(p.key)}
+                  onChange={(e) => { setRoles(roles.map((x) => x.id === r.id ? { ...x, permissions: e.target.checked ? [...x.permissions, p.key] : x.permissions.filter((k) => k !== p.key) } : x)); notify("Role updated"); }} />
+                {p.label}
+              </label>
+            ))}
+            {confirmDelete === r.id ? (
+              <div style={{ marginTop: 10 }}>
+                <p className="field-error" style={{ marginTop: 0 }}>{holders ? `${holders} member${holders === 1 ? "" : "s"} hold${holders === 1 ? "s" : ""} this role and will lose it.` : "No member holds this role."} Delete it?</p>
+                <div className="confirm-pair"><Button variant="danger" onClick={() => remove(r.id)}>Yes, delete</Button><Button onClick={() => setConfirmDelete(null)}>Cancel</Button></div>
+              </div>
+            ) : <Button variant="danger" block style={{ marginTop: 10 }} onClick={() => setConfirmDelete(r.id)}>Delete role</Button>}
+          </>) : null}
+        </Card>
+      );
+    })}
+    <Field label="New role name" error={err}><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Support lead" /></Field>
+    <Button block onClick={create}>Create role</Button>
   </>);
 }
