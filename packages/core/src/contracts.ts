@@ -5,7 +5,6 @@
 import type { OutcomePercent, Paise } from "@rr/money";
 
 export type TextMode = "none" | "keywords" | "manual_pool" | "ai_generated";
-export type ProofType = "screenshot" | "screenshot_link" | "screenshot_note";
 export type TaskStatus = "active" | "closing_soon" | "paused" | "closed" | "removed";
 
 export interface AiConfig {
@@ -26,7 +25,6 @@ export interface Task {
   slotsRemaining: number | null;
   timerMinutes: number; // time limit once claimed
   activeUntil: string | null; // ISO date-time the task stops accepting claims; null = no end date
-  proofType: ProofType;
   status: TaskStatus;
   keywords: string[];
   textMode: TextMode;

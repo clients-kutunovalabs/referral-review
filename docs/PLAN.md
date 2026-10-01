@@ -10,7 +10,7 @@ Built in the cloud session and pushed to the branch; the user pulls it in VS Cod
 ## Decisions locked
 - Stack: TypeScript end-to-end, Next.js + Node, pnpm monorepo, Postgres.
 - Keep the current HTML structure: every screen, class and flow ported 1:1 into React components. Originals copied unchanged to `packages/ui/reference/`.
-- Workflow unchanged: worker claims task -> timer -> uploads screenshot (+ optional note/link) -> admin reviews manually (100/75/50/25/0%, mandatory note) -> credit to wallet. Task price is fixed per task template.
+- Workflow unchanged: worker claims task -> timer -> uploads a screenshot + optional note (no link) -> admin reviews manually (100/75/50/25/0%, mandatory note) -> credit to wallet. Task price is fixed per task template.
 - Multi-email: one login, several identities (emails), one wallet. Claim uniqueness = `(identity_id, template_id)`: one email can claim a task once, and the same account may claim the same task from each of its emails. Farming control: optional `max_claims_per_account` per template (NULL = unlimited), plus admin flag when one account claims the same template from many identities.
 - Wallet: one total; every ledger row carries `identity_id`; the wallet screen expands to per-email earnings.
 - Payout: worker enters the amount and UPI ID each time (nothing else saved). Available = credits - debits - amount held by pending requests. Amount >= configurable minimum and <= available. One pending request at a time. `payment_method` enum (`upi` only now) for later methods.

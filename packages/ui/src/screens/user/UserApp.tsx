@@ -334,21 +334,14 @@ function MyTasksScreen({ tab, setTab, claims, identities, onSubmit }: {
 }
 
 function SubmitBody({ task, onSubmit }: { task: Task; onSubmit: () => void }) {
-  const [file, setFile] = useState<File | null>(null); const [link, setLink] = useState(""); const [note, setNote] = useState(""); const [err, setErr] = useState("");
-  const needsLink = task.proofType === "screenshot_link";
-  const go = () => {
-    if (!file) return setErr("Attach a screenshot first.");
-    if (needsLink && !/^https:\/\/\S+$/.test(link)) return setErr("Add a valid https link.");
-    onSubmit();
-  };
+  const [file, setFile] = useState<File | null>(null); const [note, setNote] = useState(""); const [err, setErr] = useState("");
   return (
     <>
       <p className="muted" style={{ fontSize: 13, marginTop: 0 }}>Upload a screenshot proving you completed "{task.title}". JPG, PNG or WebP, up to 5 MB.</p>
       <FileUpload label="Tap to upload screenshot" onFile={(f) => { setFile(f); setErr(""); }} />
-      {needsLink ? <Field label="Link (required)"><Input value={link} onChange={(e) => setLink(e.target.value)} placeholder="https://" /></Field> : null}
       <Field label="Note (optional)"><Textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Anything the reviewer should know" /></Field>
       {err ? <div className="field-error" role="alert" style={{ marginBottom: 8 }}>{err}</div> : null}
-      <Button variant="primary" block onClick={go}>Submit for review</Button>
+      <Button variant="primary" block onClick={() => (file ? onSubmit() : setErr("Attach a screenshot first."))}>Submit for review</Button>
     </>
   );
 }

@@ -205,7 +205,7 @@ export function AdminApp({ initialScreen = "dashboard", viewerRoleIds = ["role-o
 /* ---------- Screens ---------- */
 
 function NewTaskScreen({ onBack, onPublish }: { onBack: () => void; onPublish: () => void }) {
-  const [f, setF] = useState({ title: "", instructions: "", siteUrl: "", proof: "screenshot", reward: "", slots: "", timer: "", cap: "", till: "" });
+  const [f, setF] = useState({ title: "", instructions: "", siteUrl: "", reward: "", slots: "", timer: "", cap: "", till: "" });
   const [mode, setMode] = useState<TextMode>("none");
   const [keywords, setKeywords] = useState<string[]>([]); const [kw, setKw] = useState("");
   const [pool, setPool] = useState("");
@@ -244,7 +244,6 @@ function NewTaskScreen({ onBack, onPublish }: { onBack: () => void; onPublish: (
       <Field label="Title"><Input value={f.title} onChange={set("title")} placeholder="e.g. Pitch our CRM to a local clinic" /></Field>
       <Field label="Instructions"><Textarea rows={3} value={f.instructions} onChange={set("instructions")} placeholder="What exactly should the user do" /></Field>
       <Field label="Site link (where the work is done)"><Input value={f.siteUrl} onChange={set("siteUrl")} placeholder="https://" inputMode="url" /></Field>
-      <Field label="Proof type"><Select value={f.proof} onChange={set("proof")}><option value="screenshot">Screenshot only</option><option value="screenshot_link">Screenshot + link</option><option value="screenshot_note">Screenshot + text note</option></Select></Field>
       <Field label="Reward amount (₹)"><Input value={f.reward} onChange={set("reward")} placeholder="40" inputMode="decimal" /></Field>
       <Field label="Total slots" hint="Leave blank for unlimited"><Input value={f.slots} onChange={set("slots")} placeholder="100" inputMode="numeric" /></Field>
       <Field label="Timer duration (minutes)"><Input value={f.timer} onChange={set("timer")} placeholder="30" inputMode="numeric" /></Field>

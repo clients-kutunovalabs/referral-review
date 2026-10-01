@@ -72,7 +72,7 @@ export function DesignSystem() {
         <Field label="Text input" hint="Helper text"><Input placeholder="Placeholder" /></Field>
         <Field label="With error" error="This field is required."><Input defaultValue="oops" /></Field>
         <Field label="Textarea"><Textarea rows={3} placeholder="Note" /></Field>
-        <Field label="Select"><Select><option>Screenshot only</option><option>Screenshot + link</option></Select></Field>
+        <Field label="Select"><Select><option>Tone: friendly</option><option>Tone: professional</option></Select></Field>
         <FileUpload label="Tap to upload screenshot" onFile={() => undefined} />
       </div>
 
