@@ -194,5 +194,5 @@ export function Sheet({ title, onClose, children }: { title: string; onClose: ()
 
 /** Inline message inside a card (not a floating toast). */
 export function Notice({ tone, children }: { tone: "green" | "amber" | "coral"; children: ReactNode }) {
-  return <div className={`notice ${tone}`} role="status"><span aria-hidden="true">{tone === "coral" ? "\u2715" : "\u2713"}</span><span>{children}</span></div>;
+  return <div className={`notice ${tone}`} role="status"><span aria-hidden="true">{tone === "coral" ? "\u2715" : "\u2713"}</span><div>{children}</div></div>;
 }

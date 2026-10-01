@@ -317,11 +317,11 @@ function MyTasksScreen({ tab, setTab, claims, identities, onSubmit }: {
                 <div className="tagrow"><StatusPill tone="gray">{email(c)}</StatusPill><StatusPill tone={c.status === "approved" ? "green" : "amber"}>{c.status === "approved" ? "Approved" : `Partial · ${c.outcome}%`}</StatusPill></div>
                 {c.reviewedLabel ? <p className="small" style={{ marginTop: 8 }}>Reviewed {c.reviewedLabel}</p> : null}
                 <Notice tone={c.status === "approved" ? "green" : "amber"}>
-                  {c.status === "approved"
+                  <div>{c.status === "approved"
                     ? `Completed successfully. Task amount ${formatRupees(t?.reward ?? 0n)} added to your wallet.`
-                    : `Completed successfully. ${formatRupees(c.credited ?? 0n)} of ${formatRupees(t?.reward ?? 0n)} added to your wallet.`}
+                    : `Completed successfully. ${formatRupees(c.credited ?? 0n)} of ${formatRupees(t?.reward ?? 0n)} added to your wallet.`}</div>
+                  {c.status === "partial" && c.reviewerNote ? <div className="notice-note">Reviewer note: {c.reviewerNote}</div> : null}
                 </Notice>
-                {c.status === "partial" && c.reviewerNote ? <p className="small" style={{ marginTop: 8 }}>Reviewer note: {c.reviewerNote}</p> : null}
               </>) : null}
               {(c.status === "rejected" || c.status === "expired" || c.status === "void") ? (<>
                 <div className="tagrow"><StatusPill tone="gray">{email(c)}</StatusPill><StatusPill tone="coral">{c.status === "rejected" ? "Rejected · 0%" : c.status === "expired" ? "Expired" : "Voided"}</StatusPill></div>

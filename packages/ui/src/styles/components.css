@@ -51,6 +51,7 @@
 .tagrow { display: flex; flex-wrap: wrap; gap: var(--space-3); margin-top: var(--space-4); }
 
 .notice { display: flex; gap: var(--space-3); align-items: flex-start; border-radius: var(--radius-md); padding: var(--space-4) var(--space-5); margin-top: var(--space-4); font-size: var(--text-md); line-height: 1.35; }
+.notice-note { margin-top: var(--space-2); font-size: var(--text-sm); }
 .notice.green { background: var(--green-bg); color: var(--green); }
 .notice.amber { background: var(--amber-bg); color: var(--amber); }
 .notice.coral { background: var(--coral-bg); color: var(--coral); }
