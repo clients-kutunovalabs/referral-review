@@ -68,10 +68,7 @@ export interface WalletEntry {
 }
 
 export interface Wallet {
-  earned: Paise;
-  withdrawn: Paise;
-  held: Paise; // pending payout requests
-  available: Paise;
+  earned: Paise; // total ever credited; withdrawn, in-process and withdrawable are derived from payouts
   entries: WalletEntry[];
 }
 
@@ -84,7 +81,8 @@ export interface PayoutRequest {
   upiMasked: string;
   upiFull: string; // only ever rendered on the admin payout detail screen
   whenLabel: string;
-  at?: string; // ISO, for ordering
+  at?: string; // ISO: when requested
+  paidAt?: string; // ISO: when marked paid
   flagReason?: string;
   paidBy?: string;
 }
@@ -142,3 +140,6 @@ export const TEXT_MODE_LABEL: Record<TextMode, string> = {
   manual_pool: "Manual pitch pool",
   ai_generated: "AI-generated pitch"
 };
+
+/** Payout lifecycle states used by ui-hub scenarios. */
+export type PayoutScenario = "none" | "default" | "inProcess" | "paid";

@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { UserApp, type MyTab, type UserScreen } from "@rr/ui";
+import type { PayoutScenario } from "@rr/core";
 import { Gallery, GalleryItem, HubPage, JumpPanel, PhoneFrame, type JumpGroup } from "@rr/ui/hub";
 
-interface Jump { screen: UserScreen; tab?: MyTab }
+interface Jump { screen: UserScreen; tab?: MyTab; scenario?: PayoutScenario }
 const JUMPS: Record<string, Jump & { label: string }> = {
   login: { screen: "login", label: "Log in" },
   register: { screen: "register", label: "Create account" },
@@ -20,12 +21,19 @@ const JUMPS: Record<string, Jump & { label: string }> = {
   payout: { screen: "payout", label: "Payout (amount + UPI)" },
   payoutSent: { screen: "payoutSent", label: "Payout requested" },
   payoutFlagged: { screen: "payoutFlagged", label: "Payout: UPI flagged" },
-  identities: { screen: "identities", label: "My emails" }
+  identities: { screen: "identities", label: "My emails" },
+  walletNone: { screen: "wallet", scenario: "none", label: "Wallet: never withdrawn" },
+  walletProcess: { screen: "wallet", scenario: "inProcess", label: "Wallet: payout in process" },
+  walletPaid: { screen: "wallet", scenario: "paid", label: "Wallet: payout paid" },
+  payoutNone: { screen: "payout", scenario: "none", label: "Payout: no requests yet" },
+  payoutProcess: { screen: "payout", scenario: "inProcess", label: "Payout: request in process" },
+  payoutPaid: { screen: "payout", scenario: "paid", label: "Payout: request paid" }
 };
 const GROUPS: JumpGroup<string>[] = [
   { label: "Account", items: ["login", "register", "verifyEmail", "identities"].map((id) => ({ id, label: JUMPS[id]!.label })) },
   { label: "Tasks", items: ["board", "detail", "claimed", "active", "review", "completed", "rejected", "submit", "submitted"].map((id) => ({ id, label: JUMPS[id]!.label })) },
-  { label: "Money", items: ["wallet", "payout", "payoutSent", "payoutFlagged"].map((id) => ({ id, label: JUMPS[id]!.label })) }
+  { label: "Money", items: ["wallet", "payout", "payoutSent", "payoutFlagged"].map((id) => ({ id, label: JUMPS[id]!.label })) },
+  { label: "Payout scenarios", items: ["walletNone", "walletProcess", "walletPaid", "payoutNone", "payoutProcess", "payoutPaid"].map((id) => ({ id, label: JUMPS[id]!.label })) }
 ];
 
 export function UserHub() {
@@ -42,12 +50,12 @@ export function UserHub() {
         <Gallery>
           {Object.entries(JUMPS).map(([id, s]) => (
             <GalleryItem key={id} caption={s.label}>
-              <PhoneFrame><UserApp initialScreen={s.screen} {...(s.tab ? { initialTab: s.tab } : {})} loggedIn={id !== "login" && id !== "register" && id !== "verifyEmail"} /></PhoneFrame>
+              <PhoneFrame><UserApp initialScreen={s.screen} {...(s.tab ? { initialTab: s.tab } : {})} {...(s.scenario ? { payoutScenario: s.scenario } : {})} loggedIn={id !== "login" && id !== "register" && id !== "verifyEmail"} /></PhoneFrame>
             </GalleryItem>
           ))}
         </Gallery>
       ) : (
-        <PhoneFrame><UserApp key={`${jump}-${rev}`} initialScreen={j.screen} {...(j.tab ? { initialTab: j.tab } : {})} loggedIn={jump !== "login" && jump !== "register" && jump !== "verifyEmail"} /></PhoneFrame>
+        <PhoneFrame><UserApp key={`${jump}-${rev}`} initialScreen={j.screen} {...(j.tab ? { initialTab: j.tab } : {})} {...(j.scenario ? { payoutScenario: j.scenario } : {})} loggedIn={jump !== "login" && jump !== "register" && jump !== "verifyEmail"} /></PhoneFrame>
       )}
     </HubPage>
   );

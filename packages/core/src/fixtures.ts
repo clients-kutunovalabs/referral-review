@@ -1,7 +1,7 @@
 /** Mock data for ui-hub and design review. Not used in production builds of the real apps. */
 import { outcomeAmount, rupees } from "@rr/money";
 import type {
-  AdminMember, AdminUserRow, Claim, Identity, PayoutRequest, ReviewQueueItem, Role, Task, Wallet
+  AdminMember, AdminUserRow, Claim, Identity, PayoutRequest, PayoutScenario, ReviewQueueItem, Role, Task, Wallet
 } from "./contracts";
 
 export const pitchPool: string[] = [
@@ -139,9 +139,6 @@ export const claims: Claim[] = [
 
 export const wallet: Wallet = {
   earned: rupees(420),
-  withdrawn: rupees(250),
-  held: rupees(0),
-  available: rupees(170),
   entries: [
     { id: "w1", title: "Write and send a follow-up email", identityId: "i2", outcome: 100, reward: rupees(60), credited: rupees(60), whenLabel: "4 Sep, 6:12 PM", at: "2026-09-04T18:12:00", reviewerNote: "Email sent, screenshot clear." },
     { id: "w2", title: "Sign up 3 leads for the newsletter (50%)", identityId: "i1", outcome: 50, reward: rupees(20), credited: rupees(10), whenLabel: "3 Sep, 11:04 AM", at: "2026-09-03T11:04:00", reviewerNote: "Only two of three signups visible, rest of proof was valid." },
@@ -149,9 +146,28 @@ export const wallet: Wallet = {
   ]
 };
 
-export const userPayouts: PayoutRequest[] = [
-  { id: "p1", who: "You", amount: rupees(250), status: "paid", upiMasked: "pri••@okhdfc", upiFull: "priya@okhdfc", whenLabel: "6 Sep, 2:15 PM", at: "2026-09-06T14:15:00", paidBy: "Anil (Payments)" }
-];
+const ago = (hours: number): string => new Date(Date.now() - hours * 3_600_000).toISOString();
+const paidEarlier: PayoutRequest = { id: "p1", who: "You", amount: rupees(250), status: "paid", upiMasked: "pri••@okhdfc", upiFull: "priya@okhdfc", whenLabel: "6 Sep, 2:15 PM", at: "2026-09-06T14:15:00", paidAt: "2026-09-07T17:30:00", paidBy: "Anil (Payments)" };
+
+/** Payout lifecycle scenarios for ui-hub. Wallet numbers are derived: earned - paid - in process. */
+export const payoutScenarios: Record<PayoutScenario, PayoutRequest[]> = {
+  /** never withdrawn: all of the earnings are withdrawable */
+  none: [] as PayoutRequest[],
+  /** one old paid payout; the rest is withdrawable (the default demo) */
+  default: [paidEarlier],
+  /** a request is in process: its amount is blocked at once, and it is not yet in wallet transactions */
+  inProcess: [
+    { id: "p2", who: "You", amount: rupees(100), status: "pending", upiMasked: "pri••@okhdfc", upiFull: "priya@okhdfc", whenLabel: "today", at: ago(3) } as PayoutRequest,
+    paidEarlier
+  ],
+  /** the request was paid: it moved from in process to withdrawn and appears in wallet transactions */
+  paid: [
+    { id: "p2", who: "You", amount: rupees(100), status: "paid", upiMasked: "pri••@okhdfc", upiFull: "priya@okhdfc", whenLabel: "yesterday", at: ago(30), paidAt: ago(5), paidBy: "Sneha (Payments)" } as PayoutRequest,
+    paidEarlier
+  ]
+};
+
+export const userPayouts: PayoutRequest[] = payoutScenarios.default;
 
 export const adminPayouts: PayoutRequest[] = [
   { id: "a1", who: "Rahul K.", amount: rupees(170), status: "pending", upiMasked: "rahul••@upi", upiFull: "rahul.kumar@okhdfc", whenLabel: "1 hour ago" },

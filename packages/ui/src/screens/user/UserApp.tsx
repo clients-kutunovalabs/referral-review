@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { activeTill, dateParts, fixtures, type Claim, type Identity, type PayoutRequest, type Task } from "@rr/core";
+import { activeTill, dateParts, fixtures, type Claim, type Identity, type PayoutRequest, type PayoutScenario, type Task } from "@rr/core";
 import { formatRupees, parseRupees, rupees, type Paise } from "@rr/money";
 import {
   BottomNav, Button, Card, Chips, CopyButton, Countdown, EmptyState, Field, FileUpload, Input, Notice, Select,
@@ -43,9 +43,11 @@ export interface UserAppProps {
   initialScreen?: UserScreen;
   initialTab?: MyTab;
   loggedIn?: boolean;
+  /** which payout lifecycle state to start in (ui-hub scenarios) */
+  payoutScenario?: PayoutScenario;
 }
 
-export function UserApp({ initialScreen = "board", initialTab = "active", loggedIn: initialLoggedIn = true }: UserAppProps) {
+export function UserApp({ initialScreen = "board", initialTab = "active", loggedIn: initialLoggedIn = true, payoutScenario = "default" }: UserAppProps) {
   const [screen, setScreen] = useState<UserScreen>(initialScreen);
   const [tab, setTab] = useState<MyTab>(initialTab);
   const [loggedIn, setLoggedIn] = useState(initialLoggedIn);
@@ -56,8 +58,7 @@ export function UserApp({ initialScreen = "board", initialTab = "active", logged
   const [identityId, setIdentityId] = useState("i1");
   const [toast, setToast] = useState<string | null>(null);
   const [registerEmail, setRegisterEmail] = useState("you@example.com");
-  const [pendingHeld, setPendingHeld] = useState<Paise>(fixtures.wallet.held);
-  const [payouts, setPayouts] = useState<PayoutRequest[]>(fixtures.userPayouts);
+  const [payouts, setPayouts] = useState<PayoutRequest[]>(fixtures.payoutScenarios[payoutScenario]);
 
   const task = fixtures.tasks.find((t) => t.id === taskId) ?? fixtures.tasks[0]!;
   const identity = identities.find((i) => i.id === identityId) ?? identities[0]!;
@@ -81,7 +82,11 @@ export function UserApp({ initialScreen = "board", initialTab = "active", logged
 
   const [submitClaimId, setSubmitClaimId] = useState("c1");
   const wallet = fixtures.wallet;
-  const available = wallet.available - (pendingHeld - wallet.held);
+  // Wallet numbers are always derived, never stored. A request blocks its amount the moment it is made.
+  const sumBy = (status: PayoutRequest["status"]) => payouts.filter((p) => p.status === status).reduce((a, p) => a + p.amount, 0n);
+  const withdrawn = sumBy("paid");
+  const inProcess = sumBy("pending");
+  const available = wallet.earned - withdrawn - inProcess > 0n ? wallet.earned - withdrawn - inProcess : 0n;
 
   let body: JSX.Element;
   switch (screen) {
@@ -129,12 +134,12 @@ export function UserApp({ initialScreen = "board", initialTab = "active", logged
         <Button block style={{ marginTop: 20 }} onClick={() => { setTab("review"); show("mytasks"); }}>View under review</Button>
       </div></div></div>
     ); break;
-    case "wallet": body = <WalletScreen identities={identities} available={available} held={pendingHeld} payouts={payouts} />; break;
+    case "wallet": body = <WalletScreen identities={identities} earned={wallet.earned} withdrawn={withdrawn} inProcess={inProcess} available={available} payouts={payouts} />; break;
     case "payout": body = (
-      <PayoutScreen available={available} pending={pendingHeld > 0n}
-        payouts={payouts}
-        onRequest={(amt, upi) => { setPendingHeld(pendingHeld + amt); setPayouts([{ id: `p${payouts.length + 1}`, who: "You", amount: amt, status: "pending", upiMasked: maskUpi(upi), upiFull: upi, whenLabel: "Just now", at: new Date().toISOString() }, ...payouts]); show("payoutSent"); }}
-        onFlagged={() => show("payoutFlagged")} />
+      <PayoutScreen available={available} inProcess={inProcess} payouts={payouts}
+        onRequest={(amt, upi) => { setPayouts([{ id: `p${payouts.length + 1}`, who: "You", amount: amt, status: "pending", upiMasked: maskUpi(upi), upiFull: upi, whenLabel: "just now", at: new Date().toISOString() }, ...payouts]); show("payoutSent"); }}
+        onFlagged={() => show("payoutFlagged")}
+        onDemoPaid={() => { setPayouts(payouts.map((p) => (p.status === "pending" ? { ...p, status: "paid", paidBy: "Anil (Payments)", paidAt: new Date().toISOString() } : p))); notify("Demo: admin marked it paid"); }} />
     ); break;
     case "payoutSent": body = (
       <div className="screen"><TopBar title="Request sent" /><div className="scrollarea"><div className="content">
@@ -358,15 +363,50 @@ function SubmitBody({ task, onSubmit }: { task: Task; onSubmit: () => void }) {
   );
 }
 
-function WalletScreen({ identities, available, held, payouts }: { identities: Identity[]; available: Paise; held: Paise; payouts: PayoutRequest[] }) {
+const when = (iso: string | undefined): string => { if (!iso) return ""; const d = dateParts(iso); return `${d.date}, ${d.time}`; };
+
+interface TxRowProps {
+  id: string; at: string; title: string; sub: string; amount: string; income?: boolean; badge?: React.ReactNode;
+  details: [string, string][]; open: boolean; onToggle: () => void;
+}
+/** One transaction: date/time | title + sub | amount, expanding in place to show details. */
+function TxRow({ id, at, title, sub, amount, income, badge, details, open, onToggle }: TxRowProps) {
+  const { date, time } = dateParts(at);
+  return (
+    <div className="tx">
+      <button className="tx-row" aria-expanded={open} aria-controls={`tx-${id}`} onClick={onToggle}>
+        <span className="tx-when"><span className="tx-date">{date}</span><span className="tx-time">{time}</span></span>
+        <span className="tx-main"><span className="tx-title">{title}</span><span className="tx-sub">{sub}</span></span>
+        <span className={`tx-amt ${income ? "in" : ""}`}>{amount}{badge ? <span className="tx-badge">{badge}</span> : null}</span>
+        <span className={`tx-chev${open ? " open" : ""}`} aria-hidden="true">&#9662;</span>
+      </button>
+      {open ? <dl className="tx-detail" id={`tx-${id}`}>{details.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl> : null}
+    </div>
+  );
+}
+
+function payoutDetails(p: PayoutRequest): [string, string][] {
+  return [
+    ["Status", p.status === "paid" ? "Paid" : "In process. The amount is blocked until it is paid."],
+    ["Amount", formatRupees(p.amount)],
+    ["UPI ID", p.upiMasked],
+    ["Requested", when(p.at)],
+    ...(p.status === "paid" ? [["Paid on", when(p.paidAt)] as [string, string], ["Paid by", p.paidBy ?? ""] as [string, string]] : [])
+  ];
+}
+
+function WalletScreen({ identities, earned, withdrawn, inProcess, available, payouts }: {
+  identities: Identity[]; earned: Paise; withdrawn: Paise; inProcess: Paise; available: Paise; payouts: PayoutRequest[];
+}) {
   const [open, setOpen] = useState(false);
   const [openTx, setOpenTx] = useState<string | null>(null);
   const w = fixtures.wallet;
   const email = (id: string) => identities.find((i) => i.id === id)?.email ?? "";
-  type Tx = { id: string; kind: "earning" | "withdrawal"; title: string; sub: string; amount: Paise; at: string; details: [string, string][]; pending?: boolean };
+  type Tx = { id: string; at: string; title: string; sub: string; amount: string; income: boolean; details: [string, string][] };
+  // Only approved and paid withdrawals appear here. A request still in process shows on the Payout page.
   const txns: Tx[] = [
     ...w.entries.map((e): Tx => ({
-      id: e.id, kind: "earning", title: e.title, sub: email(e.identityId), amount: e.credited, at: e.at,
+      id: e.id, at: e.at, title: e.title, sub: email(e.identityId), amount: `+${formatRupees(e.credited)}`, income: true,
       details: [
         ["Result", e.outcome === 100 ? "Approved 100%" : `Partial approval ${e.outcome}%`],
         ["Task amount", formatRupees(e.reward)],
@@ -375,53 +415,36 @@ function WalletScreen({ identities, available, held, payouts }: { identities: Id
         ...(e.reviewerNote ? [["Reviewer note", e.reviewerNote] as [string, string]] : [])
       ]
     })),
-    ...payouts.map((p): Tx => ({
-      id: p.id, kind: "withdrawal", title: "Withdrawal", sub: p.upiMasked, amount: p.amount, at: p.at ?? "", pending: p.status !== "paid",
-      details: [
-        ["Status", p.status === "paid" ? "Paid" : "Pending, settled manually within a few days"],
-        ["Amount", formatRupees(p.amount)],
-        ["UPI ID", p.upiMasked],
-        ...(p.paidBy ? [["Paid by", p.paidBy] as [string, string]] : [])
-      ]
+    ...payouts.filter((p) => p.status === "paid").map((p): Tx => ({
+      id: p.id, at: p.paidAt ?? p.at ?? "", title: "Withdrawal", sub: p.upiMasked, amount: `\u2212${formatRupees(p.amount)}`, income: false, details: payoutDetails(p)
     }))
   ].sort((a, b) => (a.at < b.at ? 1 : -1));
   return (
     <div className="screen"><TopBar title="Wallet" /><div className="scrollarea"><div className="content">
       <Card>
-        <div className="stat"><span>Total earned</span><span>{formatRupees(w.earned)}</span></div>
-        <div className="stat"><span>Total withdrawn</span><span>{formatRupees(w.withdrawn)}</span></div>
-        {held > 0n ? <div className="stat"><span>Held for pending payout</span><span>{formatRupees(held)}</span></div> : null}
+        <div className="stat"><span>Total earned</span><span>{formatRupees(earned)}</span></div>
+        <div className="stat"><span>Total withdrawn</span><span>{formatRupees(withdrawn)}</span></div>
+        {inProcess > 0n ? <div className="stat" style={{ color: "var(--amber)" }}><span>In process</span><span>{formatRupees(inProcess)}</span></div> : null}
         <div className="stat last"><span>Withdrawable balance</span><span>{formatRupees(available)}</span></div>
         <button className="expander" aria-expanded={open} onClick={() => setOpen(!open)}>{open ? "Hide" : "Show"} earnings by email</button>
         {open ? identities.map((i) => <div key={i.id} className="stat"><span>{i.email}</span><span>{formatRupees(i.earned)}</span></div>) : null}
       </Card>
       <h2 className="section-title">Transactions</h2>
-      {txns.map((t) => {
-        const earning = t.kind === "earning";
-        const { date, time } = dateParts(t.at);
-        const isOpen = openTx === t.id;
-        return (
-          <div key={t.id} className="tx">
-            <button className="tx-row" aria-expanded={isOpen} aria-controls={`tx-${t.id}`} onClick={() => setOpenTx(isOpen ? null : t.id)}>
-              <span className="tx-when"><span className="tx-date">{date}</span><span className="tx-time">{time}</span></span>
-              <span className="tx-main"><span className="tx-title">{t.title}</span><span className="tx-sub">{t.sub}</span></span>
-              <span className={`tx-amt ${earning ? "in" : ""}`}>{earning ? "+" : "\u2212"}{formatRupees(t.amount)}{t.pending ? <small>Pending</small> : null}</span>
-              <span className={`tx-chev${isOpen ? " open" : ""}`} aria-hidden="true">&#9662;</span>
-            </button>
-            {isOpen ? (
-              <dl className="tx-detail" id={`tx-${t.id}`}>
-                {t.details.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}
-              </dl>
-            ) : null}
-          </div>
-        );
-      })}
+      {txns.length === 0 ? <EmptyState>No transactions yet.</EmptyState> : null}
+      {txns.map((t) => (
+        <TxRow key={t.id} id={t.id} at={t.at} title={t.title} sub={t.sub} amount={t.amount} income={t.income} details={t.details}
+          open={openTx === t.id} onToggle={() => setOpenTx(openTx === t.id ? null : t.id)} />
+      ))}
     </div></div></div>
   );
 }
 
-function PayoutScreen({ available, pending, payouts, onRequest, onFlagged }: { available: Paise; pending: boolean; payouts: PayoutRequest[]; onRequest: (amt: Paise, upi: string) => void; onFlagged: () => void }) {
+function PayoutScreen({ available, inProcess, payouts, onRequest, onFlagged, onDemoPaid }: {
+  available: Paise; inProcess: Paise; payouts: PayoutRequest[]; onRequest: (amt: Paise, upi: string) => void; onFlagged: () => void; onDemoPaid: () => void;
+}) {
   const [amount, setAmount] = useState(""); const [upi, setUpi] = useState(""); const [errs, setErrs] = useState<{ amount?: string; upi?: string }>({});
+  const [openTx, setOpenTx] = useState<string | null>(null);
+  const pending = inProcess > 0n;
   function submit() {
     const e: typeof errs = {};
     const amt = parseRupees(amount);
@@ -437,19 +460,24 @@ function PayoutScreen({ available, pending, payouts, onRequest, onFlagged }: { a
   }
   return (
     <div className="screen"><TopBar title="Payout" /><div className="scrollarea"><div className="content">
-      <Card><p style={{ fontSize: 12, margin: "0 0 4px" }}>Withdrawable balance</p><h3 style={{ fontSize: 20 }}>{formatRupees(available)}</h3></Card>
-      {pending ? <div className="banner">You already have a payout request pending. You can request again once it's paid.</div> : null}
+      <Card>
+        <p style={{ fontSize: 12, margin: "0 0 4px" }}>Withdrawable balance</p>
+        <h3 style={{ fontSize: 20 }}>{formatRupees(available)}</h3>
+        {pending ? <p className="small" style={{ marginTop: 4, color: "var(--amber)" }}>{formatRupees(inProcess)} is in process and blocked until it is paid.</p> : null}
+      </Card>
+      {pending ? <div className="banner">You already have a payout request in process. You can request again once it's paid.</div> : null}
       <Field label="Amount (₹)" error={errs.amount} hint={`Minimum ${formatRupees(MIN_PAYOUT)}`}><Input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="10" disabled={pending} /></Field>
       <Field label="UPI ID" error={errs.upi} hint="You'll enter this each time. It isn't saved as a payment method."><Input id="upi-input" value={upi} onChange={(e) => setUpi(e.target.value)} placeholder="yourname@upi" disabled={pending} autoComplete="off" /></Field>
       <Button variant="primary" block disabled={pending} onClick={submit}>Request payout</Button>
-      <p className="section-label">Payout history</p>
+      <h2 className="section-title">Payout requests</h2>
+      {payouts.length === 0 ? <EmptyState>No payout requests yet.</EmptyState> : null}
       {payouts.map((p) => (
-        <div className="txn" key={p.id} style={{ cursor: "default" }}>
-          <span>Requested {p.whenLabel}<div className="muted">{p.upiMasked}{p.paidBy ? ` · paid by ${p.paidBy}` : ""}</div></span>
-          <StatusPill tone={p.status === "paid" ? "green" : "amber"}>{p.status === "paid" ? "Paid" : "Pending"} {formatRupees(p.amount)}</StatusPill>
-        </div>
+        <TxRow key={p.id} id={`po-${p.id}`} at={p.at ?? ""} title="Payout request" sub={p.upiMasked} amount={formatRupees(p.amount)}
+          badge={<StatusPill tone={p.status === "paid" ? "green" : "amber"}>{p.status === "paid" ? "Paid" : "In process"}</StatusPill>}
+          details={payoutDetails(p)} open={openTx === p.id} onToggle={() => setOpenTx(openTx === p.id ? null : p.id)} />
       ))}
       <p className="hint" style={{ marginTop: 20 }}>Demo: enter <span className="mono">taken@upi</span> to see the "UPI belongs to another account" state.</p>
+      {pending ? <p className="hint">Demo: <button className="expander" style={{ padding: 0, minHeight: 0 }} onClick={onDemoPaid}>admin marks the request as paid</button></p> : null}
     </div></div></div>
   );
 }
