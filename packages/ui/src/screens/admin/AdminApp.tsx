@@ -158,7 +158,7 @@ export function AdminApp({ initialScreen = "dashboard", viewerRoleIds = ["role-o
     }
     case "tasks": body = (
       <div className="screen"><TopBar title="Tasks" /><div className="scrollarea"><div className="content">
-        <div style={{ margin: "0 calc(var(--space-7) * -1) var(--space-5)" }}><Tabs<"active" | "closed"> value={taskFilter} onChange={setTaskFilter} tabs={[{ id: "active", label: "Active" }, { id: "closed", label: "Closed" }]} /></div>
+        <div style={{ margin: "0 calc(var(--space-7) * -1) var(--space-5)" }}><Tabs<"active" | "closed"> value={taskFilter} onChange={setTaskFilter} tabs={[{ id: "active", label: `Active (${fixtures.tasks.filter((t) => !isClosed(t)).length})` }, { id: "closed", label: `Closed (${fixtures.tasks.filter(isClosed).length + extraTasks.length})` }]} /></div>
         {fixtures.tasks.filter((t) => (isClosed(t) ? "closed" : "active") === taskFilter).map((t) => {
           const till = activeTill(t.activeUntil);
           const closed = isClosed(t);
