@@ -42,7 +42,7 @@ export interface Claim {
   minutesLeft?: number; // active claims only
   submittedLabel?: string;
   reviewedLabel?: string; // when it was reviewed / ended
-  assignedText?: string; // pitch given at claim time
+  assignedText?: string; // script given at claim time
   outcome?: OutcomePercent;
   credited?: Paise;
   reviewerNote?: string;
@@ -112,7 +112,7 @@ export interface AdminUserRow {
 export const PERMISSIONS = [
   { key: "task.manage", label: "Create and edit tasks" },
   { key: "task.assign", label: "Assign tasks" },
-  { key: "task_text.manage", label: "Manage pitch texts" },
+  { key: "task_text.manage", label: "Manage scripts" },
   { key: "review.decide", label: "Review submissions" },
   { key: "payout.mark_paid", label: "Make payments" },
   { key: "user.manage", label: "Manage users" },
@@ -135,11 +135,21 @@ export interface AdminMember {
   roleIds: string[];
 }
 
+/** "Task script" options. Stored values stay none | manual_pool | ai_generated | keywords. */
 export const TEXT_MODE_LABEL: Record<TextMode, string> = {
-  none: "No text",
-  keywords: "Keywords only",
-  manual_pool: "Manual pitch pool",
-  ai_generated: "AI-generated pitch"
+  none: "None",
+  manual_pool: "Manual",
+  ai_generated: "AI",
+  keywords: "Keywords"
+};
+/** Order shown while creating a task. */
+export const TEXT_MODE_ORDER: TextMode[] = ["none", "manual_pool", "ai_generated", "keywords"];
+
+export const TEXT_MODE_HELP: Record<TextMode, string> = {
+  none: "Workers write in their own words.",
+  manual_pool: "You write the scripts. Each worker gets one at random, spread evenly.",
+  ai_generated: "A new script is written for each worker.",
+  keywords: "Workers see the keywords to mention."
 };
 
 /** Payout lifecycle states used by ui-hub scenarios. */

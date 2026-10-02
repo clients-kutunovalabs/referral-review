@@ -6,8 +6,8 @@ import { Gallery, GalleryItem, HubPage, JumpPanel, PhoneFrame, type JumpGroup } 
 const JUMPS: Record<string, { screen: AdminScreen; tab?: "users" | "team" | "roles"; label: string }> = {
   dashboard: { screen: "dashboard", label: "Dashboard" },
   tasks: { screen: "tasks", label: "Task list" },
-  newtask: { screen: "newtask", label: "New task (text modes, AI fields)" },
-  taskdetail: { screen: "taskdetail", label: "Task detail (pitch pool)" },
+  newtask: { screen: "newtask", label: "New task (task script, AI fields)" },
+  taskdetail: { screen: "taskdetail", label: "Task detail (scripts)" },
   removeconfirm: { screen: "removeconfirm", label: "Remove task confirm" },
   reviewqueue: { screen: "reviewqueue", label: "Review queue" },
   reviewitem: { screen: "reviewitem", label: "Review submission" },

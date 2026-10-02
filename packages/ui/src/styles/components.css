@@ -109,6 +109,10 @@
 .composer-closed { padding: var(--space-5) var(--space-7); border-top: var(--border-width) solid var(--border); background: var(--surface-2); flex-shrink: 0; }
 .composer-closed p { margin: 0 0 var(--space-4); font-size: var(--text-md); color: var(--text-secondary); }
 
+.segmented { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: var(--space-2); margin-top: var(--space-3); }
+.seg { min-height: var(--tap-min); padding: 6px 4px; border-radius: var(--radius-sm); border: var(--border-width) solid var(--border-strong); background: var(--surface-2); color: var(--text-primary); font-family: inherit; font-size: var(--text-md); cursor: pointer; }
+.seg.on { background: var(--brand); border-color: var(--brand); color: var(--text-inverse); font-weight: var(--weight-medium); }
+
 .chips { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-3); }
 .chip { font-size: var(--text-sm); padding: 4px 10px; border-radius: var(--radius-pill); background: var(--surface-2); border: var(--border-width) solid var(--border-strong); color: var(--text-primary); }
 .chip.hit { background: var(--green-bg); border-color: var(--green); color: var(--green); }
@@ -152,7 +156,7 @@ input[type="checkbox"] { width: 20px; height: 20px; min-height: 0; margin: 0; }
 .mono { font-family: var(--font-mono); font-size: var(--text-sm); }
 .section-label { font-size: var(--text-sm); color: var(--text-secondary); margin: var(--space-6) 0 var(--space-3); }
 .divider { border: 0; border-top: var(--border-width) solid var(--border); margin: var(--space-6) 0; }
-.pitch { background: var(--surface-2); border: var(--border-width) dashed var(--border-strong); border-radius: var(--radius-md); padding: var(--space-5); font-size: var(--text-md); line-height: 1.5; margin-top: var(--space-4); white-space: pre-wrap; }
+.script { background: var(--surface-2); border: var(--border-width) dashed var(--border-strong); border-radius: var(--radius-md); padding: var(--space-5); font-size: var(--text-md); line-height: 1.5; margin-top: var(--space-4); white-space: pre-wrap; }
 .linkrow { display: flex; align-items: center; gap: var(--space-3); margin-top: var(--space-4); font-size: var(--text-md); }
 .linkrow a { color: var(--teal); word-break: break-all; }
 .banner { background: var(--amber-bg); color: var(--amber); border-radius: var(--radius-md); padding: var(--space-4) var(--space-5); font-size: var(--text-sm); margin-bottom: var(--space-5); }

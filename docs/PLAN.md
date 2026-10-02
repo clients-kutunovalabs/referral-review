@@ -1,7 +1,7 @@
 # Multi-purpose Task Board (beta: internal sales team) — Plan + Repo Scaffold v3
 
 ## Context
-Product pivot: from review tasks to a general task board. Beta use: our own sales team (salespeople accept tasks, get a task description, optional keywords/features to highlight, and optionally a sales pitch text). Later it becomes a product for other uses (influencer subscriptions, nursing staff taskboard, etc.) and is integrated into Kutunova as a product with isolated workspaces. Website only (responsive + PWA), no native app. The two HTML prototypes are accurate and are the base.
+Product pivot: from review tasks to a general task board. Beta use: our own sales team (salespeople accept tasks, get a task description, optional keywords/features to highlight, and optionally a sales script text). Later it becomes a product for other uses (influencer subscriptions, nursing staff taskboard, etc.) and is integrated into Kutunova as a product with isolated workspaces. Website only (responsive + PWA), no native app. The two HTML prototypes are accurate and are the base.
 Repo: `referral-review` (built on branch `claude/vibrant-darwin-k1z0pa`, pulled locally in VS Code).
 
 ## Step 0
@@ -18,11 +18,11 @@ Built in the cloud session and pushed to the branch; the user pulls it in VS Cod
 - Payment: an admin with `payout.mark_paid` transfers manually, then uploads a REQUIRED payment screenshot and marks it paid. Debit row + `payout_payments` row (paid_by, proof_file_key NOT NULL) written in one transaction. No maker-checker.
 - Workspace-ready, single workspace now: `workspaces` table and `workspace_id` on every domain table from day one, one seeded default workspace. No tenant-management UI, no RLS yet; RLS + per-workspace roles/branding are added when it becomes a product. This is cheap now and very costly to retrofit.
 
-## Task text: keywords, manual pitches, AI pitches
+## Task script: keywords, manual scripts, AI scripts
 Per task `text_mode`: `none | keywords | manual_pool | ai_generated` (keywords can combine with any).
 - Keywords: shown as "features to highlight"; server matches them in the worker's note (whole word, case-insensitive) as an aid to the reviewer, not auto-approval.
-- Manual pool (`task_texts`): admin adds 1..N pitches. Assignment is a balanced random bag: for N pitches and M claimers each pitch is used floor(M/N) or ceil(M/N) times, order random. Persisted bag per template, drawn under a row lock inside the claim transaction (no two workers race to the same slot); when the bag empties it is reshuffled. Example: 10 pitches, 100 workers = each pitch given to 10 workers in random order.
-- AI-generated: a new pitch per claim. Only when chosen. Server-enforced input allow-list: task title, task description, keywords, plus the generator fields. No worker name, email, phone or wallet data ever reaches the AI. Publish is blocked until the required fields are filled: description, at least 1 keyword, tone, language, min/max length, pitch style (e.g. cold message / call script / email). Generated text is stored (`claim_task_texts`) so the worker sees the same text on reopen, and it is audit-logged.
+- Manual pool (`task_texts`): admin adds 1..N scripts. Assignment is a balanced random bag: for N scripts and M claimers each script is used floor(M/N) or ceil(M/N) times, order random. Persisted bag per template, drawn under a row lock inside the claim transaction (no two workers race to the same slot); when the bag empties it is reshuffled. Example: 10 scripts, 100 workers = each script given to 10 workers in random order.
+- AI-generated: a new script per claim. Only when chosen. Server-enforced input allow-list: task title, task description, keywords, plus the generator fields. No worker name, email, phone or wallet data ever reaches the AI. Publish is blocked until the required fields are filled: description, at least 1 keyword, tone, language, min/max length, script style (e.g. cold message / call script / email). Generated text is stored (`claim_task_texts`) so the worker sees the same text on reopen, and it is audit-logged.
 - The assigned text is shown to the worker with a copy button.
 - Site link: `site_url` per task (validated https), shown on the task page (where the work happens).
 
@@ -76,7 +76,7 @@ referral-review/
     core/       # claims, task-texts (bag), ledger, payouts, rbac, identities
     auth/       # Authgate adapter, sessions, CSRF
     storage/    # object storage, upload validation, thumbnails
-    ai/         # pitch generator, typed input allow-list
+    ai/         # script generator, typed input allow-list
     config/     # eslint, tsconfig, Zod env schema
   docs/ ARCHITECTURE.md MONEY.md SECURITY.md RUNBOOK.md POLICY.md
   scripts/ backup, restore-test, reconcile
@@ -91,4 +91,4 @@ UI first, backend after the UI flow is signed off:
 Because the backend comes last, the UI defines typed service interfaces and mock fixtures in `packages/core` contracts (Zod schemas) so the backend later implements exactly what the UI consumed.
 
 ## Verification (scaffold)
-`pnpm install && pnpm lint && pnpm typecheck && pnpm test` pass; `pnpm --filter ui-hub dev` serves `/`, `/admin`, `/design-system`; production Docker target builds without ui-hub; `docker compose up` boots Postgres and migrations apply. Later: 50 concurrent claims on a 10-slot task give exactly 10; 100 claims over 10 pitches give 10 each.
+`pnpm install && pnpm lint && pnpm typecheck && pnpm test` pass; `pnpm --filter ui-hub dev` serves `/`, `/admin`, `/design-system`; production Docker target builds without ui-hub; `docker compose up` boots Postgres and migrations apply. Later: 50 concurrent claims on a 10-slot task give exactly 10; 100 claims over 10 scripts give 10 each.

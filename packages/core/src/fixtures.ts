@@ -4,7 +4,7 @@ import type {
   AdminMember, AdminUserRow, Claim, Identity, PayoutRequest, PayoutScenario, ReviewQueueItem, Role, Task, Ticket, Wallet
 } from "./contracts";
 
-export const pitchPool: string[] = [
+export const scriptPool: string[] = [
   "Hi Dr. Rao, I help clinics cut no-shows with automatic appointment reminders. Can I show you a 10-minute demo this week?",
   "Hello, quick question: how do you keep patient records today? Our CRM puts them in one place and has a free 14-day trial.",
   "Hi, we're helping clinics in your area save 5 hours a week on scheduling. Would a short call on Thursday work?"
@@ -15,9 +15,9 @@ const fromNow = (hours: number): string => new Date(Date.now() + hours * 3_600_0
 export const tasks: Task[] = [
   {
     id: "t1",
-    title: "Pitch our CRM to a local clinic",
+    title: "Introduce our CRM to a local clinic",
     description:
-      "Reach out to a clinic or practice owner and pitch the CRM. Book a demo or get a clear yes/no. Screenshot the conversation as proof.",
+      "Reach out to a clinic or practice owner and present the CRM. Book a demo or get a clear yes/no. Screenshot the conversation as proof.",
     siteUrl: "https://kutunovalabs.com/crm",
     reward: rupees(40),
     slotsTotal: 100,
@@ -47,7 +47,7 @@ export const tasks: Task[] = [
   {
     id: "t3",
     title: "Write and send a follow-up email",
-    description: "Send a follow-up email to a warm lead using the generated pitch. Attach a screenshot of the sent email.",
+    description: "Send a follow-up email to a warm lead using the generated script. Attach a screenshot of the sent email.",
     siteUrl: "https://kutunovalabs.com/pricing",
     reward: rupees(60),
     slotsTotal: 20,
@@ -130,7 +130,7 @@ export const claims: Claim[] = [
   activeClaim,
   { id: "c6", taskId: "t2", identityId: "i2", status: "claimed", minutesLeft: 14 },
   { id: "c7", taskId: "t4", identityId: "i1", status: "claimed", minutesLeft: 11 },
-  { id: "c8", taskId: "t5", identityId: "i1", status: "claimed", minutesLeft: 22, assignedText: pitchPool[1] },
+  { id: "c8", taskId: "t5", identityId: "i1", status: "claimed", minutesLeft: 22, assignedText: scriptPool[1] },
   { id: "c2", taskId: "t2", identityId: "i1", status: "under_review", submittedLabel: "2 hours ago" },
   { id: "c3", taskId: "t3", identityId: "i2", status: "approved", outcome: 100, credited: rupees(60), reviewerNote: "Email sent, screenshot clear.", reviewedLabel: "4 Sep, 6:12 PM" },
   { id: "c4", taskId: "t6", identityId: "i1", status: "partial", outcome: 75, credited: outcomeAmount(rupees(60), 75), reviewerNote: "Screenshot was missing the call duration.", reviewedLabel: "3 Sep, 11:04 AM" },
@@ -142,7 +142,7 @@ export const wallet: Wallet = {
   entries: [
     { id: "w1", title: "Write and send a follow-up email", identityId: "i2", outcome: 100, reward: rupees(60), credited: rupees(60), whenLabel: "4 Sep, 6:12 PM", at: "2026-09-04T18:12:00", reviewerNote: "Email sent, screenshot clear." },
     { id: "w2", title: "Sign up 3 leads for the newsletter (50%)", identityId: "i1", outcome: 50, reward: rupees(20), credited: rupees(10), whenLabel: "3 Sep, 11:04 AM", at: "2026-09-03T11:04:00", reviewerNote: "Only two of three signups visible, rest of proof was valid." },
-    { id: "w3", title: "Pitch our CRM to a local clinic", identityId: "i1", outcome: 100, reward: rupees(35), credited: rupees(35), whenLabel: "1 Sep, 9:30 AM", at: "2026-09-01T09:30:00" }
+    { id: "w3", title: "Introduce our CRM to a local clinic", identityId: "i1", outcome: 100, reward: rupees(35), credited: rupees(35), whenLabel: "1 Sep, 9:30 AM", at: "2026-09-01T09:30:00" }
   ]
 };
 
@@ -178,10 +178,10 @@ export const reviewQueue: ReviewQueueItem[] = [
     id: "r1",
     worker: "Priya S.",
     identityEmail: "priya••@gmail.com",
-    taskTitle: "Pitch our CRM to a local clinic",
+    taskTitle: "Introduce our CRM to a local clinic",
     reward: rupees(40),
     waitingLabel: "12 min ago",
-    workerNote: "Pitched Dr. Rao, demo booked for Friday. Screenshot attached above.",
+    workerNote: "Presented to Dr. Rao, demo booked for Friday. Screenshot attached above.",
     keywords: ["appointment reminders", "patient records", "free 14-day trial"],
     keywordsMatched: ["appointment reminders", "free 14-day trial"],
     assignedText: activeClaim.assignedText

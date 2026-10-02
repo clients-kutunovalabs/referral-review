@@ -220,3 +220,18 @@ export function Sheet({ title, onClose, children }: { title: string; onClose: ()
 export function Notice({ tone, children }: { tone: "green" | "amber" | "coral"; children: ReactNode }) {
   return <div className={`notice ${tone}`} role="status"><span aria-hidden="true">{tone === "coral" ? "\u2715" : "\u2713"}</span><div>{children}</div></div>;
 }
+
+/** A short list of mutually exclusive choices shown as buttons (radio semantics). */
+export function Segmented<T extends string>({ label, value, options, onChange }: {
+  label: string; value: T; options: { id: T; label: string }[]; onChange: (id: T) => void;
+}) {
+  return (
+    <div className="segmented" role="radiogroup" aria-label={label}>
+      {options.map((o) => (
+        <button key={o.id} type="button" role="radio" aria-checked={o.id === value} className={`seg${o.id === value ? " on" : ""}`} onClick={() => onChange(o.id)}>
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}

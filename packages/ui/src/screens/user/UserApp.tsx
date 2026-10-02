@@ -31,7 +31,7 @@ const MIN_PAYOUT = rupees(10);
 
 /** Demo-only text assignment. The real balanced random bag lives on the server (step 6). */
 function demoText(task: Task, n: number): string | undefined {
-  if (task.textMode === "manual_pool") return fixtures.pitchPool[n % fixtures.pitchPool.length];
+  if (task.textMode === "manual_pool") return fixtures.scriptPool[n % fixtures.scriptPool.length];
   if (task.textMode === "ai_generated") {
     return `Hi, I wanted to follow up about ${task.keywords.join(" and ") || task.title}. We can get you set up quickly and our team will support the onboarding. Would you be open to a short call this week?`;
   }

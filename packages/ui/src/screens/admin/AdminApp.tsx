@@ -1,10 +1,10 @@
 import { useState } from "react";
 import {
-  activeTill, fixtures, PERMISSIONS, TEXT_MODE_LABEL, type AdminMember, type PermissionKey, type Role, type Task, type TextMode
+  activeTill, fixtures, PERMISSIONS, TEXT_MODE_HELP, TEXT_MODE_LABEL, TEXT_MODE_ORDER, type AdminMember, type PermissionKey, type Role, type Task, type TextMode
 } from "@rr/core";
 import { OUTCOME_PERCENTS, formatRupees, outcomeAmount, rupees, type OutcomePercent, type Paise } from "@rr/money";
 import {
-  BottomNav, Icon, type IconName, Button, Card, Chips, CopyButton, EmptyState, Field, FileUpload, Input, ListRow, Select,
+  BottomNav, Icon, Segmented, type IconName, Button, Card, Chips, CopyButton, EmptyState, Field, FileUpload, Input, ListRow, Select,
   StatusPill, Tabs, Textarea, Toast, TopBar
 } from "../../primitives";
 import { AdminTicketChat, AdminTicketList, type SupportTab } from "./SupportScreens";
@@ -52,7 +52,7 @@ function AdminTaskCard({ title, reward, claimed, timer, mode, pill, onOpen }: {
       <h3>{title}</h3>
       <p>{formatRupees(reward)} reward &middot; {claimed} &middot; {timer} min limit</p>
       <div className="card-split" style={{ marginTop: "var(--space-3)" }}>
-        <div className="card-split-main"><div className="chips" style={{ margin: 0 }}>{pill}<StatusPill tone="gray">{mode}</StatusPill></div></div>
+        <div className="card-split-main"><div className="chips" style={{ margin: 0 }}>{pill}<StatusPill tone="gray">Script: {mode}</StatusPill></div></div>
         {onOpen ? <Button compact>Manage</Button> : null}
       </div>
     </Card>
@@ -135,7 +135,7 @@ export function AdminApp({ initialScreen = "dashboard", viewerRoleIds = ["role-o
               ))}
             </div>
             <p className="section-label">Recent activity</p>
-            <Card><p>Priya S. submitted proof for "Pitch our CRM to a local clinic" &middot; 12 min ago</p></Card>
+            <Card><p>Priya S. submitted proof for "Introduce our CRM to a local clinic" &middot; 12 min ago</p></Card>
             <Card><p>Priya S. opened a ticket: "Screenshot upload fails on my phone" &middot; yesterday</p></Card>
             <Card><p>Rahul K. requested a payout of {formatRupees(17000n)} &middot; 1 hour ago</p></Card>
             <Card><p>"Rate us on the App Store" reached its slot limit &middot; 3 hours ago</p></Card>
@@ -296,7 +296,7 @@ function NewTaskScreen({ onBack, onPublish }: { onBack: () => void; onPublish: (
   const [ai, setAi] = useState({ tone: "", language: "", min: "", max: "", style: "" });
   const [errors, setErrors] = useState<string[]>([]);
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => setF({ ...f, [k]: e.target.value });
-  const pitches = pool.split(/\n\s*\n/).map((x) => x.trim()).filter(Boolean);
+  const scripts = pool.split(/\n\s*\n/).map((x) => x.trim()).filter(Boolean);
   const addKw = () => { const v = kw.trim(); if (v && !keywords.includes(v)) setKeywords([...keywords, v]); setKw(""); };
 
   function publish() {
@@ -309,13 +309,13 @@ function NewTaskScreen({ onBack, onPublish }: { onBack: () => void; onPublish: (
     if (!/^\d+$/.test(f.timer) || Number(f.timer) < 1) e.push("Timer must be minutes, 1 or more.");
     if (f.till && Date.parse(f.till) <= Date.now()) e.push("Active till must be in the future.");
     if (mode === "keywords" && keywords.length === 0) e.push("Add at least one keyword.");
-    if (mode === "manual_pool" && pitches.length === 0) e.push("Add at least one pitch.");
+    if (mode === "manual_pool" && scripts.length === 0) e.push("Add at least one script.");
     if (mode === "ai_generated") {
       if (f.instructions.trim().length < 20) e.push("AI needs a task description of at least 20 characters.");
       if (keywords.length === 0) e.push("AI needs at least one keyword.");
       if (!ai.tone) e.push("AI: choose a tone.");
       if (!ai.language.trim()) e.push("AI: enter a language.");
-      if (!ai.style) e.push("AI: choose a pitch style.");
+      if (!ai.style) e.push("AI: choose a script style.");
       if (!/^\d+$/.test(ai.min) || !/^\d+$/.test(ai.max) || Number(ai.min) < 10 || Number(ai.max) < Number(ai.min)) e.push("AI: set word limits (min 10, max at least min).");
     }
     setErrors(e);
@@ -325,7 +325,7 @@ function NewTaskScreen({ onBack, onPublish }: { onBack: () => void; onPublish: (
 
   return (
     <div className="screen"><TopBar title="New task template" onBack={onBack} /><div className="scrollarea"><div className="content">
-      <Field label="Title"><Input value={f.title} onChange={set("title")} placeholder="e.g. Pitch our CRM to a local clinic" /></Field>
+      <Field label="Title"><Input value={f.title} onChange={set("title")} placeholder="e.g. Introduce our CRM to a local clinic" /></Field>
       <Field label="Instructions"><Textarea rows={3} value={f.instructions} onChange={set("instructions")} placeholder="What exactly should the user do" /></Field>
       <Field label="Site link (where the work is done)"><Input value={f.siteUrl} onChange={set("siteUrl")} placeholder="https://" inputMode="url" /></Field>
       <Field label="Reward amount (₹)"><Input value={f.reward} onChange={set("reward")} placeholder="40" inputMode="decimal" /></Field>
@@ -335,32 +335,34 @@ function NewTaskScreen({ onBack, onPublish }: { onBack: () => void; onPublish: (
       <Field label="Max claims per account" hint="Across all of one person's emails. Blank = unlimited."><Input value={f.cap} onChange={set("cap")} placeholder="e.g. 3" inputMode="numeric" /></Field>
 
       <hr className="divider" />
-      <Field label="Task text for workers">
-        <Select value={mode} onChange={(e) => setMode(e.target.value as TextMode)}>
-          {(Object.keys(TEXT_MODE_LABEL) as TextMode[]).map((m) => <option key={m} value={m}>{TEXT_MODE_LABEL[m]}</option>)}
-        </Select>
-      </Field>
-      <Field label="Keywords / features to highlight" hint="Shown to workers. The reviewer sees which ones appear in their note.">
+      <div className="field" style={{ marginBottom: 12 }}>
+        <span id="task-script-label">Task script</span>
+        <Segmented<TextMode> label="Task script" value={mode} onChange={setMode} options={TEXT_MODE_ORDER.map((m) => ({ id: m, label: TEXT_MODE_LABEL[m] }))} />
+        <div className="hint">{TEXT_MODE_HELP[mode]}</div>
+      </div>
+      {mode !== "none" ? (
+      <Field label="Keywords / features to highlight" hint={mode === "manual_pool" ? "Optional. Shown to workers next to their script." : "Required. Shown to workers. The reviewer sees which ones appear in their note."}>
         <div style={{ display: "flex", gap: 8 }}>
           <Input value={kw} onChange={(e) => setKw(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addKw(); } }} placeholder="Type and press Add" />
           <Button style={{ marginTop: 6 }} onClick={addKw}>Add</Button>
         </div>
         <Chips items={keywords} onRemove={(k) => setKeywords(keywords.filter((x) => x !== k))} />
       </Field>
+      ) : null}
 
       {mode === "manual_pool" ? (
-        <Field label="Pitch pool" hint="Separate pitches with a blank line. Each worker gets one at random, spread evenly.">
-          <Textarea rows={7} value={pool} onChange={(e) => setPool(e.target.value)} placeholder={"Pitch one...\n\nPitch two...\n\nPitch three..."} />
-          <div className="hint">{pitches.length} pitch{pitches.length === 1 ? "" : "es"}{slotsNum && pitches.length ? ` · with ${slotsNum} workers, each pitch is used about ${Math.ceil(slotsNum / pitches.length)} times` : ""}</div>
+        <Field label="Scripts" hint="Separate scripts with a blank line. Each worker gets one at random, spread evenly.">
+          <Textarea rows={7} value={pool} onChange={(e) => setPool(e.target.value)} placeholder={"Script one...\n\nScript two...\n\nScript three..."} />
+          <div className="hint">{scripts.length} script{scripts.length === 1 ? "" : "s"}{slotsNum && scripts.length ? ` · with ${slotsNum} workers, each script is used about ${Math.ceil(slotsNum / scripts.length)} times` : ""}</div>
         </Field>
       ) : null}
 
       {mode === "ai_generated" ? (
         <Card>
-          <h3>AI pitch settings</h3>
-          <p className="muted" style={{ marginBottom: 10 }}>A new pitch is written for each worker. The AI only receives the task title, instructions, keywords and these settings. No worker details are ever sent.</p>
+          <h3>AI script settings</h3>
+          <p className="muted" style={{ marginBottom: 10 }}>A new script is written for each worker. The AI only receives the task title, instructions, keywords and these settings. No worker details are ever sent.</p>
           <Field label="Tone (required)"><Select value={ai.tone} onChange={(e) => setAi({ ...ai, tone: e.target.value })}><option value="">Choose…</option><option>friendly</option><option>professional</option><option>persuasive</option><option>casual</option></Select></Field>
-          <Field label="Pitch style (required)"><Select value={ai.style} onChange={(e) => setAi({ ...ai, style: e.target.value })}><option value="">Choose…</option><option value="cold_message">Cold message</option><option value="call_script">Call script</option><option value="email">Email</option></Select></Field>
+          <Field label="Script style (required)"><Select value={ai.style} onChange={(e) => setAi({ ...ai, style: e.target.value })}><option value="">Choose…</option><option value="cold_message">Cold message</option><option value="call_script">Call script</option><option value="email">Email</option></Select></Field>
           <Field label="Language (required)"><Input value={ai.language} onChange={(e) => setAi({ ...ai, language: e.target.value })} placeholder="English" /></Field>
           <div style={{ display: "flex", gap: 8 }}>
             <Field label="Min words"><Input inputMode="numeric" value={ai.min} onChange={(e) => setAi({ ...ai, min: e.target.value })} placeholder="60" /></Field>
@@ -378,7 +380,7 @@ function NewTaskScreen({ onBack, onPublish }: { onBack: () => void; onPublish: (
 function TaskDetailScreen({ task, canManage, canTexts, onBack, onRemove, notify }: {
   task: Task; canManage: boolean; canTexts: boolean; onBack: () => void; onRemove: () => void; notify: (m: string) => void;
 }) {
-  const [pool, setPool] = useState(fixtures.pitchPool); const [add, setAdd] = useState("");
+  const [pool, setPool] = useState(fixtures.scriptPool); const [add, setAdd] = useState("");
   return (
     <div className="screen"><TopBar title="Task detail" onBack={onBack} /><div className="scrollarea"><div className="content">
       <Card>
@@ -386,16 +388,16 @@ function TaskDetailScreen({ task, canManage, canTexts, onBack, onRemove, notify 
         <div className="row"><StatusPill tone="teal">{formatRupees(task.reward)} reward</StatusPill><StatusPill tone="gray">{task.slotsTotal === null ? "unlimited slots" : `${task.slotsTotal - (task.slotsRemaining ?? 0)} of ${task.slotsTotal} claimed`}</StatusPill><StatusPill tone="amber">{task.timerMinutes} min limit</StatusPill></div>
         <div className="linkrow">Site: <a href={task.siteUrl} target="_blank" rel="noreferrer noopener">{task.siteUrl.replace("https://", "")} &#8599;</a></div>
         <Chips items={task.keywords} />
-        <p className="hint" style={{ marginTop: 8 }}>Task text: {TEXT_MODE_LABEL[task.textMode]}</p>
+        <p className="hint" style={{ marginTop: 8 }}>Task script: {TEXT_MODE_LABEL[task.textMode]}</p>
       </Card>
       {task.textMode === "manual_pool" ? (
         <Card>
-          <h3>Pitch pool ({pool.length})</h3>
-          <p className="muted">Shared evenly and randomly. With {pool.length} pitches and {task.slotsTotal ?? 100} workers, each pitch goes to about {Math.ceil((task.slotsTotal ?? 100) / pool.length)}.</p>
-          {pool.map((p, i) => <div key={i} className="pitch">{p}</div>)}
+          <h3>Scripts ({pool.length})</h3>
+          <p className="muted">Shared evenly and randomly. With {pool.length} scripts and {task.slotsTotal ?? 100} workers, each script goes to about {Math.ceil((task.slotsTotal ?? 100) / pool.length)}.</p>
+          {pool.map((p, i) => <div key={i} className="script">{p}</div>)}
           {canTexts ? (<>
-            <Field label="Add a pitch"><Textarea rows={3} value={add} onChange={(e) => setAdd(e.target.value)} /></Field>
-            <Button block onClick={() => { if (add.trim()) { setPool([...pool, add.trim()]); setAdd(""); notify("Pitch added"); } }}>Add to pool</Button>
+            <Field label="Add a script"><Textarea rows={3} value={add} onChange={(e) => setAdd(e.target.value)} /></Field>
+            <Button block onClick={() => { if (add.trim()) { setPool([...pool, add.trim()]); setAdd(""); notify("Script added"); } }}>Add script</Button>
           </>) : null}
         </Card>
       ) : null}
@@ -423,7 +425,7 @@ function ReviewItemScreen({ item, onBack, onDone }: { item: (typeof fixtures.rev
           <p className="muted">{item.keywordsMatched.length} of {item.keywords.length} keywords found in the worker's note. An aid only, you decide the outcome.</p>
           <Chips items={item.keywords} hits={item.keywordsMatched} misses={misses} /></Card>
       ) : null}
-      {item.assignedText ? <Card><h3>Pitch given to this worker</h3><div className="pitch">{item.assignedText}</div></Card> : null}
+      {item.assignedText ? <Card><h3>Script given to this worker</h3><div className="script">{item.assignedText}</div></Card> : null}
       <p className="muted" style={{ marginBottom: 4 }}>Outcome</p>
       <div className="outcomes" role="radiogroup" aria-label="Outcome">
         {OUTCOME_PERCENTS.map((p) => <button key={p} role="radio" aria-checked={pct === p} className={`outcomebtn${pct === p ? " picked" : ""}`} onClick={() => setPct(p)}>{p}%</button>)}
