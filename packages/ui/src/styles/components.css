@@ -224,3 +224,9 @@ button.metric:hover { border-color: var(--border-strong); }
   .app-frame.responsive { max-width: 520px; margin: 0 auto; border-left: var(--border-width) solid var(--border); border-right: var(--border-width) solid var(--border); }
 }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.card-pair { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); margin-bottom: var(--space-5); }
+.info-sub { font-size: var(--text-sm); line-height: 1.2; }
+.list-toolbar { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-4); }
+.list-count { font-size: var(--text-md); color: var(--text-secondary); }
+.list-count strong { color: var(--text-primary); font-weight: var(--weight-medium); }
+.list-toolbar select { width: auto; min-height: 36px; padding: 4px 10px; }

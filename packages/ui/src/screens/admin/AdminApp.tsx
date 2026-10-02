@@ -90,6 +90,7 @@ export function AdminApp({ initialScreen = "dashboard", viewerRoleIds = ["role-o
   const [userStatus, setUserStatus] = useState<Record<string, string>>({});
   const [pending, setPending] = useState<{ title: string; text: string; label: string; tone: "primary" | "danger"; run: () => void } | null>(null);
   const [ticketId, setTicketId] = useState(initialTicketId);
+  const [reviewSort, setReviewSort] = useState<"oldest" | "newest">("oldest");
   const [adminTaskId, setAdminTaskId] = useState("t1");
   const [taskFilter, setTaskFilter] = useState<"active" | "closed">("active");
   const [supportTab, setSupportTab] = useState<SupportTab>("open");
@@ -180,9 +181,14 @@ export function AdminApp({ initialScreen = "dashboard", viewerRoleIds = ["role-o
     case "taskdetail": body = <TaskDetailScreen task={fixtures.tasks.find((t) => t.id === adminTaskId) ?? fixtures.tasks[0]!} canManage={perms.has("task.manage")} canTexts={perms.has("task_text.manage")} onBack={() => show("tasks")} onRemove={() => { notify("Task removed"); show("tasks"); }} notify={notify} />; break;
     case "reviewqueue": body = (
       <div className="screen"><TopBar title="Review queue" /><div className="scrollarea"><div className="content">
-        <p className="note-text" style={{ marginBottom: 10 }}>{queue.length} waiting, oldest first.</p>
+        <div className="list-toolbar">
+          <span className="list-count"><strong>{queue.length}</strong> to review</span>
+          <Select aria-label="Sort reviews" value={reviewSort} onChange={(e) => setReviewSort(e.target.value as "oldest" | "newest")}>
+            <option value="oldest">Oldest first</option><option value="newest">Newest first</option>
+          </Select>
+        </div>
         {queue.length === 0 ? <EmptyState>Queue is clear.</EmptyState> : null}
-        {queue.map((q) => <ListRow key={q.id} onClick={() => { setReviewId(q.id); show("reviewitem"); }} title={q.worker} right={<span className="sub">{q.waitingLabel}</span>} sub={`${q.taskTitle} · ${q.identityEmail}`} />)}
+        {[...queue].sort((x, y) => (reviewSort === "oldest" ? y.waitingMinutes - x.waitingMinutes : x.waitingMinutes - y.waitingMinutes)).map((q) => <ListRow key={q.id} onClick={() => { setReviewId(q.id); show("reviewitem"); }} title={q.worker} right={<span className="sub">{q.waitingLabel}</span>} sub={`${q.taskTitle} · ${q.identityEmail}`} />)}
       </div></div></div>
     ); break;
     case "reviewitem": {
@@ -482,8 +488,12 @@ function ReviewItemScreen({ item, onBack, onDone }: { item: (typeof fixtures.rev
       {item.workerNote ? <p className="note-text" style={{ marginBottom: 12 }}>User note: "{item.workerNote}"</p> : null}
       <Card>
         <p style={{ fontWeight: 500, margin: "0 0 2px", color: "var(--text-primary)" }}>{item.worker} <span className="muted">· {item.identityEmail}</span></p>
-        <p style={{ fontSize: 12 }}>Task: {item.taskTitle} &middot; Reward {formatRupees(item.reward)}</p>
+        <p style={{ fontSize: 12 }}>Task: {item.taskTitle}</p>
       </Card>
+      <div className="card-pair">
+        <div className="info-cell green"><span className="info-label">Reward</span><span className="info-value big">{formatRupees(item.reward)}</span></div>
+        <div className="info-cell amber"><span className="info-label">Completed in</span><span className="info-value time">{formatLimit(item.timeTakenMinutes)}</span><span className="info-sub">{item.timeLimitMinutes === null ? "No time limit" : `${formatLimit(item.timeLimitMinutes - item.timeTakenMinutes)} left`}</span></div>
+      </div>
       {item.keywords.length ? (
         <Card><h3>Keyword check</h3>
           <p className="muted">{item.keywordsMatched.length} of {item.keywords.length} keywords found in the worker's note. An aid only, you decide the outcome.</p>

@@ -94,6 +94,9 @@ export interface ReviewQueueItem {
   taskTitle: string;
   reward: Paise;
   waitingLabel: string;
+  waitingMinutes: number; // for sorting
+  timeLimitMinutes: number | null; // the task's limit, null = unlimited
+  timeTakenMinutes: number; // claim start to proof submitted
   workerNote?: string;
   keywords: string[];
   keywordsMatched: string[];

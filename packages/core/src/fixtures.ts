@@ -180,14 +180,14 @@ export const reviewQueue: ReviewQueueItem[] = [
     identityEmail: "priya••@gmail.com",
     taskTitle: "Introduce our CRM to a local clinic",
     reward: rupees(40),
-    waitingLabel: "12 min ago",
+    waitingLabel: "12 min ago", waitingMinutes: 12, timeLimitMinutes: 30, timeTakenMinutes: 23,
     workerNote: "Presented to Dr. Rao, demo booked for Friday. Screenshot attached above.",
     keywords: ["appointment reminders", "patient records", "free 14-day trial"],
     keywordsMatched: ["appointment reminders", "free 14-day trial"],
     assignedText: activeClaim.assignedText
   },
-  { id: "r2", worker: "Amit V.", identityEmail: "amit••@gmail.com", taskTitle: "Sign up 3 leads for the newsletter", reward: rupees(15), waitingLabel: "1 hour ago", keywords: [], keywordsMatched: [] },
-  { id: "r3", worker: "Neha J.", identityEmail: "neha••@gmail.com", taskTitle: "Write and send a follow-up email", reward: rupees(60), waitingLabel: "3 hours ago", keywords: ["pricing", "onboarding support"], keywordsMatched: ["pricing"] }
+  { id: "r2", worker: "Amit V.", identityEmail: "amit••@gmail.com", taskTitle: "Sign up 3 leads for the newsletter", reward: rupees(15), waitingLabel: "1 hour ago", waitingMinutes: 60, timeLimitMinutes: null, timeTakenMinutes: 42, keywords: [], keywordsMatched: [] },
+  { id: "r3", worker: "Neha J.", identityEmail: "neha••@gmail.com", taskTitle: "Write and send a follow-up email", reward: rupees(60), waitingLabel: "3 hours ago", waitingMinutes: 180, timeLimitMinutes: 45, timeTakenMinutes: 38, keywords: ["pricing", "onboarding support"], keywordsMatched: ["pricing"] }
 ];
 
 export const adminUsers: AdminUserRow[] = [
