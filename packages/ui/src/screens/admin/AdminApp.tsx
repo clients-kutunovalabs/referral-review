@@ -13,7 +13,7 @@ import { markPaid, usePayouts } from "../../demo/payoutStore";
 
 export type AdminScreen =
   | "dashboard" | "tasks" | "newtask" | "taskdetail"
-  | "reviewqueue" | "reviewitem" | "payouts" | "payoutitem" | "payoutflagged"
+  | "reviewqueue" | "reviewitem" | "payouts" | "payoutitem"
   | "userdetail" | "tickets" | "ticket" | "access";
 type AccessTab = "users" | "team" | "roles";
 
@@ -21,7 +21,7 @@ type AccessTab = "users" | "team" | "roles";
 const NEEDS: Partial<Record<AdminScreen, PermissionKey[]>> = {
   tasks: ["task.manage", "task.assign"], newtask: ["task.manage"], taskdetail: ["task.manage", "task.assign"],
   reviewqueue: ["review.decide"], reviewitem: ["review.decide"],
-  payouts: ["payout.mark_paid"], payoutitem: ["payout.mark_paid"], payoutflagged: ["payout.mark_paid"],
+  payouts: ["payout.mark_paid"], payoutitem: ["payout.mark_paid"],
   userdetail: ["user.manage"],
   tickets: ["ticket.manage"], ticket: ["ticket.manage"]
 };
@@ -34,7 +34,7 @@ const NAV_DEF: { id: AdminScreen; tab: string; label: string; icon: IconName }[]
 ];
 const TAB_OF: Partial<Record<AdminScreen, string>> = {
   dashboard: "dashboard", tasks: "tasks", newtask: "tasks", taskdetail: "tasks",
-  reviewqueue: "review", reviewitem: "review", payouts: "payouts", payoutitem: "payouts", payoutflagged: "payouts",
+  reviewqueue: "review", reviewitem: "review", payouts: "payouts", payoutitem: "payouts",
   userdetail: "dashboard", tickets: "support", ticket: "support", access: "dashboard"
 };
 
@@ -83,7 +83,7 @@ export function AdminApp({ initialScreen = "dashboard", viewerRoleIds = ["role-o
   // Priya's requests come from the same store as the user app: paying one here updates her wallet there.
   const stored = usePayouts();
   const [others, setOthers] = useState(fixtures.adminPayouts);
-  const rank = { pending: 0, flagged: 1, paid: 2 } as const;
+  const rank = { pending: 0, paid: 1 } as const;
   const payouts = [...stored.map((p) => ({ ...p, who: "Priya S." })), ...others].sort((a, b) => rank[a.status] - rank[b.status]);
   const [payoutId, setPayoutId] = useState("a1");
   const [userId, setUserId] = useState("u1");
@@ -197,12 +197,11 @@ export function AdminApp({ initialScreen = "dashboard", viewerRoleIds = ["role-o
       break;
     }
     case "payouts": {
-      const rank = { flagged: 0, pending: 1, paid: 2 } as const;
-      const action = payouts.filter((p) => p.status !== "paid").sort((x, y) => rank[x.status as "flagged" | "pending"] - rank[y.status as "flagged" | "pending"]);
+      const action = payouts.filter((p) => p.status !== "paid");
       const history = payouts.filter((p) => p.status === "paid");
       const row = (p: (typeof payouts)[number]) => (
-        <ListRow key={p.id} onClick={() => { setPayoutId(p.id); show(p.status === "flagged" ? "payoutflagged" : "payoutitem"); }} title={`${p.who} · ${formatRupees(p.amount)}`}
-          right={<StatusPill tone={p.status === "paid" ? "green" : p.status === "flagged" ? "coral" : "amber"}>{p.status === "paid" ? "Paid" : p.status === "flagged" ? "Flagged" : "Pending"}</StatusPill>}
+        <ListRow key={p.id} onClick={() => { setPayoutId(p.id); show("payoutitem"); }} title={`${p.who} · ${formatRupees(p.amount)}`}
+          right={<StatusPill tone={p.status === "paid" ? "green" : "amber"}>{p.status === "paid" ? "Paid" : "Pending"}</StatusPill>}
           sub={`${p.upiMasked} · ${p.whenLabel}${p.paidBy ? ` · paid by ${p.paidBy}` : ""}`} />
       );
       body = (
@@ -219,19 +218,6 @@ export function AdminApp({ initialScreen = "dashboard", viewerRoleIds = ["role-o
       const p = payouts.find((x) => x.id === payoutId) ?? payouts.find((x) => x.status === "pending") ?? payouts[0]!;
       body = <PayoutItemScreen key={p.id} payout={p} adminName={adminName} onBack={() => show("payouts")}
         onPaid={() => { if (stored.some((x) => x.id === p.id)) markPaid(p.id, adminName); else setOthers(others.map((x) => (x.id === p.id ? { ...x, status: "paid", paidBy: adminName } : x))); notify(`Recorded: paid by ${adminName}`); show("payouts"); }} />;
-      break;
-    }
-    case "payoutflagged": {
-      const p = payouts.find((x) => x.id === payoutId) ?? payouts.find((x) => x.status === "flagged") ?? payouts[0]!;
-      body = (
-        <div className="screen"><TopBar title="Flagged payout" onBack={() => show("payouts")} /><div className="scrollarea"><div className="content">
-          <Card alert><p style={{ color: "var(--coral)", margin: "0 0 8px" }}>{p.flagReason}</p><p className="muted">{p.who} &middot; {formatRupees(p.amount)} &middot; requested {p.whenLabel}</p></Card>
-          <Button variant="danger" block style={{ marginBottom: 8 }} onClick={() => setPending({ title: "Ban both accounts?", text: "Both accounts sharing this UPI are suspended and this payout is stopped. Every record is kept and the action is written to the audit log.", label: "Yes, ban both", tone: "danger", run: () => { notify("Both accounts suspended (records kept)"); show("payouts"); } })}>Ban both accounts</Button>
-          <Button block style={{ marginBottom: 8 }} onClick={() => setPending({ title: "Freeze this payout?", text: "The money stays blocked and nothing is paid until you decide. The action is written to the audit log.", label: "Yes, freeze", tone: "primary", run: () => { notify("Frozen for investigation"); show("payouts"); } })}>Freeze and investigate</Button>
-          <Button block onClick={() => { setOthers(others.map((x) => (x.id === p.id ? { ...x, status: "pending" } : x))); notify("Allowed once"); show("payouts"); }}>Ignore &middot; allow this once</Button>
-          <p className="hint" style={{ marginTop: 12 }}>Every choice is written to the audit log with your name.</p>
-        </div></div></div>
-      );
       break;
     }
     case "tickets": body = <AdminTicketList tab={supportTab} setTab={setSupportTab} onOpen={(id) => { setTicketId(id); show("ticket"); }} />; break;
@@ -286,7 +272,7 @@ export function AdminApp({ initialScreen = "dashboard", viewerRoleIds = ["role-o
           <Card><h3>{u.name}</h3><p>{u.emailMasked} &middot; {u.identityCount} email{u.identityCount > 1 ? "s" : ""} &middot; {formatRupees(u.lifetime)} lifetime</p>
             <div className="row"><StatusPill tone={st === "active" ? "teal" : st === "suspended" ? "amber" : st === "deleted" ? "gray" : "coral"}>{st}</StatusPill></div></Card>
           <p className="hint" style={{ marginBottom: 12 }}>Suspending or deleting never removes records. Claims, ledger, payouts and payment proofs are kept for audit.</p>
-          {st === "active" || st === "flagged" ? <Button block style={{ marginBottom: 8 }} onClick={() => setPending({ title: `Suspend ${u.name}?`, text: "They cannot log in, claim or request payouts. Every record is kept. You can reinstate them later.", label: "Yes, suspend", tone: "danger", run: () => set("suspended", "User suspended") })}>Suspend user</Button> : null}
+          {st === "active" ? <Button block style={{ marginBottom: 8 }} onClick={() => setPending({ title: `Suspend ${u.name}?`, text: "They cannot log in, claim or request payouts. Every record is kept. You can reinstate them later.", label: "Yes, suspend", tone: "danger", run: () => set("suspended", "User suspended") })}>Suspend user</Button> : null}
           {st === "suspended" ? <Button block style={{ marginBottom: 8 }} onClick={() => set("active", "User reinstated")}>Reinstate user</Button> : null}
           {st !== "deleted" ? <Button variant="danger" block onClick={() => setPending({ title: `Delete ${u.name}?`, text: "The account is closed and personal details can be anonymised on request. Claims, ledger, payouts and payment proofs are kept for audit.", label: "Yes, delete", tone: "danger", run: () => set("deleted", "User deleted (records kept)") })}>Delete user (soft)</Button> : <p className="muted">Deleted. Personal details anonymised on request; financial records retained.</p>}
         </div></div></div>

@@ -28,7 +28,4 @@ describe("walletTotals", () => {
   it("never goes negative", () => {
     expect(walletTotals(rupees(50), [p("a", rupees(100), "pending")]).available).toBe(0n);
   });
-  it("ignores flagged requests", () => {
-    expect(walletTotals(earned, [p("a", rupees(100), "flagged")]).available).toBe(rupees(420));
-  });
 });

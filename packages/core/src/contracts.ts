@@ -72,7 +72,7 @@ export interface Wallet {
   entries: WalletEntry[];
 }
 
-export type PayoutStatus = "pending" | "paid" | "flagged";
+export type PayoutStatus = "pending" | "paid";
 export interface PayoutRequest {
   id: string;
   who: string;
@@ -83,7 +83,6 @@ export interface PayoutRequest {
   whenLabel: string;
   at?: string; // ISO: when requested
   paidAt?: string; // ISO: when marked paid
-  flagReason?: string;
   paidBy?: string;
 }
 
@@ -107,7 +106,7 @@ export interface AdminUserRow {
   id: string;
   name: string;
   emailMasked: string;
-  status: "active" | "suspended" | "deleted" | "flagged";
+  status: "active" | "suspended" | "deleted";
   lifetime: Paise;
   identityCount: number;
 }

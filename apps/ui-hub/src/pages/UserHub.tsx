@@ -20,7 +20,6 @@ const JUMPS: Record<string, Jump & { label: string }> = {
   wallet: { screen: "wallet", label: "Wallet + transactions" },
   payout: { screen: "payout", label: "Payout (amount + UPI)" },
   payoutSent: { screen: "payoutSent", scenario: "processing", label: "Payout requested" },
-  payoutFlagged: { screen: "payoutFlagged", label: "Payout: UPI flagged" },
   identities: { screen: "identities", label: "My emails" },
   help: { screen: "help", label: "Help: tickets (open)" },
   helpClosed: { screen: "help", helpTab: "closed", label: "Help: closed tickets" },
@@ -38,7 +37,7 @@ const JUMPS: Record<string, Jump & { label: string }> = {
 const GROUPS: JumpGroup<string>[] = [
   { label: "Account", items: ["login", "register", "verifyEmail", "identities"].map((id) => ({ id, label: JUMPS[id]!.label })) },
   { label: "Tasks", items: ["board", "detail", "claimed", "active", "review", "completed", "rejected", "submit", "submitted"].map((id) => ({ id, label: JUMPS[id]!.label })) },
-  { label: "Money", items: ["wallet", "payout", "payoutSent", "payoutFlagged"].map((id) => ({ id, label: JUMPS[id]!.label })) },
+  { label: "Money", items: ["wallet", "payout", "payoutSent"].map((id) => ({ id, label: JUMPS[id]!.label })) },
   { label: "Help and support", items: ["help", "helpClosed", "createTicket", "ticketOpen", "ticketNew", "ticketClosed"].map((id) => ({ id, label: JUMPS[id]!.label })) },
   { label: "Payout scenarios", items: ["walletNone", "walletProcess", "walletPaid", "payoutNone", "payoutProcess", "payoutPaid"].map((id) => ({ id, label: JUMPS[id]!.label })) }
 ];

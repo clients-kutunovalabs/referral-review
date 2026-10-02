@@ -10,7 +10,7 @@ import { CreateTicketBody, HelpScreen, TicketChatScreen, type HelpTab } from "./
 
 export type UserScreen =
   | "login" | "register" | "verifyEmail" | "board" | "detail" | "claimed" | "mytasks" | "submit" | "submitted"
-  | "wallet" | "payout" | "payoutSent" | "payoutFlagged" | "identities" | "help" | "createTicket" | "ticket";
+  | "wallet" | "payout" | "payoutSent" | "identities" | "help" | "createTicket" | "ticket";
 export type MyTab = "active" | "review" | "completed" | "rejected";
 
 const NAV = [
@@ -24,7 +24,7 @@ const TAB_OF: Partial<Record<UserScreen, string>> = {
   board: "board", detail: "board", claimed: "board",
   mytasks: "mytasks", submit: "mytasks", submitted: "mytasks",
   wallet: "wallet",
-  payout: "payout", payoutSent: "payout", payoutFlagged: "payout",
+  payout: "payout", payoutSent: "payout",
   help: "help", createTicket: "help", ticket: "help", identities: "board"
 };
 const MIN_PAYOUT = rupees(10);
@@ -144,7 +144,6 @@ export function UserApp({ initialScreen = "board", initialTab = "active", logged
           else requestPayout(amt, upi);
           show("payoutSent");
         }}
-        onFlagged={() => show("payoutFlagged")}
         onHelp={() => show("help")}
         onDemoPaid={() => {
           const pending = payouts.find((p) => p.status === "pending");
@@ -173,13 +172,6 @@ export function UserApp({ initialScreen = "board", initialTab = "active", logged
       );
       break;
     }
-    case "payoutFlagged": body = (
-      <div className="screen"><TopBar title="Payout rejected" onBack={() => show("payout")} /><div className="scrollarea"><div className="content">
-        <Card alert><p style={{ color: "var(--coral)" }}>This UPI ID is already linked to another account. Enter a different UPI ID to continue.</p></Card>
-        <p className="muted">Your balance is untouched. This request has been flagged for review and won't be paid until resolved.</p>
-        <Button variant="primary" block style={{ marginTop: 14 }} onClick={() => show("payout")}>Try a different UPI ID</Button>
-      </div></div></div>
-    ); break;
     case "help": body = <HelpScreen tab={helpTab} setTab={setHelpTab} onOpen={(id) => { setTicketId(id); show("ticket"); }} onCreate={() => show("createTicket")} />; break;
     case "createTicket": body = (
       <>
@@ -473,8 +465,8 @@ function WalletScreen({ identities, earned, withdrawn, inProcess, available, pay
   );
 }
 
-function PayoutScreen({ available, inProcess, payouts, onRequest, onFlagged, onDemoPaid, onHelp }: {
-  available: Paise; inProcess: Paise; payouts: PayoutRequest[]; onRequest: (amt: Paise, upi: string) => void; onFlagged: () => void; onDemoPaid: () => void; onHelp: () => void;
+function PayoutScreen({ available, inProcess, payouts, onRequest, onDemoPaid, onHelp }: {
+  available: Paise; inProcess: Paise; payouts: PayoutRequest[]; onRequest: (amt: Paise, upi: string) => void; onDemoPaid: () => void; onHelp: () => void;
 }) {
   const [amount, setAmount] = useState(""); const [upi, setUpi] = useState(""); const [errs, setErrs] = useState<{ amount?: string; upi?: string }>({});
   const [openTx, setOpenTx] = useState<string | null>(null);
@@ -488,7 +480,6 @@ function PayoutScreen({ available, inProcess, payouts, onRequest, onFlagged, onD
     if (!/^[\w.-]{2,}@[a-zA-Z]{2,}$/.test(upi)) e.upi = upi ? "That doesn't look like a UPI ID (name@bank)." : "Enter a UPI ID before requesting payout.";
     setErrs(e);
     if (!e.amount && !e.upi && amt !== null) {
-      if (upi.toLowerCase() === "taken@upi") return onFlagged();
       onRequest(amt, upi);
     }
   }
@@ -510,7 +501,6 @@ function PayoutScreen({ available, inProcess, payouts, onRequest, onFlagged, onD
           badge={<StatusPill tone={p.status === "paid" ? "green" : "amber"}>{p.status === "paid" ? "Paid" : "Processing"}</StatusPill>}
           details={payoutDetails(p)} open={openTx === p.id} onToggle={() => setOpenTx(openTx === p.id ? null : p.id)} />
       ))}
-      <p className="hint" style={{ marginTop: 20 }}>Demo: enter <span className="mono">taken@upi</span> to see the "UPI belongs to another account" state.</p>
       {pending ? <p className="hint">Demo: <button className="expander" style={{ padding: 0, minHeight: 0 }} onClick={onDemoPaid}>admin marks the request as paid</button></p> : null}
     </div></div></div>
   );

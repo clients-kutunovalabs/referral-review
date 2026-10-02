@@ -170,7 +170,7 @@ export const userPayouts: PayoutRequest[] = payoutScenarios.processing;
 export const adminPayouts: PayoutRequest[] = [
   { id: "a1", who: "Rahul K.", amount: rupees(170), status: "pending", upiMasked: "rahul••@upi", upiFull: "rahul.kumar@okhdfc", whenLabel: "1 hour ago" },
   { id: "a2", who: "Sara M.", amount: rupees(90), status: "pending", upiMasked: "sara••@upi", upiFull: "sara.m@oksbi", whenLabel: "4 hours ago" },
-  { id: "a3", who: "Karan D.", amount: rupees(220), status: "flagged", upiMasked: "9876•••@upi", upiFull: "9876543210@ybl", whenLabel: "yesterday", flagReason: "This UPI ID matches an existing UPI on another account (Meena D.)." }
+  { id: "a3", who: "Karan D.", amount: rupees(220), status: "pending", upiMasked: "9876•••@upi", upiFull: "9876543210@ybl", whenLabel: "yesterday" }
 ];
 
 export const reviewQueue: ReviewQueueItem[] = [
@@ -193,7 +193,7 @@ export const reviewQueue: ReviewQueueItem[] = [
 export const adminUsers: AdminUserRow[] = [
   { id: "u1", name: "Priya S.", emailMasked: "priya••@gmail.com", status: "active", lifetime: rupees(540), identityCount: 2 },
   { id: "u2", name: "Rahul K.", emailMasked: "rahul••@gmail.com", status: "active", lifetime: rupees(320), identityCount: 1 },
-  { id: "u3", name: "Karan D.", emailMasked: "karan••@gmail.com", status: "flagged", lifetime: rupees(220), identityCount: 1 },
+  { id: "u3", name: "Karan D.", emailMasked: "karan••@gmail.com", status: "active", lifetime: rupees(220), identityCount: 1 },
   { id: "u4", name: "Old User", emailMasked: "old••@gmail.com", status: "deleted", lifetime: rupees(80), identityCount: 1 }
 ];
 
