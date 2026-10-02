@@ -221,3 +221,4 @@ button.metric:hover { border-color: var(--border-strong); }
 @media (min-width: 640px) {
   .app-frame.responsive { max-width: 520px; margin: 0 auto; border-left: var(--border-width) solid var(--border); border-right: var(--border-width) solid var(--border); }
 }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

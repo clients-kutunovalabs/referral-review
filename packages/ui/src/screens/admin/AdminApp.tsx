@@ -300,7 +300,7 @@ function ScriptBlocks({ blocks, onChange }: { blocks: string[]; onChange: (b: st
 }
 
 function NewTaskScreen({ onBack, onPublish }: { onBack: () => void; onPublish: () => void }) {
-  const [f, setF] = useState({ title: "", instructions: "", siteUrl: "", reward: "", slots: "", timer: "", cap: "", till: "" });
+  const [f, setF] = useState({ title: "", instructions: "", siteUrl: "", reward: "", slots: "", timer: "", till: "" });
   const [mode, setMode] = useState<TextMode>("none");
   const [keywords, setKeywords] = useState<string[]>([]); const [kw, setKw] = useState("");
   const [pool, setPool] = useState<string[]>([""]);
@@ -336,30 +336,29 @@ function NewTaskScreen({ onBack, onPublish }: { onBack: () => void; onPublish: (
 
   return (
     <div className="screen"><TopBar title="New task template" onBack={onBack} /><div className="scrollarea"><div className="content">
+      <h3 className="section-title" style={{ marginTop: 0 }}>Task details</h3>
       <Field label="Title"><Input value={f.title} onChange={set("title")} placeholder="e.g. Introduce our CRM to a local clinic" /></Field>
       <Field label="Instructions"><Textarea rows={3} value={f.instructions} onChange={set("instructions")} placeholder="What exactly should the user do" /></Field>
       <Field label="Site link (where the work is done)"><Input value={f.siteUrl} onChange={set("siteUrl")} placeholder="https://" inputMode="url" /></Field>
-      <Field label="Reward amount (₹)"><Input value={f.reward} onChange={set("reward")} placeholder="40" inputMode="decimal" /></Field>
-      <Field label="Total slots" hint="Leave blank for unlimited"><Input value={f.slots} onChange={set("slots")} placeholder="100" inputMode="numeric" /></Field>
-      <Field label="Time limit (hours)" hint="Leave blank for unlimited time. Decimals allowed, e.g. 1.5."><Input value={f.timer} onChange={set("timer")} placeholder="e.g. 2" inputMode="decimal" /></Field>
-      <Field label="Active till (optional)" hint="Date and time the task stops accepting claims. Blank = no end date."><Input type="datetime-local" value={f.till} onChange={set("till")} /></Field>
-      <div className="field" style={{ marginBottom: 12 }}>
-        <span>Claim rules</span>
-        <Card>
-          <div className="chips"><StatusPill tone="teal">Each email: 1 claim per task</StatusPill><StatusPill tone="teal">Each account: unlimited emails</StatusPill></div>
-          <div className="hint" style={{ marginTop: 8 }}>An account can add as many emails as it likes, but each email can claim this task only once. Enforced by the server.</div>
-        </Card>
-      </div>
-      <Field label="Max claims per account (optional)" hint="Extra cap across all of one account's emails. Blank = no cap."><Input value={f.cap} onChange={set("cap")} placeholder="e.g. 3" inputMode="numeric" /></Field>
 
       <hr className="divider" />
+      <h3 className="section-title" style={{ marginTop: 0 }}>Reward and limits</h3>
+      <div style={{ display: "flex", gap: 12 }}>
+        <div style={{ flex: 1, minWidth: 0 }}><Field label="Reward (₹)"><Input value={f.reward} onChange={set("reward")} placeholder="40" inputMode="decimal" /></Field></div>
+        <div style={{ flex: 1, minWidth: 0 }}><Field label="Total slots" hint="Blank = unlimited"><Input value={f.slots} onChange={set("slots")} placeholder="100" inputMode="numeric" /></Field></div>
+      </div>
+      <Field label="Time limit (hours)" hint="Leave blank for unlimited time. Decimals allowed, e.g. 1.5."><Input value={f.timer} onChange={set("timer")} placeholder="e.g. 2" inputMode="decimal" /></Field>
+      <Field label="Active till (optional)" hint="Date and time the task stops accepting claims. Blank = no end date."><Input type="datetime-local" value={f.till} onChange={set("till")} /></Field>
+
+      <hr className="divider" />
+      <h3 className="section-title" style={{ marginTop: 0 }}>Task script</h3>
       <div className="field" style={{ marginBottom: 12 }}>
-        <span id="task-script-label">Task script</span>
+        <span id="task-script-label" className="sr-only">Task script</span>
         <Segmented<TextMode> label="Task script" value={mode} onChange={setMode} options={TEXT_MODE_ORDER.map((m) => ({ id: m, label: TEXT_MODE_LABEL[m] }))} />
         <div className="hint">{TEXT_MODE_HELP[mode]}</div>
       </div>
-      {mode !== "none" ? (
-      <Field label="Keywords / features to highlight" hint={mode === "manual_pool" ? "Optional. Shown to workers next to their script." : "Required. Shown to workers. The reviewer sees which ones appear in their note."}>
+      {mode === "ai_generated" || mode === "keywords" ? (
+      <Field label="Keywords / features to highlight" hint={mode === "ai_generated" ? "Required. The AI uses these to write each script." : "Required. Shown to workers. The reviewer sees which ones appear in their note."}>
         <div style={{ display: "flex", gap: 8 }}>
           <Input value={kw} onChange={(e) => setKw(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addKw(); } }} placeholder="Type and press Add" />
           <Button style={{ marginTop: 6 }} onClick={addKw}>Add</Button>
@@ -370,10 +369,9 @@ function NewTaskScreen({ onBack, onPublish }: { onBack: () => void; onPublish: (
 
       {mode === "manual_pool" ? (
         <div className="field">
-          <span>Scripts</span>
+          <span>Scripts (one block per script)</span>
           <ScriptBlocks blocks={pool} onChange={setPool} />
-          <div className="hint">One block per script. Each worker gets one at random, spread evenly.</div>
-          <div className="hint">{scripts.length} script{scripts.length === 1 ? "" : "s"}{slotsNum && scripts.length ? ` · with ${slotsNum} workers, each script is used about ${Math.ceil(slotsNum / scripts.length)} times` : ""}</div>
+                    <div className="hint">{scripts.length} script{scripts.length === 1 ? "" : "s"}{slotsNum && scripts.length ? ` · with ${slotsNum} workers, each script is used about ${Math.ceil(slotsNum / scripts.length)} times` : ""}</div>
         </div>
       ) : null}
 
