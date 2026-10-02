@@ -523,9 +523,10 @@ function PayoutItemScreen({ payout, adminName, onBack, onPaid }: { payout: (type
       {paid ? <p className="muted">Paid by {payout.paidBy}. The payment proof is stored with this record.</p> : (<>
         <p className="muted">After you transfer the money, attach the payment screenshot. It is required and is saved with your name.</p>
         <FileUpload label="Tap to upload payment screenshot" onFile={setProof} />
-        <Button variant="primary" block disabled={!proof || busy} onClick={() => { setBusy(true); onPaid(); }}>Mark as paid by {adminName}</Button>
       </>)}
-    </div></div></div>
+    </div></div>
+    {paid ? null : <div className="screen-footer"><Button variant="primary" block disabled={!proof || busy} onClick={() => { setBusy(true); onPaid(); }}>Mark as paid by {adminName}</Button></div>}
+    </div>
   );
 }
 
