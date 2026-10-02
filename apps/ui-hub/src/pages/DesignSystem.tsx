@@ -91,7 +91,7 @@ export function DesignSystem() {
         <ListRow title="Priya S." right={<StatusPill tone="teal">Active</StatusPill>} sub="priya••@gmail.com · ₹540 lifetime" />
         <Chips items={["appointment reminders", "patient records", "free trial"]} />
         <Chips items={["found", "missing"]} hits={["found"]} misses={["missing"]} />
-        <div style={{ marginTop: 10 }}><Countdown minutes={18} /> <Countdown minutes={3} /></div>
+        <div style={{ marginTop: 10 }}><Countdown minutes={18} /> <Countdown minutes={3} /> <Countdown minutes={90} /></div>
         <EmptyState>Nothing here yet.</EmptyState>
       </div>
 

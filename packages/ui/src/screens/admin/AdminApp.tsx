@@ -1,6 +1,6 @@
 import { useState } from "react";
 import {
-  activeTill, fixtures, PERMISSIONS, TEXT_MODE_HELP, TEXT_MODE_LABEL, TEXT_MODE_ORDER, type AdminMember, type PermissionKey, type Role, type Task, type TextMode
+  activeTill, fixtures, formatLimit, hoursToMinutes, PERMISSIONS, TEXT_MODE_HELP, TEXT_MODE_LABEL, TEXT_MODE_ORDER, type AdminMember, type PermissionKey, type Role, type Task, type TextMode
 } from "@rr/core";
 import { OUTCOME_PERCENTS, formatRupees, outcomeAmount, rupees, type OutcomePercent, type Paise } from "@rr/money";
 import {
@@ -38,19 +38,19 @@ const TAB_OF: Partial<Record<AdminScreen, string>> = {
   userdetail: "dashboard", tickets: "support", ticket: "support", access: "dashboard"
 };
 
-const extraTasks: { id: string; title: string; status: "closed" | "removed"; reward: Paise; claimed: string; timer: number; mode: string }[] = [
+const extraTasks: { id: string; title: string; status: "closed" | "removed"; reward: Paise; claimed: string; timer: number | null; mode: string }[] = [
   { id: "x1", title: "Rate us on the App Store", status: "closed", reward: rupees(25), claimed: "100 of 100 claimed", timer: 20, mode: TEXT_MODE_LABEL.none },
   { id: "x2", title: "Follow our Instagram", status: "removed", reward: rupees(20), claimed: "unlimited slots", timer: 10, mode: TEXT_MODE_LABEL.none }
 ];
 
 /** Same card idea as the user board: title, reward line, then a compact row with the status pill and the action button. */
 function AdminTaskCard({ title, reward, claimed, timer, mode, pill, onOpen }: {
-  title: string; reward: Paise; claimed: string; timer: number; mode: string; pill: React.ReactNode; onOpen?: () => void;
+  title: string; reward: Paise; claimed: string; timer: number | null; mode: string; pill: React.ReactNode; onOpen?: () => void;
 }) {
   return (
     <Card {...(onOpen ? { onClick: onOpen } : {})}>
       <h3>{title}</h3>
-      <p>{formatRupees(reward)} reward &middot; {claimed} &middot; {timer} min limit</p>
+      <p>{formatRupees(reward)} reward &middot; {claimed} &middot; {formatLimit(timer)}{timer === null ? "" : " limit"}</p>
       <div className="card-split" style={{ marginTop: "var(--space-3)" }}>
         <div className="card-split-main"><div className="chips stack" style={{ margin: 0 }}>{pill}<StatusPill tone="gray">Script: {mode}</StatusPill></div></div>
         {onOpen ? <Button compact>Manage</Button> : null}
@@ -306,7 +306,7 @@ function NewTaskScreen({ onBack, onPublish }: { onBack: () => void; onPublish: (
     if (!/^https:\/\/\S+\.\S+/.test(f.siteUrl)) e.push("Site link must be a valid https URL.");
     if (!/^\d+(\.\d{1,2})?$/.test(f.reward)) e.push("Reward must be an amount in rupees.");
     if (f.slots && !/^\d+$/.test(f.slots)) e.push("Total slots must be a whole number or blank.");
-    if (!/^\d+$/.test(f.timer) || Number(f.timer) < 1) e.push("Timer must be minutes, 1 or more.");
+    if (hoursToMinutes(f.timer) === "invalid") e.push("Time limit must be hours (e.g. 2 or 1.5) or blank for unlimited.");
     if (f.till && Date.parse(f.till) <= Date.now()) e.push("Active till must be in the future.");
     if (mode === "keywords" && keywords.length === 0) e.push("Add at least one keyword.");
     if (mode === "manual_pool" && scripts.length === 0) e.push("Add at least one script.");
@@ -330,9 +330,16 @@ function NewTaskScreen({ onBack, onPublish }: { onBack: () => void; onPublish: (
       <Field label="Site link (where the work is done)"><Input value={f.siteUrl} onChange={set("siteUrl")} placeholder="https://" inputMode="url" /></Field>
       <Field label="Reward amount (₹)"><Input value={f.reward} onChange={set("reward")} placeholder="40" inputMode="decimal" /></Field>
       <Field label="Total slots" hint="Leave blank for unlimited"><Input value={f.slots} onChange={set("slots")} placeholder="100" inputMode="numeric" /></Field>
-      <Field label="Timer duration (minutes)"><Input value={f.timer} onChange={set("timer")} placeholder="30" inputMode="numeric" /></Field>
+      <Field label="Time limit (hours)" hint="Leave blank for unlimited time. Decimals allowed, e.g. 1.5."><Input value={f.timer} onChange={set("timer")} placeholder="e.g. 2" inputMode="decimal" /></Field>
       <Field label="Active till (optional)" hint="Date and time the task stops accepting claims. Blank = no end date."><Input type="datetime-local" value={f.till} onChange={set("till")} /></Field>
-      <Field label="Max claims per account" hint="Across all of one person's emails. Blank = unlimited."><Input value={f.cap} onChange={set("cap")} placeholder="e.g. 3" inputMode="numeric" /></Field>
+      <div className="field" style={{ marginBottom: 12 }}>
+        <span>Claim rules</span>
+        <Card>
+          <div className="chips"><StatusPill tone="teal">Each email: 1 claim per task</StatusPill><StatusPill tone="teal">Each account: unlimited emails</StatusPill></div>
+          <div className="hint" style={{ marginTop: 8 }}>An account can add as many emails as it likes, but each email can claim this task only once. Enforced by the server.</div>
+        </Card>
+      </div>
+      <Field label="Max claims per account (optional)" hint="Extra cap across all of one account's emails. Blank = no cap."><Input value={f.cap} onChange={set("cap")} placeholder="e.g. 3" inputMode="numeric" /></Field>
 
       <hr className="divider" />
       <div className="field" style={{ marginBottom: 12 }}>
@@ -391,7 +398,7 @@ function TaskDetailScreen({ task, canManage, canTexts, onBack, onRemove, notify 
     <div className="screen"><TopBar title="Task detail" onBack={onBack} /><div className="scrollarea"><div className="content">
       <Card>
         <h3>{task.title}</h3><p>{task.description}</p>
-        <div className="row"><StatusPill tone="teal">{formatRupees(task.reward)} reward</StatusPill><StatusPill tone="gray">{task.slotsTotal === null ? "unlimited slots" : `${task.slotsTotal - (task.slotsRemaining ?? 0)} of ${task.slotsTotal} claimed`}</StatusPill><StatusPill tone="amber">{task.timerMinutes} min limit</StatusPill></div>
+        <div className="row"><StatusPill tone="teal">{formatRupees(task.reward)} reward</StatusPill><StatusPill tone="gray">{task.slotsTotal === null ? "unlimited slots" : `${task.slotsTotal - (task.slotsRemaining ?? 0)} of ${task.slotsTotal} claimed`}</StatusPill><StatusPill tone="amber">{formatLimit(task.timerMinutes)}{task.timerMinutes === null ? "" : " limit"}</StatusPill></div>
         <div className="linkrow">Site: <a href={task.siteUrl} target="_blank" rel="noreferrer noopener">{task.siteUrl.replace("https://", "")} &#8599;</a></div>
         <Chips items={task.keywords} />
         <p className="hint" style={{ marginTop: 8 }}>Task script: {TEXT_MODE_LABEL[task.textMode]}</p>

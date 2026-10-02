@@ -23,7 +23,7 @@ export interface Task {
   reward: Paise;
   slotsTotal: number | null; // null = unlimited
   slotsRemaining: number | null;
-  timerMinutes: number; // time limit once claimed
+  timerMinutes: number | null; // time limit once claimed, in minutes. null = unlimited
   activeUntil: string | null; // ISO date-time the task stops accepting claims; null = no end date
   status: TaskStatus;
   keywords: string[];

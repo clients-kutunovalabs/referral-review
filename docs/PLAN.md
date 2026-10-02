@@ -92,3 +92,7 @@ Because the backend comes last, the UI defines typed service interfaces and mock
 
 ## Verification (scaffold)
 `pnpm install && pnpm lint && pnpm typecheck && pnpm test` pass; `pnpm --filter ui-hub dev` serves `/`, `/admin`, `/design-system`; production Docker target builds without ui-hub; `docker compose up` boots Postgres and migrations apply. Later: 50 concurrent claims on a 10-slot task give exactly 10; 100 claims over 10 scripts give 10 each.
+
+## Time limit and claim rules (task template)
+- Time limit is entered in hours (decimals allowed) and stored as minutes; blank = unlimited (`timer_minutes` NULL, no expiry sweep for that claim).
+- Claim rules: an account may hold unlimited emails; each email (identity) may claim a given task once. Enforced by the DB unique constraint `(identity_id, template_id)`. `max_claims_per_account` stays as an optional extra cap (NULL = none).

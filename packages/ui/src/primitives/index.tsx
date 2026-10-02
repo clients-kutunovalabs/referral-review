@@ -182,9 +182,10 @@ export function Countdown({ minutes }: { minutes: number }) {
     const t = setInterval(() => setSecs((s) => (s > 0 ? s - 1 : 0)), 1000);
     return () => clearInterval(t);
   }, []);
-  const mm = String(Math.floor(secs / 60)).padStart(2, "0");
+  const h = Math.floor(secs / 3600);
+  const mm = String(Math.floor((secs % 3600) / 60)).padStart(h > 0 ? 2 : 2, "0");
   const ss = String(secs % 60).padStart(2, "0");
-  return <StatusPill tone={secs < 300 ? "coral" : "amber"}>{mm}:{ss} left</StatusPill>;
+  return <StatusPill tone={secs < 300 ? "coral" : "amber"}>{h > 0 ? `${h}:` : ""}{mm}:{ss} left</StatusPill>;
 }
 
 export function PhoneFrame({ children }: { children: ReactNode }) {

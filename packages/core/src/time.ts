@@ -51,3 +51,24 @@ export function whenLabel(iso: string | undefined, now: Date = new Date()): stri
   const { date, time } = dateParts(iso, now);
   return date ? `${date}, ${time}` : "";
 }
+
+/** Time limit once claimed, in minutes. null = unlimited. */
+export function formatLimit(minutes: number | null): string {
+  if (minutes === null) return "No time limit";
+  if (minutes < 60) return `${minutes} min`;
+  const h = Math.trunc(minutes / 60);
+  const m = minutes % 60;
+  return m === 0 ? `${h} h` : `${h} h ${m} min`;
+}
+
+/**
+ * Admin enters the time limit in hours ("2", "0.5", "1.25"). Blank means unlimited (null).
+ * Returns minutes, or "invalid".
+ */
+export function hoursToMinutes(input: string): number | null | "invalid" {
+  const t = input.trim();
+  if (t === "") return null;
+  if (!/^\d+(\.\d{1,2})?$/.test(t)) return "invalid";
+  const minutes = Math.round(Number(t) * 60);
+  return minutes >= 1 ? minutes : "invalid";
+}

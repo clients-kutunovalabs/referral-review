@@ -37,7 +37,7 @@ export const tasks: Task[] = [
     reward: rupees(15),
     slotsTotal: null,
     slotsRemaining: null,
-    timerMinutes: 15,
+    timerMinutes: null,
     activeUntil: null,
     status: "active",
     keywords: [],
@@ -128,7 +128,7 @@ export const activeClaim: Claim = {
 
 export const claims: Claim[] = [
   activeClaim,
-  { id: "c6", taskId: "t2", identityId: "i2", status: "claimed", minutesLeft: 14 },
+  { id: "c6", taskId: "t2", identityId: "i2", status: "claimed" },
   { id: "c7", taskId: "t4", identityId: "i1", status: "claimed", minutesLeft: 11 },
   { id: "c8", taskId: "t5", identityId: "i1", status: "claimed", minutesLeft: 22, assignedText: scriptPool[1] },
   { id: "c2", taskId: "t2", identityId: "i1", status: "under_review", submittedLabel: "2 hours ago" },

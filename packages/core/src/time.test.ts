@@ -39,3 +39,25 @@ describe("dateParts", () => {
   it("adds the year for other years", () => expect(shortDate(new Date("2025-12-31T09:05:00"), n)).toBe("31 Dec 2025"));
   it("handles bad input", () => expect(dateParts("nope", n)).toEqual({ date: "", time: "" }));
 });
+
+import { formatLimit, hoursToMinutes } from "./time";
+
+describe("time limit", () => {
+  it("blank means unlimited", () => { expect(hoursToMinutes("")).toBeNull(); expect(hoursToMinutes("  ")).toBeNull(); });
+  it("hours to minutes", () => {
+    expect(hoursToMinutes("1")).toBe(60);
+    expect(hoursToMinutes("0.5")).toBe(30);
+    expect(hoursToMinutes("1.25")).toBe(75);
+    expect(hoursToMinutes("24")).toBe(1440);
+  });
+  it("rejects nonsense", () => {
+    for (const bad of ["0", "-1", "abc", "1.255", "1,5", "0.001"]) expect(hoursToMinutes(bad)).toBe("invalid");
+  });
+  it("formats the limit", () => {
+    expect(formatLimit(null)).toBe("No time limit");
+    expect(formatLimit(30)).toBe("30 min");
+    expect(formatLimit(60)).toBe("1 h");
+    expect(formatLimit(90)).toBe("1 h 30 min");
+    expect(formatLimit(1440)).toBe("24 h");
+  });
+});

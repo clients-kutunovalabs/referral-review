@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { activeTill, dateParts, fixtures, walletTotals, type Claim, type Identity, type PayoutRequest, type PayoutScenario, type Task } from "@rr/core";
+import { activeTill, dateParts, fixtures, formatLimit, walletTotals, type Claim, type Identity, type PayoutRequest, type PayoutScenario, type Task } from "@rr/core";
 import { formatRupees, parseRupees, rupees, type Paise } from "@rr/money";
 import {
   BottomNav, Button, Card, Chips, CopyButton, Countdown, EmptyState, Field, FileUpload, Input, Notice, Select,
@@ -76,7 +76,7 @@ export function UserApp({ initialScreen = "board", initialTab = "active", logged
     if (already) return;
     const count = claims.filter((c) => c.taskId === task.id).length;
     const text = demoText(task, count);
-    setClaims([{ id: `c${claims.length + 1}`, taskId: task.id, identityId, status: "claimed", minutesLeft: task.timerMinutes, ...(text ? { assignedText: text } : {}) }, ...claims]);
+    setClaims([{ id: `c${claims.length + 1}`, taskId: task.id, identityId, status: "claimed", ...(task.timerMinutes === null ? {} : { minutesLeft: task.timerMinutes }), ...(text ? { assignedText: text } : {}) }, ...claims]);
     show("claimed");
   }
 
@@ -280,7 +280,7 @@ function DetailBody({ task, identities, identityId, setIdentityId, claims, logge
         </div>
         <div className="info-cell amber">
           <span className="info-label">Time limit</span>
-          <span className="info-value time">{task.timerMinutes} min</span>
+          <span className="info-value time">{formatLimit(task.timerMinutes)}</span>
         </div>
         <div className="info-cell green">
           <span className="info-label">Reward</span>
@@ -303,12 +303,12 @@ function DetailBody({ task, identities, identityId, setIdentityId, claims, logge
   );
 }
 
-function ClaimedScreen({ minutes, onGo, onMore }: { minutes: number; onGo: () => void; onMore: () => void }) {
+function ClaimedScreen({ minutes, onGo, onMore }: { minutes: number | null; onGo: () => void; onMore: () => void }) {
   return (
     <div className="screen"><TopBar title="Task accepted" /><div className="scrollarea"><div className="content">
       <div className="center-icon">&#10003;</div>
       <p className="center-text" style={{ fontWeight: 500 }}>Task accepted</p>
-      <p className="center-text note-text">Complete it within {minutes} minutes. Find it under My tasks &rarr; Active.</p>
+      <p className="center-text note-text">{minutes === null ? "There is no time limit." : `Complete it within ${formatLimit(minutes)}.`} Find it under My tasks &rarr; Active.</p>
       <Button variant="primary" block style={{ marginTop: 20 }} onClick={onGo}>Go to My tasks</Button>
       <Button block style={{ marginTop: 8 }} onClick={onMore}>Select more tasks</Button>
     </div></div></div>
@@ -336,7 +336,7 @@ function MyTasksScreen({ tab, setTab, claims, identities, onSubmit }: {
           return (
             <Card key={c.id}>
               {c.status === "claimed" ? (
-                <div className="card-head"><h3>{title(c)}</h3><Countdown minutes={c.minutesLeft ?? 0} /></div>
+                <div className="card-head"><h3>{title(c)}</h3>{c.minutesLeft === undefined ? <StatusPill tone="gray">No time limit</StatusPill> : <Countdown minutes={c.minutesLeft} />}</div>
               ) : <h3>{title(c)}</h3>}
               {c.status === "claimed" ? <p className="muted">{email(c)}</p> : null}
               {c.status === "claimed" && t ? (<>
