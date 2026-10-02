@@ -288,15 +288,33 @@ export function AdminApp({ initialScreen = "dashboard", viewerRoleIds = ["role-o
 
 /* ---------- Screens ---------- */
 
+/** One block per script, plus button to add another. Blank blocks are ignored. */
+function ScriptBlocks({ blocks, onChange }: { blocks: string[]; onChange: (b: string[]) => void }) {
+  return (
+    <div>
+      {blocks.map((b, i) => (
+        <div key={i} className="field" style={{ marginBottom: 10 }}>
+          <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
+            <span>Script {i + 1}</span>
+            {blocks.length > 1 ? <Button compact onClick={() => onChange(blocks.filter((_, j) => j !== i))} aria-label={`Remove script ${i + 1}`}>Remove</Button> : null}
+          </div>
+          <Textarea rows={4} value={b} onChange={(e) => onChange(blocks.map((x, j) => (j === i ? e.target.value : x)))} placeholder="Write the script here" />
+        </div>
+      ))}
+      <Button block onClick={() => onChange([...blocks, ""])}>+ Add another script</Button>
+    </div>
+  );
+}
+
 function NewTaskScreen({ onBack, onPublish }: { onBack: () => void; onPublish: () => void }) {
   const [f, setF] = useState({ title: "", instructions: "", siteUrl: "", reward: "", slots: "", timer: "", cap: "", till: "" });
   const [mode, setMode] = useState<TextMode>("none");
   const [keywords, setKeywords] = useState<string[]>([]); const [kw, setKw] = useState("");
-  const [pool, setPool] = useState("");
+  const [pool, setPool] = useState<string[]>([""]);
   const [ai, setAi] = useState({ tone: "", language: "", min: "", max: "", style: "" });
   const [errors, setErrors] = useState<string[]>([]);
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => setF({ ...f, [k]: e.target.value });
-  const scripts = pool.split(/\n\s*\n/).map((x) => x.trim()).filter(Boolean);
+  const scripts = pool.map((x) => x.trim()).filter(Boolean);
   const addKw = () => { const v = kw.trim(); if (v && !keywords.includes(v)) setKeywords([...keywords, v]); setKw(""); };
 
   function publish() {
@@ -358,10 +376,12 @@ function NewTaskScreen({ onBack, onPublish }: { onBack: () => void; onPublish: (
       ) : null}
 
       {mode === "manual_pool" ? (
-        <Field label="Scripts" hint="Separate scripts with a blank line. Each worker gets one at random, spread evenly.">
-          <Textarea rows={7} value={pool} onChange={(e) => setPool(e.target.value)} placeholder={"Script one...\n\nScript two...\n\nScript three..."} />
+        <div className="field">
+          <span>Scripts</span>
+          <ScriptBlocks blocks={pool} onChange={setPool} />
+          <div className="hint">One block per script. Each worker gets one at random, spread evenly.</div>
           <div className="hint">{scripts.length} script{scripts.length === 1 ? "" : "s"}{slotsNum && scripts.length ? ` · with ${slotsNum} workers, each script is used about ${Math.ceil(slotsNum / scripts.length)} times` : ""}</div>
-        </Field>
+        </div>
       ) : null}
 
       {mode === "ai_generated" ? (
@@ -387,11 +407,11 @@ function NewTaskScreen({ onBack, onPublish }: { onBack: () => void; onPublish: (
 function TaskDetailScreen({ task, canManage, canTexts, onBack, onRemove, notify }: {
   task: Task; canManage: boolean; canTexts: boolean; onBack: () => void; onRemove: () => void; notify: (m: string) => void;
 }) {
-  const [pool, setPool] = useState(fixtures.scriptPool); const [adding, setAdding] = useState(false); const [draft, setDraft] = useState("");
-  const drafted = draft.split(/\n\s*\n/).map((x) => x.trim()).filter(Boolean);
+  const [pool, setPool] = useState(fixtures.scriptPool); const [adding, setAdding] = useState(false); const [draft, setDraft] = useState<string[]>([""]);
+  const drafted = draft.map((x) => x.trim()).filter(Boolean);
   function addScripts() {
     if (!drafted.length) return;
-    setPool([...pool, ...drafted]); notify(`${drafted.length} script${drafted.length === 1 ? "" : "s"} added`); setDraft(""); setAdding(false);
+    setPool([...pool, ...drafted]); notify(`${drafted.length} script${drafted.length === 1 ? "" : "s"} added`); setDraft([""]); setAdding(false);
   }
   return (
     <>
@@ -417,10 +437,9 @@ function TaskDetailScreen({ task, canManage, canTexts, onBack, onRemove, notify 
       </>) : null}
     </div></div></div>
     {adding ? (
-      <Sheet title="Add scripts" onClose={() => { setAdding(false); setDraft(""); }}>
-        <Field label="Scripts" hint="Separate scripts with a blank line. Add one or many.">
-          <Textarea id="new-scripts" rows={8} value={draft} onChange={(e) => setDraft(e.target.value)} placeholder={"Script one...\n\nScript two...\n\nScript three..."} />
-        </Field>
+      <Sheet title="Add scripts" onClose={() => { setAdding(false); setDraft([""]); }}>
+        <ScriptBlocks blocks={draft} onChange={setDraft} />
+        <div style={{ height: 12 }} />
         <p className="muted" style={{ margin: "0 0 12px" }}>{drafted.length} script{drafted.length === 1 ? "" : "s"} to add</p>
         <Button variant="primary" block disabled={!drafted.length} onClick={addScripts}>Add scripts</Button>
       </Sheet>
