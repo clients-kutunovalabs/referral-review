@@ -28,19 +28,19 @@ const GROUPS: JumpGroup<string>[] = [
   { label: "User detail", items: ["userdetail"].map((id) => ({ id, label: JUMPS[id]!.label })) }
 ];
 
-export function AdminHub() {
+export function AdminHub({ ownerOnly = false }: { ownerOnly?: boolean } = {}) {
   const [jump, setJump] = useState("dashboard");
   const [all, setAll] = useState(false);
   const [rev, setRev] = useState(0);
   const [viewer, setViewer] = useState("role-owner");
   return (
     <HubPage>
-      <JumpPanel title="Admin side" hint="Switch the viewing role to see permission-gated navigation and 403 screens." groups={GROUPS} active={jump} onPick={(id) => { setJump(id); setRev(rev + 1); setAll(false); }}>
-        <label className="field" style={{ marginBottom: 10 }}>View as
+      <JumpPanel title="Admin side" hint={ownerOnly ? "Viewing as the Owner role." : "Switch the viewing role to see permission-gated navigation and 403 screens."} groups={GROUPS} active={jump} onPick={(id) => { setJump(id); setRev(rev + 1); setAll(false); }}>
+        {ownerOnly ? null : <label className="field" style={{ marginBottom: 10 }}>View as
           <select value={viewer} onChange={(e) => { setViewer(e.target.value); setRev(rev + 1); }}>
             {fixtures.roles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
           </select>
-        </label>
+        </label>}
         <button className={`jumpbtn${all ? " on" : ""}`} onClick={() => setAll(!all)} style={{ marginBottom: 14 }}>{all ? "Back to interactive" : "Show all screens at once"}</button>
       </JumpPanel>
       {all ? (
