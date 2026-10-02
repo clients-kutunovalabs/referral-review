@@ -181,8 +181,10 @@ export function AdminApp({ initialScreen = "dashboard", viewerRoleIds = ["role-o
     case "taskdetail": body = <TaskDetailScreen task={fixtures.tasks.find((t) => t.id === adminTaskId) ?? fixtures.tasks[0]!} canManage={perms.has("task.manage")} canTexts={perms.has("task_text.manage")} onBack={() => show("tasks")} onRemove={() => { notify("Task removed"); show("tasks"); }} notify={notify} />; break;
     case "reviewqueue": body = (
       <div className="screen"><TopBar title="Review queue" /><div className="scrollarea"><div className="content">
-        <div style={{ margin: "0 calc(var(--space-7) * -1) var(--space-5)" }}><Tabs<"oldest" | "newest"> value={reviewSort} onChange={setReviewSort} tabs={[{ id: "oldest", label: "Oldest" }, { id: "newest", label: "Newest" }]} /></div>
-        <p className="list-count" style={{ margin: "0 0 var(--space-4)" }}><strong>{queue.length}</strong> to review</p>
+        <div className="list-toolbar">
+          <span className="list-count"><strong>{queue.length}</strong> to review</span>
+          <Tabs<"oldest" | "newest"> inline value={reviewSort} onChange={setReviewSort} tabs={[{ id: "oldest", label: "Oldest" }, { id: "newest", label: "Newest" }]} />
+        </div>
         {queue.length === 0 ? <EmptyState>Queue is clear.</EmptyState> : null}
         {[...queue].sort((x, y) => (reviewSort === "oldest" ? y.waitingMinutes - x.waitingMinutes : x.waitingMinutes - y.waitingMinutes)).map((q) => <ListRow key={q.id} onClick={() => { setReviewId(q.id); show("reviewitem"); }} title={q.worker} right={<span className="sub">{q.waitingLabel}</span>} sub={`${q.taskTitle} · ${q.identityEmail}`} />)}
       </div></div></div>
@@ -481,7 +483,7 @@ function ReviewItemScreen({ item, onBack, onDone }: { item: (typeof fixtures.rev
   return (
     <div className="screen"><TopBar title="Review submission" onBack={onBack} /><div className="scrollarea"><div className="content">
       <div className="placeholder-img">Screenshot proof placeholder</div>
-      <Card><h3>Note from user</h3>{item.workerNote ? <p>{item.workerNote}</p> : <p className="muted">No note added.</p>}</Card>
+      {item.workerNote ? <Card><h3>Note from user</h3><p>{item.workerNote}</p></Card> : null}
       <Card>
         <p style={{ fontWeight: 500, margin: "0 0 2px", color: "var(--text-primary)" }}>{item.worker} <span className="muted">· {item.identityEmail}</span></p>
         <p style={{ fontSize: 12 }}>Task: {item.taskTitle}</p>

@@ -43,9 +43,9 @@ export function Input(props: InputHTMLAttributes<HTMLInputElement>) { return <in
 export function Textarea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) { return <textarea {...props} />; }
 export function Select(props: SelectHTMLAttributes<HTMLSelectElement>) { return <select {...props} />; }
 
-export function Tabs<T extends string>({ tabs, value, onChange }: { tabs: { id: T; label: string }[]; value: T; onChange: (id: T) => void }) {
+export function Tabs<T extends string>({ tabs, value, onChange, inline }: { tabs: { id: T; label: string }[]; value: T; onChange: (id: T) => void; inline?: boolean }) {
   return (
-    <div className="tabs" role="tablist">
+    <div className={`tabs${inline ? " inline" : ""}`} role="tablist">
       {tabs.map((t) => (
         <button key={t.id} role="tab" aria-selected={t.id === value} className={`tab${t.id === value ? " on" : ""}`} onClick={() => onChange(t.id)}>
           {t.label}

@@ -186,7 +186,7 @@ export const reviewQueue: ReviewQueueItem[] = [
     keywordsMatched: ["appointment reminders", "free 14-day trial"],
     assignedText: activeClaim.assignedText
   },
-  { id: "r2", worker: "Amit V.", identityEmail: "amit••@gmail.com", taskTitle: "Sign up 3 leads for the newsletter", reward: rupees(15), waitingLabel: "1 hour ago", waitingMinutes: 60, timeLimitMinutes: null, timeTakenMinutes: 42, workerNote: "Signed up three leads from the walk-in list. Screenshots of all three confirmations attached.", keywords: [], keywordsMatched: [] },
+  { id: "r2", worker: "Amit V.", identityEmail: "amit••@gmail.com", taskTitle: "Sign up 3 leads for the newsletter", reward: rupees(15), waitingLabel: "1 hour ago", waitingMinutes: 60, timeLimitMinutes: null, timeTakenMinutes: 42, keywords: [], keywordsMatched: [] },
   { id: "r3", worker: "Neha J.", identityEmail: "neha••@gmail.com", taskTitle: "Write and send a follow-up email", reward: rupees(60), waitingLabel: "3 hours ago", waitingMinutes: 180, timeLimitMinutes: 45, timeTakenMinutes: 38, workerNote: "Sent the follow-up email with pricing and offered onboarding help. Screenshot of the sent mail attached.", keywords: ["pricing", "onboarding support"], keywordsMatched: ["pricing"] }
 ];
 
