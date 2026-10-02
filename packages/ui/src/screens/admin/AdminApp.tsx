@@ -12,14 +12,14 @@ import { needsReply, useTickets } from "../../demo/ticketStore";
 import { markPaid, usePayouts } from "../../demo/payoutStore";
 
 export type AdminScreen =
-  | "dashboard" | "tasks" | "newtask" | "taskdetail" | "removeconfirm"
+  | "dashboard" | "tasks" | "newtask" | "taskdetail"
   | "reviewqueue" | "reviewitem" | "payouts" | "payoutitem" | "payoutflagged"
   | "userdetail" | "tickets" | "ticket" | "access";
 type AccessTab = "users" | "team" | "roles";
 
 /** Screen -> permission needed. Mirrors the server, which checks the database on every request. */
 const NEEDS: Partial<Record<AdminScreen, PermissionKey[]>> = {
-  tasks: ["task.manage", "task.assign"], newtask: ["task.manage"], taskdetail: ["task.manage", "task.assign"], removeconfirm: ["task.manage"],
+  tasks: ["task.manage", "task.assign"], newtask: ["task.manage"], taskdetail: ["task.manage", "task.assign"],
   reviewqueue: ["review.decide"], reviewitem: ["review.decide"],
   payouts: ["payout.mark_paid"], payoutitem: ["payout.mark_paid"], payoutflagged: ["payout.mark_paid"],
   userdetail: ["user.manage"],
@@ -33,7 +33,7 @@ const NAV_DEF: { id: AdminScreen; tab: string; label: string; icon: IconName }[]
   { id: "tickets", tab: "support", label: "Support", icon: "support" }
 ];
 const TAB_OF: Partial<Record<AdminScreen, string>> = {
-  dashboard: "dashboard", tasks: "tasks", newtask: "tasks", taskdetail: "tasks", removeconfirm: "tasks",
+  dashboard: "dashboard", tasks: "tasks", newtask: "tasks", taskdetail: "tasks",
   reviewqueue: "review", reviewitem: "review", payouts: "payouts", payoutitem: "payouts", payoutflagged: "payouts",
   userdetail: "dashboard", tickets: "support", ticket: "support", access: "dashboard"
 };
@@ -164,14 +164,7 @@ export function AdminApp({ initialScreen = "dashboard", viewerRoleIds = ["role-o
       </div>
     ); break;
     case "newtask": body = <NewTaskScreen onBack={() => show("tasks")} onPublish={() => { notify("Task published"); show("tasks"); }} />; break;
-    case "taskdetail": body = <TaskDetailScreen task={fixtures.tasks.find((t) => t.id === adminTaskId) ?? fixtures.tasks[0]!} canManage={perms.has("task.manage")} canTexts={perms.has("task_text.manage")} onBack={() => show("tasks")} onRemove={() => show("removeconfirm")} notify={notify} />; break;
-    case "removeconfirm": body = (
-      <div className="screen"><TopBar title="Remove this task?" onBack={() => show("taskdetail")} /><div className="scrollarea"><div className="content">
-        <p className="note-text">New claims will be blocked immediately. Anyone with this task in Active (not yet submitted) will have their claim voided. Submissions already awaiting review will still be processed normally.</p>
-        <Button variant="danger" block style={{ margin: "14px 0 8px" }} onClick={() => { notify("Task removed"); show("tasks"); }}>Confirm remove</Button>
-        <Button block onClick={() => show("taskdetail")}>Cancel</Button>
-      </div></div></div>
-    ); break;
+    case "taskdetail": body = <TaskDetailScreen task={fixtures.tasks.find((t) => t.id === adminTaskId) ?? fixtures.tasks[0]!} canManage={perms.has("task.manage")} canTexts={perms.has("task_text.manage")} onBack={() => show("tasks")} onRemove={() => { notify("Task removed"); show("tasks"); }} notify={notify} />; break;
     case "reviewqueue": body = (
       <div className="screen"><TopBar title="Review queue" /><div className="scrollarea"><div className="content">
         <p className="note-text" style={{ marginBottom: 10 }}>{queue.length} waiting, oldest first.</p>
@@ -407,6 +400,7 @@ function NewTaskScreen({ onBack, onPublish }: { onBack: () => void; onPublish: (
 function TaskDetailScreen({ task, canManage, canTexts, onBack, onRemove, notify }: {
   task: Task; canManage: boolean; canTexts: boolean; onBack: () => void; onRemove: () => void; notify: (m: string) => void;
 }) {
+  const [confirm, setConfirm] = useState<"pause" | "remove" | null>(null);
   const [pool, setPool] = useState(fixtures.scriptPool); const [adding, setAdding] = useState(false); const [draft, setDraft] = useState<string[]>([""]);
   const drafted = draft.map((x) => x.trim()).filter(Boolean);
   function addScripts() {
@@ -432,10 +426,24 @@ function TaskDetailScreen({ task, canManage, canTexts, onBack, onRemove, notify 
         </Card>
       ) : null}
       {canManage ? (<>
-        <Button block style={{ marginBottom: 8 }} onClick={() => notify("Task paused")}>Pause task</Button>
-        <Button variant="danger" block onClick={onRemove}>Remove task</Button>
+        <Button block style={{ marginBottom: 8 }} onClick={() => setConfirm("pause")}>Pause task</Button>
+        <Button variant="danger" block onClick={() => setConfirm("remove")}>Remove task</Button>
       </>) : null}
     </div></div></div>
+    {confirm === "pause" ? (
+      <Sheet title="Pause this task?" onClose={() => setConfirm(null)}>
+        <p className="note-text">New claims are blocked while it is paused. Workers who already claimed it can still submit. You can resume it later.</p>
+        <Button variant="primary" block style={{ margin: "14px 0 8px" }} onClick={() => { setConfirm(null); notify("Task paused"); }}>Confirm pause</Button>
+        <Button block onClick={() => setConfirm(null)}>Cancel</Button>
+      </Sheet>
+    ) : null}
+    {confirm === "remove" ? (
+      <Sheet title="Remove this task?" onClose={() => setConfirm(null)}>
+        <p className="note-text">New claims will be blocked immediately. Anyone with this task in Active (not yet submitted) will have their claim voided. Submissions already awaiting review will still be processed normally.</p>
+        <Button variant="danger" block style={{ margin: "14px 0 8px" }} onClick={() => { setConfirm(null); onRemove(); }}>Confirm remove</Button>
+        <Button block onClick={() => setConfirm(null)}>Cancel</Button>
+      </Sheet>
+    ) : null}
     {adding ? (
       <Sheet title="Add scripts" onClose={() => { setAdding(false); setDraft([""]); }}>
         <ScriptBlocks blocks={draft} onChange={setDraft} />

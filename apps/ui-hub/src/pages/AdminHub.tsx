@@ -8,7 +8,6 @@ const JUMPS: Record<string, { screen: AdminScreen; tab?: "users" | "team" | "rol
   tasks: { screen: "tasks", label: "Task list" },
   newtask: { screen: "newtask", label: "New task (task script, AI fields)" },
   taskdetail: { screen: "taskdetail", label: "Task detail (scripts)" },
-  removeconfirm: { screen: "removeconfirm", label: "Remove task confirm" },
   reviewqueue: { screen: "reviewqueue", label: "Review queue" },
   reviewitem: { screen: "reviewitem", label: "Review submission" },
   payouts: { screen: "payouts", label: "Payouts" },
@@ -23,7 +22,7 @@ const JUMPS: Record<string, { screen: AdminScreen; tab?: "users" | "team" | "rol
 };
 const GROUPS: JumpGroup<string>[] = [
   { label: "Overview", items: ["dashboard", "access", "accessTeam", "accessRoles"].map((id) => ({ id, label: JUMPS[id]!.label })) },
-  { label: "Tasks", items: ["tasks", "newtask", "taskdetail", "removeconfirm"].map((id) => ({ id, label: JUMPS[id]!.label })) },
+  { label: "Tasks", items: ["tasks", "newtask", "taskdetail"].map((id) => ({ id, label: JUMPS[id]!.label })) },
   { label: "Review", items: ["reviewqueue", "reviewitem"].map((id) => ({ id, label: JUMPS[id]!.label })) },
   { label: "Payments", items: ["payouts", "payoutitem", "payoutflagged"].map((id) => ({ id, label: JUMPS[id]!.label })) },
   { label: "Support", items: ["tickets", "ticket"].map((id) => ({ id, label: JUMPS[id]!.label })) },
