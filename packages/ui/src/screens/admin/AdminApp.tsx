@@ -4,7 +4,7 @@ import {
 } from "@rr/core";
 import { OUTCOME_PERCENTS, formatRupees, outcomeAmount, rupees, type OutcomePercent, type Paise } from "@rr/money";
 import {
-  BottomNav, Icon, Segmented, Sheet, type IconName, Button, Card, Chips, CopyButton, EmptyState, Field, FileUpload, Input, ListRow, Select,
+  BottomNav, Icon, Segmented, Sheet, type IconName, Button, Card, Chips, ConfirmSheet, CopyButton, EmptyState, Field, FileUpload, Input, ListRow, Select,
   StatusPill, Tabs, Textarea, Toast, TopBar
 } from "../../primitives";
 import { AdminTicketChat, AdminTicketList, type SupportTab } from "./SupportScreens";
@@ -44,6 +44,10 @@ const extraTasks: { id: string; title: string; status: "closed" | "removed"; rew
 ];
 
 /** Same card idea as the user board: title, reward line, then a compact row with the status pill and the action button. */
+function isClosed(t: Task): boolean {
+  return t.status === "closed" || t.status === "removed" || activeTill(t.activeUntil).kind === "closed";
+}
+
 function AdminTaskCard({ title, reward, claimed, timer, mode, pill, onOpen }: {
   title: string; reward: Paise; claimed: string; timer: number | null; mode: string; pill: React.ReactNode; onOpen?: () => void;
 }) {
@@ -84,8 +88,10 @@ export function AdminApp({ initialScreen = "dashboard", viewerRoleIds = ["role-o
   const [payoutId, setPayoutId] = useState("a1");
   const [userId, setUserId] = useState("u1");
   const [userStatus, setUserStatus] = useState<Record<string, string>>({});
+  const [pending, setPending] = useState<{ title: string; text: string; label: string; tone: "primary" | "danger"; run: () => void } | null>(null);
   const [ticketId, setTicketId] = useState(initialTicketId);
   const [adminTaskId, setAdminTaskId] = useState("t1");
+  const [taskFilter, setTaskFilter] = useState<"active" | "closed">("active");
   const [supportTab, setSupportTab] = useState<SupportTab>("open");
   const allTickets = useTickets();
 
@@ -127,6 +133,7 @@ export function AdminApp({ initialScreen = "dashboard", viewerRoleIds = ["role-o
             </button>
           </div>
           <div className="scrollarea"><div className="content">
+            <p className="section-label" style={{ marginTop: 0 }}>Needs your attention</p>
             <div className="metric-grid">
               {cards.filter((c) => can(c.go)).map((c) => (
                 <button key={c.go} className="metric" onClick={() => show(c.go)}>
@@ -135,10 +142,14 @@ export function AdminApp({ initialScreen = "dashboard", viewerRoleIds = ["role-o
               ))}
             </div>
             <p className="section-label">Recent activity</p>
-            <Card><p>Priya S. submitted proof for "Introduce our CRM to a local clinic" &middot; 12 min ago</p></Card>
-            <Card><p>Priya S. opened a ticket: "Screenshot upload fails on my phone" &middot; yesterday</p></Card>
-            <Card><p>Rahul K. requested a payout of {formatRupees(17000n)} &middot; 1 hour ago</p></Card>
-            <Card><p>"Rate us on the App Store" reached its slot limit &middot; 3 hours ago</p></Card>
+            {([
+              ["reviewqueue", 'Priya S. submitted proof for "Introduce our CRM to a local clinic"', "12 min ago"],
+              ["tickets", 'Priya S. opened a ticket: "Screenshot upload fails on my phone"', "yesterday"],
+              ["payouts", `Rahul K. requested a payout of ${formatRupees(17000n)}`, "1 hour ago"],
+              ["tasks", '"Rate us on the App Store" reached its slot limit', "3 hours ago"]
+            ] as const).filter(([go]) => can(go)).map(([go, text, when]) => (
+              <ListRow key={text} onClick={() => show(go)} title={text} sub={when} />
+            ))}
           </div></div>
         </div>
       );
@@ -146,19 +157,22 @@ export function AdminApp({ initialScreen = "dashboard", viewerRoleIds = ["role-o
     }
     case "tasks": body = (
       <div className="screen"><TopBar title="Tasks" /><div className="scrollarea"><div className="content">
-        {fixtures.tasks.map((t) => {
+        <Segmented<"active" | "closed"> label="Show tasks" value={taskFilter} onChange={setTaskFilter} options={[{ id: "active", label: "Active" }, { id: "closed", label: "Closed" }]} />
+        <div style={{ height: 12 }} />
+        {fixtures.tasks.filter((t) => (isClosed(t) ? "closed" : "active") === taskFilter).map((t) => {
           const till = activeTill(t.activeUntil);
-          const closed = t.status === "closed" || t.status === "removed" || till.kind === "closed";
+          const closed = isClosed(t);
           const tone = closed ? "coral" : till.kind === "left" ? "amber" : "teal";
           const pill = <StatusPill tone={tone}>{closed ? "Closed" : till.kind === "none" ? "Active · no end date" : `Active till: ${till.label}`}</StatusPill>;
           return <AdminTaskCard key={t.id} title={t.title} reward={t.reward} timer={t.timerMinutes} mode={TEXT_MODE_LABEL[t.textMode]} pill={pill}
             claimed={t.slotsTotal === null ? "unlimited slots" : `${t.slotsTotal - (t.slotsRemaining ?? 0)} of ${t.slotsTotal} claimed`}
             onOpen={() => { setAdminTaskId(t.id); show("taskdetail"); }} />;
         })}
-        {extraTasks.map((t) => (
+        {taskFilter === "closed" ? extraTasks.map((t) => (
           <AdminTaskCard key={t.id} title={t.title} reward={t.reward} timer={t.timer} mode={t.mode} claimed={t.claimed}
             pill={<StatusPill tone={t.status === "removed" ? "coral" : "gray"}>{t.status === "removed" ? "Removed" : "Closed"}</StatusPill>} />
-        ))}
+        )) : null}
+        {fixtures.tasks.filter((t) => (isClosed(t) ? "closed" : "active") === taskFilter).length === 0 && taskFilter === "active" ? <EmptyState>No active tasks.</EmptyState> : null}
       </div></div>
       {perms.has("task.manage") ? <div className="screen-footer"><Button variant="primary" block onClick={() => show("newtask")}>New task</Button></div> : null}
       </div>
@@ -179,16 +193,25 @@ export function AdminApp({ initialScreen = "dashboard", viewerRoleIds = ["role-o
         : <EmptyState>Already reviewed.</EmptyState>;
       break;
     }
-    case "payouts": body = (
-      <div className="screen"><TopBar title="Payouts" /><div className="scrollarea"><div className="content">
-        <p className="note-text" style={{ marginBottom: 10 }}>{payouts.filter((p) => p.status === "pending").length} pending, {payouts.filter((p) => p.status === "flagged").length} flagged.</p>
-        {payouts.map((p) => (
-          <ListRow key={p.id} onClick={() => { setPayoutId(p.id); show(p.status === "flagged" ? "payoutflagged" : "payoutitem"); }} title={p.who}
-            right={<StatusPill tone={p.status === "paid" ? "green" : p.status === "flagged" ? "coral" : "amber"}>{p.status === "paid" ? "Paid" : p.status === "flagged" ? "Flagged" : "Pending"}</StatusPill>}
-            sub={`${formatRupees(p.amount)} · ${p.upiMasked} · ${p.whenLabel}${p.paidBy ? ` · paid by ${p.paidBy}` : ""}`} />
-        ))}
-      </div></div></div>
-    ); break;
+    case "payouts": {
+      const rank = { flagged: 0, pending: 1, paid: 2 } as const;
+      const action = payouts.filter((p) => p.status !== "paid").sort((x, y) => rank[x.status as "flagged" | "pending"] - rank[y.status as "flagged" | "pending"]);
+      const history = payouts.filter((p) => p.status === "paid");
+      const row = (p: (typeof payouts)[number]) => (
+        <ListRow key={p.id} onClick={() => { setPayoutId(p.id); show(p.status === "flagged" ? "payoutflagged" : "payoutitem"); }} title={`${p.who} · ${formatRupees(p.amount)}`}
+          right={<StatusPill tone={p.status === "paid" ? "green" : p.status === "flagged" ? "coral" : "amber"}>{p.status === "paid" ? "Paid" : p.status === "flagged" ? "Flagged" : "Pending"}</StatusPill>}
+          sub={`${p.upiMasked} · ${p.whenLabel}${p.paidBy ? ` · paid by ${p.paidBy}` : ""}`} />
+      );
+      body = (
+        <div className="screen"><TopBar title="Payouts" /><div className="scrollarea"><div className="content">
+          <p className="section-label" style={{ marginTop: 0 }}>Needs action ({action.length})</p>
+          {action.length ? action.map(row) : <EmptyState>Nothing to pay right now.</EmptyState>}
+          <p className="section-label">History ({history.length})</p>
+          {history.map(row)}
+        </div></div></div>
+      );
+      break;
+    }
     case "payoutitem": {
       const p = payouts.find((x) => x.id === payoutId) ?? payouts.find((x) => x.status === "pending") ?? payouts[0]!;
       body = <PayoutItemScreen key={p.id} payout={p} adminName={adminName} onBack={() => show("payouts")}
@@ -200,8 +223,8 @@ export function AdminApp({ initialScreen = "dashboard", viewerRoleIds = ["role-o
       body = (
         <div className="screen"><TopBar title="Flagged payout" onBack={() => show("payouts")} /><div className="scrollarea"><div className="content">
           <Card alert><p style={{ color: "var(--coral)", margin: "0 0 8px" }}>{p.flagReason}</p><p className="muted">{p.who} &middot; {formatRupees(p.amount)} &middot; requested {p.whenLabel}</p></Card>
-          <Button variant="danger" block style={{ marginBottom: 8 }} onClick={() => { notify("Both accounts suspended (records kept)"); show("payouts"); }}>Ban both accounts</Button>
-          <Button block style={{ marginBottom: 8 }} onClick={() => { notify("Frozen for investigation"); show("payouts"); }}>Freeze and investigate</Button>
+          <Button variant="danger" block style={{ marginBottom: 8 }} onClick={() => setPending({ title: "Ban both accounts?", text: "Both accounts sharing this UPI are suspended and this payout is stopped. Every record is kept and the action is written to the audit log.", label: "Yes, ban both", tone: "danger", run: () => { notify("Both accounts suspended (records kept)"); show("payouts"); } })}>Ban both accounts</Button>
+          <Button block style={{ marginBottom: 8 }} onClick={() => setPending({ title: "Freeze this payout?", text: "The money stays blocked and nothing is paid until you decide. The action is written to the audit log.", label: "Yes, freeze", tone: "primary", run: () => { notify("Frozen for investigation"); show("payouts"); } })}>Freeze and investigate</Button>
           <Button block onClick={() => { setOthers(others.map((x) => (x.id === p.id ? { ...x, status: "pending" } : x))); notify("Allowed once"); show("payouts"); }}>Ignore &middot; allow this once</Button>
           <p className="hint" style={{ marginTop: 12 }}>Every choice is written to the audit log with your name.</p>
         </div></div></div>
@@ -260,9 +283,9 @@ export function AdminApp({ initialScreen = "dashboard", viewerRoleIds = ["role-o
           <Card><h3>{u.name}</h3><p>{u.emailMasked} &middot; {u.identityCount} email{u.identityCount > 1 ? "s" : ""} &middot; {formatRupees(u.lifetime)} lifetime</p>
             <div className="row"><StatusPill tone={st === "active" ? "teal" : st === "suspended" ? "amber" : st === "deleted" ? "gray" : "coral"}>{st}</StatusPill></div></Card>
           <p className="hint" style={{ marginBottom: 12 }}>Suspending or deleting never removes records. Claims, ledger, payouts and payment proofs are kept for audit.</p>
-          {st === "active" || st === "flagged" ? <Button block style={{ marginBottom: 8 }} onClick={() => set("suspended", "User suspended")}>Suspend user</Button> : null}
+          {st === "active" || st === "flagged" ? <Button block style={{ marginBottom: 8 }} onClick={() => setPending({ title: `Suspend ${u.name}?`, text: "They cannot log in, claim or request payouts. Every record is kept. You can reinstate them later.", label: "Yes, suspend", tone: "danger", run: () => set("suspended", "User suspended") })}>Suspend user</Button> : null}
           {st === "suspended" ? <Button block style={{ marginBottom: 8 }} onClick={() => set("active", "User reinstated")}>Reinstate user</Button> : null}
-          {st !== "deleted" ? <Button variant="danger" block onClick={() => set("deleted", "User deleted (records kept)")}>Delete user (soft)</Button> : <p className="muted">Deleted. Personal details anonymised on request; financial records retained.</p>}
+          {st !== "deleted" ? <Button variant="danger" block onClick={() => setPending({ title: `Delete ${u.name}?`, text: "The account is closed and personal details can be anonymised on request. Claims, ledger, payouts and payment proofs are kept for audit.", label: "Yes, delete", tone: "danger", run: () => set("deleted", "User deleted (records kept)") })}>Delete user (soft)</Button> : <p className="muted">Deleted. Personal details anonymised on request; financial records retained.</p>}
         </div></div></div>
       );
       break;
@@ -273,6 +296,7 @@ export function AdminApp({ initialScreen = "dashboard", viewerRoleIds = ["role-o
   return (
     <>
       {body}
+      {pending ? <ConfirmSheet title={pending.title} tone={pending.tone} confirmLabel={pending.label} onCancel={() => setPending(null)} onConfirm={() => { const run = pending.run; setPending(null); run(); }}>{pending.text}</ConfirmSheet> : null}
       {toast ? <Toast message={toast} onDone={() => setToast(null)} /> : null}
       <BottomNav items={navItems} active={tab} onSelect={(t) => show(NAV_DEF.find((n) => n.tab === t)!.id)} />
     </>
@@ -429,18 +453,14 @@ function TaskDetailScreen({ task, canManage, canTexts, onBack, onRemove, notify 
       </>) : null}
     </div></div></div>
     {confirm === "pause" ? (
-      <Sheet title="Pause this task?" onClose={() => setConfirm(null)}>
-        <p className="note-text">New claims are blocked while it is paused. Workers who already claimed it can still submit. You can resume it later.</p>
-        <Button variant="primary" block style={{ margin: "14px 0 8px" }} onClick={() => { setConfirm(null); notify("Task paused"); }}>Confirm pause</Button>
-        <Button block onClick={() => setConfirm(null)}>Cancel</Button>
-      </Sheet>
+      <ConfirmSheet title="Pause this task?" confirmLabel="Yes, pause" onCancel={() => setConfirm(null)} onConfirm={() => { setConfirm(null); notify("Task paused"); }}>
+        New claims are blocked while it is paused. Workers who already claimed it can still submit. You can resume it later.
+      </ConfirmSheet>
     ) : null}
     {confirm === "remove" ? (
-      <Sheet title="Remove this task?" onClose={() => setConfirm(null)}>
-        <p className="note-text">New claims will be blocked immediately. Anyone with this task in Active (not yet submitted) will have their claim voided. Submissions already awaiting review will still be processed normally.</p>
-        <Button variant="danger" block style={{ margin: "14px 0 8px" }} onClick={() => { setConfirm(null); onRemove(); }}>Confirm remove</Button>
-        <Button block onClick={() => setConfirm(null)}>Cancel</Button>
-      </Sheet>
+      <ConfirmSheet title="Remove this task?" tone="danger" confirmLabel="Yes, remove" onCancel={() => setConfirm(null)} onConfirm={() => { setConfirm(null); onRemove(); }}>
+        New claims will be blocked immediately. Anyone with this task in Active (not yet submitted) will have their claim voided. Submissions already awaiting review will still be processed normally.
+      </ConfirmSheet>
     ) : null}
     {adding ? (
       <Sheet title="Add scripts" onClose={() => { setAdding(false); setDraft([""]); }}>
@@ -566,16 +586,20 @@ function RolesPanel({ roles, setRoles, members, setMembers, notify }: {
                 {p.label}
               </label>
             ))}
-            {confirmDelete === r.id ? (
-              <div style={{ marginTop: 10 }}>
-                <p className="field-error" style={{ marginTop: 0 }}>{holders ? `${holders} member${holders === 1 ? "" : "s"} hold${holders === 1 ? "s" : ""} this role and will lose it.` : "No member holds this role."} Delete it?</p>
-                <div className="confirm-pair"><Button variant="danger" onClick={() => remove(r.id)}>Yes, delete</Button><Button onClick={() => setConfirmDelete(null)}>Cancel</Button></div>
-              </div>
-            ) : <Button variant="danger" block style={{ marginTop: 10 }} onClick={() => setConfirmDelete(r.id)}>Delete role</Button>}
+            <Button variant="danger" block style={{ marginTop: 10 }} onClick={() => setConfirmDelete(r.id)}>Delete role</Button>
           </>) : null}
         </Card>
       );
     })}
+    {confirmDelete ? (() => {
+      const r = roles.find((x) => x.id === confirmDelete); if (!r) return null;
+      const holders = members.filter((m) => m.roleIds.includes(r.id)).length;
+      return (
+        <ConfirmSheet title={`Delete role "${r.name}"?`} tone="danger" confirmLabel="Yes, delete" onCancel={() => setConfirmDelete(null)} onConfirm={() => remove(r.id)}>
+          {holders ? `${holders} member${holders === 1 ? "" : "s"} hold${holders === 1 ? "s" : ""} this role and will lose it.` : "No member holds this role."}
+        </ConfirmSheet>
+      );
+    })() : null}
     <Field label="New role name" error={err}><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Support lead" /></Field>
     <Button block onClick={create}>Create role</Button>
   </>);

@@ -8,7 +8,7 @@ export function StatusPill({ tone, children }: { tone: Tone; children: ReactNode
 }
 
 type BtnProps = ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: "default" | "primary" | "danger";
+  variant?: "default" | "primary" | "danger" | "dangerSolid";
   block?: boolean;
   small?: boolean;
   compact?: boolean;
@@ -234,5 +234,18 @@ export function Segmented<T extends string>({ label, value, options, onChange }:
         </button>
       ))}
     </div>
+  );
+}
+
+/** Overlay confirmation. The confirm button is always filled: brand for safe actions, red for destructive ones. */
+export function ConfirmSheet({ title, children, confirmLabel, tone = "primary", onConfirm, onCancel }: {
+  title: string; children: ReactNode; confirmLabel: string; tone?: "primary" | "danger"; onConfirm: () => void; onCancel: () => void;
+}) {
+  return (
+    <Sheet title={title} onClose={onCancel}>
+      <div className="note-text">{children}</div>
+      <Button variant={tone === "danger" ? "dangerSolid" : "primary"} block style={{ margin: "14px 0 8px" }} onClick={onConfirm}>{confirmLabel}</Button>
+      <Button block onClick={onCancel}>Cancel</Button>
+    </Sheet>
   );
 }
