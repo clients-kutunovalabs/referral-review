@@ -4,7 +4,7 @@ import {
 } from "@rr/core";
 import { OUTCOME_PERCENTS, formatRupees, outcomeAmount, rupees, type OutcomePercent, type Paise } from "@rr/money";
 import {
-  BottomNav, Icon, Segmented, type IconName, Button, Card, Chips, CopyButton, EmptyState, Field, FileUpload, Input, ListRow, Select,
+  BottomNav, Icon, Segmented, Sheet, type IconName, Button, Card, Chips, CopyButton, EmptyState, Field, FileUpload, Input, ListRow, Select,
   StatusPill, Tabs, Textarea, Toast, TopBar
 } from "../../primitives";
 import { AdminTicketChat, AdminTicketList, type SupportTab } from "./SupportScreens";
@@ -52,7 +52,7 @@ function AdminTaskCard({ title, reward, claimed, timer, mode, pill, onOpen }: {
       <h3>{title}</h3>
       <p>{formatRupees(reward)} reward &middot; {claimed} &middot; {timer} min limit</p>
       <div className="card-split" style={{ marginTop: "var(--space-3)" }}>
-        <div className="card-split-main"><div className="chips" style={{ margin: 0 }}>{pill}<StatusPill tone="gray">Script: {mode}</StatusPill></div></div>
+        <div className="card-split-main"><div className="chips stack" style={{ margin: 0 }}>{pill}<StatusPill tone="gray">Script: {mode}</StatusPill></div></div>
         {onOpen ? <Button compact>Manage</Button> : null}
       </div>
     </Card>
@@ -380,8 +380,14 @@ function NewTaskScreen({ onBack, onPublish }: { onBack: () => void; onPublish: (
 function TaskDetailScreen({ task, canManage, canTexts, onBack, onRemove, notify }: {
   task: Task; canManage: boolean; canTexts: boolean; onBack: () => void; onRemove: () => void; notify: (m: string) => void;
 }) {
-  const [pool, setPool] = useState(fixtures.scriptPool); const [add, setAdd] = useState("");
+  const [pool, setPool] = useState(fixtures.scriptPool); const [adding, setAdding] = useState(false); const [draft, setDraft] = useState("");
+  const drafted = draft.split(/\n\s*\n/).map((x) => x.trim()).filter(Boolean);
+  function addScripts() {
+    if (!drafted.length) return;
+    setPool([...pool, ...drafted]); notify(`${drafted.length} script${drafted.length === 1 ? "" : "s"} added`); setDraft(""); setAdding(false);
+  }
   return (
+    <>
     <div className="screen"><TopBar title="Task detail" onBack={onBack} /><div className="scrollarea"><div className="content">
       <Card>
         <h3>{task.title}</h3><p>{task.description}</p>
@@ -395,10 +401,7 @@ function TaskDetailScreen({ task, canManage, canTexts, onBack, onRemove, notify 
           <h3>Scripts ({pool.length})</h3>
           <p className="muted">Shared evenly and randomly. With {pool.length} scripts and {task.slotsTotal ?? 100} workers, each script goes to about {Math.ceil((task.slotsTotal ?? 100) / pool.length)}.</p>
           {pool.map((p, i) => <div key={i} className="script">{p}</div>)}
-          {canTexts ? (<>
-            <Field label="Add a script"><Textarea rows={3} value={add} onChange={(e) => setAdd(e.target.value)} /></Field>
-            <Button block onClick={() => { if (add.trim()) { setPool([...pool, add.trim()]); setAdd(""); notify("Script added"); } }}>Add script</Button>
-          </>) : null}
+          {canTexts ? <Button block style={{ marginTop: 10 }} onClick={() => setAdding(true)}>Add scripts</Button> : null}
         </Card>
       ) : null}
       {canManage ? (<>
@@ -406,6 +409,16 @@ function TaskDetailScreen({ task, canManage, canTexts, onBack, onRemove, notify 
         <Button variant="danger" block onClick={onRemove}>Remove task</Button>
       </>) : null}
     </div></div></div>
+    {adding ? (
+      <Sheet title="Add scripts" onClose={() => { setAdding(false); setDraft(""); }}>
+        <Field label="Scripts" hint="Separate scripts with a blank line. Add one or many.">
+          <Textarea id="new-scripts" rows={8} value={draft} onChange={(e) => setDraft(e.target.value)} placeholder={"Script one...\n\nScript two...\n\nScript three..."} />
+        </Field>
+        <p className="muted" style={{ margin: "0 0 12px" }}>{drafted.length} script{drafted.length === 1 ? "" : "s"} to add</p>
+        <Button variant="primary" block disabled={!drafted.length} onClick={addScripts}>Add scripts</Button>
+      </Sheet>
+    ) : null}
+    </>
   );
 }
 

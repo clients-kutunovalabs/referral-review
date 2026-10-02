@@ -114,6 +114,7 @@
 .seg.on { background: var(--brand); border-color: var(--brand); color: var(--text-inverse); font-weight: var(--weight-medium); }
 
 .chips { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-3); }
+.chips.stack { flex-direction: column; align-items: flex-start; }
 .chip { font-size: var(--text-sm); padding: 4px 10px; border-radius: var(--radius-pill); background: var(--surface-2); border: var(--border-width) solid var(--border-strong); color: var(--text-primary); }
 .chip.hit { background: var(--green-bg); border-color: var(--green); color: var(--green); }
 .chip.miss { background: var(--coral-bg); border-color: var(--coral); color: var(--coral); }
