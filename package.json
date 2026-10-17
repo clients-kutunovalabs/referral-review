@@ -7,6 +7,7 @@
     "node": ">=20"
   },
   "scripts": {
+    "dev": "pnpm dev:web",
     "dev:hub": "pnpm --filter @rr/ui-hub dev",
     "build": "pnpm -r build",
     "build:hub": "pnpm --filter @rr/ui-hub build",

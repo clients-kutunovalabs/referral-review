@@ -1,3 +1,5 @@
+import { mkdirSync } from "node:fs";
+import { dirname } from "node:path";
 import type { PGlite } from "@electric-sql/pglite";
 import { INT8_OID, bindParams, parseInt8, type Db, type Queryable, type Row } from "./db";
 
@@ -18,6 +20,7 @@ export async function createPgliteDb(dataDir?: string): Promise<Db> {
   // Loaded only when asked for, and natively rather than through the bundler: PGlite finds its WebAssembly files relative to
   // its own location, which bundling breaks. A production build that uses real Postgres never loads it at all.
   const { PGlite: Lite } = await import(/* webpackIgnore: true */ "@electric-sql/pglite");
+  if (dataDir) mkdirSync(dirname(dataDir), { recursive: true });
   const lite = dataDir ? new Lite(dataDir) : new Lite();
   await lite.waitReady;
   return {
