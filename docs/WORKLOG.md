@@ -91,6 +91,7 @@ What was built, what went wrong and how it was fixed, and what is deliberately n
 | 35 | Accessibility scan (axe, 42 screens at phone/tablet/desktop) found 2 serious problems: a button inside a clickable card, and two buttons whose accessible name did not contain their visible text. | New scan, `e2e/a11y.mjs` | Fixed; the scan is clean. |
 | 36 | No way to change a password while logged in. | Launch list | Change-password on the worker's account screen and the admin's access screen: needs the current password (5 tries per 15 minutes), signs out other browsers. |
 | 37 | Errors were only `console.error` text lines; nobody would be told. | Launch list | JSON log lines, an optional alert webhook (`ALERT_WEBHOOK_URL`) for unexpected errors, failed jobs and money mismatches. |
+| 38 | **`ops/backup.sh` stopped with exit code 2 when there was no uploads backup yet** (a failing `ls` under `pipefail`). My own test had always had an uploads folder. | The first run on GitHub's real CI, which has none | The prune step tolerates an empty match; retested with no uploads folder. |
 
 Test-harness mistakes made along the way, in the open: two shell commands that killed their own shell (`pkill -f` matched itself); test data that assumed an empty database; one test that asserted nothing and was deleted.
 

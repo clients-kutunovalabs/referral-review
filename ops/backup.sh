@@ -26,7 +26,8 @@ fi
 
 # prune: newest KEEP of each kind
 for pattern in 'db-*.dump' 'uploads-*.tar.gz'; do
-  ls -1t "$BACKUP_DIR"/$pattern 2>/dev/null | tail -n +"$((KEEP + 1))" | xargs -r rm -f --
+  # `ls` fails when nothing matches (for example no uploads folder yet); that is fine, so it must not stop the script
+  { ls -1t "$BACKUP_DIR"/$pattern 2>/dev/null || true; } | tail -n +"$((KEEP + 1))" | xargs -r rm -f --
 done
 
 echo "backup.ok db=$db_file ($(du -h "$db_file" | cut -f1)) uploads=${files_file:-none}"
