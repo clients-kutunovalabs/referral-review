@@ -9,7 +9,7 @@ export default function Site({ kind }: { kind: "user" | "admin" }) {
   const services = useMemo(() => createHttpServices(), []);
   return (
     <ServicesProvider services={services}>
-      <div className="site-root"><AppFrame>{kind === "admin" ? <AdminApp /> : <UserApp />}</AppFrame></div>
+      <div className="site-root"><AppFrame>{kind === "admin" ? <AdminApp syncUrl /> : <UserApp syncUrl />}</AppFrame></div>
     </ServicesProvider>
   );
 }

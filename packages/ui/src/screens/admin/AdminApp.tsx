@@ -20,6 +20,10 @@ export type AdminScreen =
   | "reviewqueue" | "reviewitem" | "payouts" | "payoutitem"
   | "userdetail" | "tickets" | "ticket" | "access";
 type AccessTab = "users" | "team" | "roles";
+const ADMIN_SCREENS: ReadonlySet<string> = new Set<AdminScreen>(["login", "dashboard", "tasks", "newtask", "taskdetail", "reviewqueue", "reviewitem", "payouts", "payoutitem", "userdetail", "tickets", "ticket", "access"]);
+/** Which pieces of state belong in the address, per screen. */
+const URL_KEYS: Partial<Record<string, readonly string[]>> = { taskdetail: ["taskId"], reviewitem: ["reviewId"], payoutitem: ["payoutId"], userdetail: ["userId"], ticket: ["ticketId"], access: ["accessTab"] };
+const ACCESS_TABS: ReadonlySet<string> = new Set<AccessTab>(["users", "team", "roles"]);
 
 /** Screen -> permission needed. Mirrors the server, which checks the database on every request. */
 const NEEDS: Partial<Record<AdminScreen, PermissionKey[]>> = {
@@ -79,10 +83,12 @@ export interface AdminAppProps {
   initialPayoutId?: string;
   initialUserId?: string;
   initialTicketId?: string;
+  /** The real site only: Back, Forward, Reload and bookmarks follow the screen (address like `/admin#/payouts`). */
+  syncUrl?: boolean;
   initialAccessTab?: AccessTab;
 }
 
-export function AdminApp({ initialScreen = "dashboard", loggedIn: loggedInProp, initialTaskId = "", initialReviewId = "", initialPayoutId = "", initialUserId = "", initialTicketId = "", initialAccessTab = "users" }: AdminAppProps) {
+export function AdminApp({ initialScreen = "dashboard", loggedIn: loggedInProp, initialTaskId = "", initialReviewId = "", initialPayoutId = "", initialUserId = "", initialTicketId = "", initialAccessTab = "users", syncUrl = false }: AdminAppProps) {
   const { auth, api } = useServices();
   const [loggedIn, setLoggedIn] = useState<boolean | null>(loggedInProp === undefined ? null : loggedInProp && initialScreen !== "login");
   const [screen, setScreen] = useState<AdminScreen>(initialScreen === "login" ? "dashboard" : initialScreen);
@@ -97,9 +103,14 @@ export function AdminApp({ initialScreen = "dashboard", loggedIn: loggedInProp, 
   const [taskFilter, setTaskFilter] = useState<"active" | "closed">("active");
   const [supportTab, setSupportTab] = useState<SupportTab>("open");
   const [reviewSort, setReviewSort] = useState<"oldest" | "newest">("oldest");
-  useBrowserHistory({ screen, accessTab, taskId, reviewId, payoutId, userId, ticketId }, (s) => {
-    setScreen(s.screen); setAccessTab(s.accessTab); setTaskId(s.taskId); setReviewId(s.reviewId); setPayoutId(s.payoutId); setUserId(s.userId); setTicketId(s.ticketId);
-  });
+  useBrowserHistory(syncUrl, { screen, accessTab, taskId, reviewId, payoutId, userId, ticketId }, (s) => {
+    // Comes from the address bar or an old history entry, so check every value before using it. (Permissions are still checked per screen.)
+    const next = s["screen"] as AdminScreen;
+    if (!ADMIN_SCREENS.has(next) || next === "login") return;
+    setScreen(next);
+    setAccessTab(ACCESS_TABS.has(s["accessTab"] ?? "") ? (s["accessTab"] as AccessTab) : "users");
+    setTaskId(s["taskId"] ?? ""); setReviewId(s["reviewId"] ?? ""); setPayoutId(s["payoutId"] ?? ""); setUserId(s["userId"] ?? ""); setTicketId(s["ticketId"] ?? "");
+  }, { urlKeys: (x) => URL_KEYS[x] ?? [] });
   const layout = useLayout();
   const wide = layout !== "phone";
   const refresh = () => setRev((n) => n + 1);

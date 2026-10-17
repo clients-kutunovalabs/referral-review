@@ -326,6 +326,40 @@ await step("admin: Back returns from a task to the task list", async () => {
   if (!a.url().startsWith(BASE)) throw new Error("Back left the site: " + a.url());
 });
 
+await step("worker: Reload and bookmarks stay on the same screen (the address shows it); a garbage address is ignored", async () => {
+  await w.getByRole("button", { name: "Tasks", exact: true }).click();
+  await w.getByRole("button", { name: "My tasks" }).click();
+  await see(w, "My tasks");
+  if (!/#\/mytasks/.test(w.url())) throw new Error("address does not show the screen: " + w.url());
+  await w.reload();
+  await see(w, "My tasks");
+  if (!/#\/mytasks/.test(w.url())) throw new Error("reload lost the address: " + w.url());
+  // a bookmark opened in a fresh tab of the same signed-in browser
+  const tab = await wctx.newPage();
+  await tab.goto(BASE + "/#/wallet");
+  await tab.getByText(/Available|Wallet/).first().waitFor({ timeout: 10000 });
+  await tab.close();
+  // nonsense in the address must not break the app or open anything: it just lands on the board
+  await w.goto(BASE + "/#/<img src=x onerror=window.__x=1>");
+  await w.reload();
+  await w.getByRole("button", { name: /Switch email/ }).waitFor({ timeout: 10000 });
+  await w.goto(BASE + "/#/notAScreen?taskId=../../etc");
+  await w.reload();
+  await w.getByRole("button", { name: /Switch email/ }).waitFor({ timeout: 10000 });
+  if (await w.evaluate("window.__x")) throw new Error("script from the address ran");
+  await w.getByRole("button", { name: /Switch email/ }).click(); // where the next step expects to be
+  await see(w, "My emails");
+});
+await step("admin: Reload on a task stays on that task", async () => {
+  await a.getByRole("button", { name: "Tasks", exact: true }).first().click();
+  await a.getByRole("row", { name: new RegExp(TASK) }).click();
+  await a.getByRole("row", { name: new RegExp(TASK) }).waitFor({ state: "detached", timeout: 5000 });
+  if (!/#\/taskdetail\?taskId=[0-9a-f-]{36}$/.test(a.url())) throw new Error("address does not show the task: " + a.url());
+  await a.reload();
+  await a.getByText(TASK).first().waitFor({ timeout: 10000 });
+  if (await a.getByRole("row", { name: new RegExp(TASK) }).count()) throw new Error("reload went back to the list");
+});
+
 // -------- sign out, sessions end --------
 await step("worker: logs out, and the session is really gone", async () => {
   await w.getByRole("button", { name: "Log out" }).click();

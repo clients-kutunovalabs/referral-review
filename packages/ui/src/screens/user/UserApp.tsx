@@ -39,6 +39,12 @@ const AUTH_VIEW: Partial<Record<UserScreen, AuthView>> = {
   login: "signIn", register: "signUp", verifyEmail: "verify", createPassword: "createPassword",
   forgot: "forgot", resetVerify: "resetVerify", resetPassword: "resetPassword"
 };
+const USER_SCREENS: ReadonlySet<string> = new Set<UserScreen>(["login", "register", "verifyEmail", "createPassword", "forgot", "resetVerify", "resetPassword", "board", "detail", "claimed", "mytasks", "submit", "submitted", "wallet", "payout", "payoutSent", "identities", "help", "createTicket", "ticket"]);
+const MY_TABS: ReadonlySet<string> = new Set<MyTab>(["active", "review", "completed", "rejected"]);
+/** Confirmation pages that mean nothing after a reload: the address points at where the worker would go next. */
+/** Which pieces of state belong in the address, per screen. */
+const URL_KEYS: Partial<Record<string, readonly string[]>> = { detail: ["taskId"], submit: ["submitClaimId"], ticket: ["ticketId"], mytasks: ["tab"], help: ["helpTab"] };
+const ONE_OFF_SCREENS: Partial<Record<string, string>> = { claimed: "mytasks", submitted: "mytasks", payoutSent: "wallet" };
 export const isUserAuthScreen = (s: UserScreen): boolean => s in AUTH_VIEW;
 const SIGN_UP_FIELDS: SignUpField[] = [{ key: "name", label: "Full name" }, { key: "phone", label: "Phone", type: "tel" }];
 
@@ -53,9 +59,11 @@ export interface UserAppProps {
   initialHelpTab?: HelpTab;
   /** ui-hub only: lets the Payout page offer "pretend the admin paid it". */
   onDemoPaid?: () => Promise<void> | void;
+  /** The real site only: Back, Forward, Reload and bookmarks follow the screen (address like `/#/mytasks`). */
+  syncUrl?: boolean;
 }
 
-export function UserApp({ initialScreen = "board", initialTab = "active", loggedIn: loggedInProp, initialTaskId, initialClaimId, initialTicketId = "", initialHelpTab = "open", onDemoPaid }: UserAppProps) {
+export function UserApp({ initialScreen = "board", initialTab = "active", loggedIn: loggedInProp, initialTaskId, initialClaimId, initialTicketId = "", initialHelpTab = "open", onDemoPaid, syncUrl = false }: UserAppProps) {
   const { auth, api } = useServices();
   const [loggedIn, setLoggedIn] = useState<boolean | null>(loggedInProp ?? null);
   const [rawScreen, setScreen] = useState<UserScreen>(initialScreen);
@@ -91,10 +99,15 @@ export function UserApp({ initialScreen = "board", initialTab = "active", logged
   // while signed in lands on the board instead.
   const loggedInRef = useRef(loggedIn);
   loggedInRef.current = loggedIn;
-  useBrowserHistory({ screen: rawScreen, tab, taskId, ticketId, helpTab, submitClaimId }, (s) => {
-    setScreen(isUserAuthScreen(s.screen) && loggedInRef.current === true ? "board" : s.screen);
-    setTab(s.tab); setTaskId(s.taskId); setTicketId(s.ticketId); setHelpTab(s.helpTab); setSubmitClaimId(s.submitClaimId);
-  }, isUserAuthScreen(rawScreen));
+  useBrowserHistory(syncUrl, { screen: rawScreen, tab, taskId, ticketId, helpTab, submitClaimId }, (s) => {
+    // Comes from the address bar or an old history entry, so check every value before using it.
+    const screen = s["screen"] as UserScreen;
+    if (!USER_SCREENS.has(screen)) return;
+    setScreen(isUserAuthScreen(screen) && loggedInRef.current !== false ? "board" : screen);
+    setTab(MY_TABS.has(s["tab"] ?? "") ? (s["tab"] as MyTab) : "active");
+    setTaskId(s["taskId"] ?? ""); setTicketId(s["ticketId"] ?? ""); setSubmitClaimId(s["submitClaimId"] ?? "");
+    setHelpTab(s["helpTab"] === "closed" ? "closed" : "open");
+  }, { replace: isUserAuthScreen(rawScreen), isAuth: (x) => isUserAuthScreen(x as UserScreen), urlScreen: (x) => ONE_OFF_SCREENS[x] ?? x, urlKeys: (x) => URL_KEYS[x] ?? [] });
   const show = (s: UserScreen) => setScreen(s);
   const notify = (m: string) => setToast(m);
   const guard = (e: unknown) => { if (isUnauthenticated(e)) { setLoggedIn(false); show("login"); } else notify(messageOf(e)); };
