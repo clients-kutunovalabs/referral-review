@@ -22,7 +22,7 @@ Everything done, every issue found and fixed, and everything deferred: [docs/WOR
 npm run dev           # http://localhost:3000. Installs with pnpm on first run (fetches pnpm if you lack it). Embedded database; sign-in codes are printed in this terminal.
 ```
 (Plain `npm install` is blocked on purpose: the workspace needs pnpm. `npm run dev` does the install for you. Windows, macOS and Linux; Node 20+.)
-Set `OWNER_EMAIL` and `OWNER_PASSWORD` first to get an admin login at `/admin`.
+It uses port 3000, or the next free one if another program has it (the terminal says which). For an admin login at `/admin`, put `OWNER_EMAIL` and `OWNER_PASSWORD` in a `.env` file at the repo root (copy `.env.example`); `npm run dev` loads it. Plain `pnpm dev:web` does not read the root `.env`.
 
 ```
 pnpm dev:hub          # the design gallery with demo data: phone, tablet and desktop previews
