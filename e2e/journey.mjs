@@ -299,6 +299,33 @@ await step("worker: changes the password (wrong current is refused), and the old
   WORKER_PW = "a brand new pass 2";
 });
 
+await step("worker: the browser Back and Forward buttons move between screens, and never back onto a sign-in screen", async () => {
+  await w.getByRole("button", { name: "Tasks", exact: true }).click();
+  await w.getByRole("button", { name: "My tasks" }).click();
+  await see(w, "My tasks");
+  await w.goBack();
+  await w.getByRole("button", { name: /Switch email/ }).waitFor({ timeout: 5000 }); // the board again, still on the site
+  if (!w.url().startsWith(BASE)) throw new Error("Back left the site: " + w.url());
+  await w.goForward();
+  await see(w, "My tasks");
+  await w.getByRole("button", { name: "Tasks", exact: true }).click();
+  await w.getByRole("button", { name: /^View/ }).first().click();
+  await see(w, "Task details");
+  await w.goBack();
+  await w.getByRole("button", { name: /Switch email/ }).waitFor({ timeout: 5000 });
+  if (await w.getByText("Task details").count()) throw new Error("the details sheet is still open after Back");
+  await w.getByRole("button", { name: /Switch email/ }).click(); // where the next step expects to be
+  await see(w, "My emails");
+});
+await step("admin: Back returns from a task to the task list", async () => {
+  await a.getByRole("button", { name: "Tasks", exact: true }).first().click();
+  await a.getByRole("row", { name: new RegExp(TASK) }).click();
+  await a.getByRole("row", { name: new RegExp(TASK) }).waitFor({ state: "detached", timeout: 5000 }); // the list is replaced by the task
+  await a.goBack();
+  await a.getByRole("row", { name: new RegExp(TASK) }).waitFor({ timeout: 5000 });
+  if (!a.url().startsWith(BASE)) throw new Error("Back left the site: " + a.url());
+});
+
 // -------- sign out, sessions end --------
 await step("worker: logs out, and the session is really gone", async () => {
   await w.getByRole("button", { name: "Log out" }).click();

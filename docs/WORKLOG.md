@@ -92,6 +92,7 @@ What was built, what went wrong and how it was fixed, and what is deliberately n
 | 36 | No way to change a password while logged in. | Launch list | Change-password on the worker's account screen and the admin's access screen: needs the current password (5 tries per 15 minutes), signs out other browsers. |
 | 37 | Errors were only `console.error` text lines; nobody would be told. | Launch list | JSON log lines, an optional alert webhook (`ALERT_WEBHOOK_URL`) for unexpected errors, failed jobs and money mismatches. |
 | 38 | **`ops/backup.sh` stopped with exit code 2 when there was no uploads backup yet** (a failing `ls` under `pipefail`). My own test had always had an uploads folder. | The first run on GitHub's real CI, which has none | The prune step tolerates an empty match; retested with no uploads folder. |
+| 39 | **The browser Back button left the site** (the app is one page, so Back went to whatever you visited before). | Launch list | Each screen change is a history entry: Back closes a task sheet or returns to the list, Forward redoes it, and Back never lands on a sign-in screen while signed in. Covered by two journey steps. |
 
 Test-harness mistakes made along the way, in the open: two shell commands that killed their own shell (`pkill -f` matched itself); test data that assumed an empty database; one test that asserted nothing and was deleted.
 
@@ -123,7 +124,7 @@ Test-harness mistakes made along the way, in the open: two shell commands that k
 | ~~Docker image never built~~ | **Done**: both images build, run as a non-root user, pass the 18-step browser journey, the attack checks and a backup-restore test. CI repeats all of it on every push. First thing to do on a machine with Docker. |
 | **One web server only** | Screenshots live on local disk. Several servers need the S3 adapter. |
 | **Offline use** (service worker) | The site installs to the home screen but needs a connection for every screen. |
-| **Browser back button and links** | The app is one page; back leaves the site and a reload returns to the first screen. |
+| **Links (URLs) to screens** | Back and Forward now move between screens (done). The address bar still does not change, so a screen cannot be bookmarked or shared, and a reload returns to the first screen. |
 | **Pagination** | Lists are capped (500 rows, 200 closed). Fine for a sales-team beta, not for thousands. |
 | **Cleaning up unused uploads; retention policy for screenshots** | Orphaned files accumulate on disk. |
 | **Change main email screen** | The main (login) email cannot be changed from the app. Change password is done. |

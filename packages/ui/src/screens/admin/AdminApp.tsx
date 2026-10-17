@@ -10,6 +10,7 @@ import {
 } from "../../primitives";
 import { ErrorBox, Loading, isUnauthenticated, messageOf, useAsync, useRefreshOnFocus } from "../../data";
 import { useServices } from "../../services";
+import { useBrowserHistory } from "../../lib/useBrowserHistory";
 import { AuthFlow } from "../auth/AuthFlow";
 import { ChangePassword } from "../auth/ChangePassword";
 import { AdminTicketChat, AdminTicketList, type SupportTab } from "./SupportScreens";
@@ -96,6 +97,9 @@ export function AdminApp({ initialScreen = "dashboard", loggedIn: loggedInProp, 
   const [taskFilter, setTaskFilter] = useState<"active" | "closed">("active");
   const [supportTab, setSupportTab] = useState<SupportTab>("open");
   const [reviewSort, setReviewSort] = useState<"oldest" | "newest">("oldest");
+  useBrowserHistory({ screen, accessTab, taskId, reviewId, payoutId, userId, ticketId }, (s) => {
+    setScreen(s.screen); setAccessTab(s.accessTab); setTaskId(s.taskId); setReviewId(s.reviewId); setPayoutId(s.payoutId); setUserId(s.userId); setTicketId(s.ticketId);
+  });
   const layout = useLayout();
   const wide = layout !== "phone";
   const refresh = () => setRev((n) => n + 1);

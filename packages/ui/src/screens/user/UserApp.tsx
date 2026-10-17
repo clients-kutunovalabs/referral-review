@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactElement } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import { activeTill, dateParts, formatLimit, walletTotals, whenLabel, type Claim, type CodeSent, type Identity, type PayoutRequest, type Task, type WalletEntry } from "@rr/core";
 import { formatRupees, parseRupees, rupees, type Paise } from "@rr/money";
 import {
@@ -7,6 +7,7 @@ import {
 } from "../../primitives";
 import { ErrorBox, Loading, isUnauthenticated, messageOf, useAsync, useRefreshOnFocus } from "../../data";
 import { useServices } from "../../services";
+import { useBrowserHistory } from "../../lib/useBrowserHistory";
 import { CreateTicketBody, HelpScreen, TicketChatScreen, type HelpTab } from "./HelpScreens";
 import { AuthFlow, type AuthView, type SignUpField } from "../auth/AuthFlow";
 import { ChangePassword } from "../auth/ChangePassword";
@@ -86,6 +87,14 @@ export function UserApp({ initialScreen = "board", initialTab = "active", logged
   useRefreshOnFocus(data.reload, loggedIn === true);
 
   const screen: UserScreen = loggedIn === false && !isUserAuthScreen(rawScreen) ? "login" : rawScreen;
+  // Back and forward move between screens. Sign-in screens replace the entry instead of adding one, and going back onto one
+  // while signed in lands on the board instead.
+  const loggedInRef = useRef(loggedIn);
+  loggedInRef.current = loggedIn;
+  useBrowserHistory({ screen: rawScreen, tab, taskId, ticketId, helpTab, submitClaimId }, (s) => {
+    setScreen(isUserAuthScreen(s.screen) && loggedInRef.current === true ? "board" : s.screen);
+    setTab(s.tab); setTaskId(s.taskId); setTicketId(s.ticketId); setHelpTab(s.helpTab); setSubmitClaimId(s.submitClaimId);
+  }, isUserAuthScreen(rawScreen));
   const show = (s: UserScreen) => setScreen(s);
   const notify = (m: string) => setToast(m);
   const guard = (e: unknown) => { if (isUnauthenticated(e)) { setLoggedIn(false); show("login"); } else notify(messageOf(e)); };
