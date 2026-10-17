@@ -5,6 +5,7 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     services:
       postgres:
         image: postgres:16
@@ -33,6 +34,7 @@ jobs:
   # real browser, attacked with the security script, and the backup scripts proven on the resulting data.
   docker:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     services:
       postgres:
         image: postgres:16
@@ -59,7 +61,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Start the mail catcher, migrate, and start the site and the worker from the images
         run: |
-          node e2e/smtp-sink.mjs &
+          nohup node e2e/smtp-sink.mjs > "$RUNNER_TEMP/sink.log" 2>&1 &
           SECRETS="-e SESSION_SECRET=$(openssl rand -base64 48) -e UPI_ENCRYPTION_KEY=$(openssl rand -base64 32)"
           COMMON="--network host $SECRETS -e APP_ENV=development -e APP_URL=http://localhost:3100 -e DATABASE_URL -e EMAIL_MODE=smtp -e SMTP_URL=smtp://127.0.0.1:2525 -e TRUST_PROXY_HOPS=0 -e OWNER_EMAIL=owner@example.com -e OWNER_NAME -e OWNER_PASSWORD"
           docker run --rm $COMMON tasks-worker migrate
