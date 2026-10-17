@@ -12,7 +12,7 @@ packages/money  integer-paise helpers and outcome maths
 packages/client HTTP implementation of the API the screens call
 packages/server domain services, HTTP handler, built-in sign-in, security (no UI, no framework)
 packages/db     SQL migrations, PostgreSQL and PGlite adapters, test harness
-packages/auth   mock sign-in, email senders (SMTP, console), Authgate placeholder
+packages/auth   mock sign-in, email senders (SMTP, console)
 packages/storage, packages/ai, packages/config   file storage, script writer, environment checks
 ```
 
@@ -32,7 +32,7 @@ Anything outside the repo is behind an interface in `packages/core/src/ports.ts`
 
 | Port | Real | Mock / placeholder |
 |---|---|---|
-| Sign-in | built-in provider (`@rr/server`) | `createMockAuth`; `createAuthgateAuth` placeholder |
+| Sign-in | built-in provider (`@rr/server`) | `createMockAuth`; Authgate will implement the server `AuthProvider` |
 | Database | PostgreSQL (`pg`) for Vista; PGlite for local development | the same SQL on both |
 | Email | SMTP (`@rr/auth/email`) | console sender (development only) |
 | File storage | local disk (`@rr/storage/local`) | in-memory; S3 adapter not written |

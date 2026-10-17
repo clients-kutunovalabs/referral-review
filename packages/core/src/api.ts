@@ -12,7 +12,7 @@ import type {
 export type ApiErrorCode =
   | "bad_request" | "unauthenticated" | "forbidden" | "not_found" | "conflict" | "rate_limited" | "csrf" | "internal"
   | "suspended" | "slots_full" | "task_closed" | "already_claimed" | "claim_limit" | "insufficient_balance" | "below_minimum"
-  | "payout_pending" | "invalid_code" | "not_pending" | "ticket_closed" | "upload_invalid"
+  | "payout_pending" | "upi_unavailable" | "invalid_code" | "not_pending" | "ticket_closed" | "upload_invalid"
   | "code_expired" | "too_many_attempts" | "invalid_email" | "email_taken" | "weak_password" | "invalid_credentials";
 
 export class ApiError extends Error {
@@ -124,6 +124,10 @@ export interface AdminApi {
   /** Includes the full UPI ID. Reading it is audit-logged. */
   getPayout(id: string): Promise<PayoutRequest>;
   markPaid(id: string, proof: File): Promise<void>;
+  /** Refuse a request (for example the UPI ID is wrong). The reason is shown to the worker and the held amount is released. */
+  rejectPayout(id: string, reason: string): Promise<void>;
+  /** Free a UPI ID from the worker it is linked to, for someone who lost their old account. */
+  releaseUpi(upi: string): Promise<void>;
 
   listUsers(): Promise<AdminUserRow[]>;
   setUserStatus(userId: string, status: "active" | "suspended" | "deleted"): Promise<void>;

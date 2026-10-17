@@ -20,6 +20,12 @@ If it prints `reconcile.PROBLEMS`, **stop marking payouts as paid** until you kn
 2. Query the rows (`wallet_transactions`, `reviews`, `payout_requests`, `payout_payments`) and the `admin_audit_log` around that time.
 3. The ledger, reviews, payments and audit log cannot be edited, so any mismatch means a record is missing or something bypassed the app. Correct it with a new, explained record, never by editing history.
 
+## A payout request has a bad UPI ID, or the bank refuses it
+Open it in Payouts, choose "Reject the request" and write the reason. The worker sees it, the amount is free again and they can ask again. Do not mark it paid. Rejected is final, so the worker makes a new request.
+
+## "This UPI ID can't be used" (a worker writes in)
+The ID is either waiting on another worker's request, or was paid to another worker before. If the worker lost their old account and the ID is theirs: confirm who they are through the ticket, then Payouts, "Release their UPI ID". If another request is still waiting on it, reject that one first. Each release is logged with your name.
+
 ## A payout was paid twice or in the wrong amount
 Money already left your bank, so this is a bookkeeping fix: do not delete anything. Record it as a ticket reply to the worker, and adjust by the worker's next payout (a manual note in support). The ledger shows exactly what the site believed.
 

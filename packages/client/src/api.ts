@@ -45,6 +45,8 @@ export function createHttpApi(http: Http): Api {
       const proofFileId = await http.upload("payment_proof", proof);
       await post(`/api/admin/payouts/${enc(id)}/pay`, { proofFileId });
     },
+    rejectPayout: (id, reason) => post(`/api/admin/payouts/${enc(id)}/reject`, { reason }),
+    releaseUpi: (upi) => post("/api/admin/upi/release", { upi }),
     listUsers: () => get("/api/admin/users"),
     setUserStatus: (userId, status) => post(`/api/admin/users/${enc(userId)}/status`, { status }),
     listMembers: () => get("/api/admin/members"),

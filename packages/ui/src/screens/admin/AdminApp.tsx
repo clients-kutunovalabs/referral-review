@@ -512,23 +512,25 @@ function PayoutsScreen({ wide, rev, onOpen }: { wide: boolean; rev: number; onOp
   const { api } = useServices();
   const { data, error, loading, reload } = useAsync(() => api.admin.listPayouts(), [rev], { refreshMs: 30_000 });
   const payouts = data ?? [];
-  const action = payouts.filter((p) => p.status !== "paid");
-  const history = payouts.filter((p) => p.status === "paid");
+  const action = payouts.filter((p) => p.status === "pending");
+  const history = payouts.filter((p) => p.status !== "pending");
+  const pill = (p: PayoutRequest) => <StatusPill tone={p.status === "paid" ? "green" : p.status === "rejected" ? "coral" : "amber"}>{p.status === "paid" ? "Paid" : p.status === "rejected" ? "Rejected" : "Pending"}</StatusPill>;
   const row = (p: PayoutRequest) => (
     <ListRow key={p.id} onClick={() => onOpen(p.id)} title={`${p.who} · ${formatRupees(p.amount)}`}
-      right={<StatusPill tone={p.status === "paid" ? "green" : "amber"}>{p.status === "paid" ? "Paid" : "Pending"}</StatusPill>}
-      sub={`${p.upiMasked} · ${agoLabel(p.at)}${p.paidBy ? ` · paid by ${p.paidBy}` : ""}`} />
+      right={pill(p)}
+      sub={`${p.upiMasked} · ${agoLabel(p.at)}${p.paidBy ? ` · paid by ${p.paidBy}` : ""}${p.rejectReason ? ` · ${p.rejectReason}` : ""}`} />
   );
   const cols: Column<PayoutRequest>[] = [
     { key: "who", header: "Worker", render: (p) => p.who },
     { key: "amount", header: "Amount", width: "120px", render: (p) => formatRupees(p.amount) },
     { key: "upi", header: "UPI ID", render: (p) => <span className="mono">{p.upiMasked}</span> },
     { key: "when", header: "Requested", width: "140px", render: (p) => agoLabel(p.at) },
-    { key: "by", header: "Paid by", width: "150px", render: (p) => p.paidBy ?? "" },
-    { key: "status", header: "Status", width: "120px", render: (p) => <StatusPill tone={p.status === "paid" ? "green" : "amber"}>{p.status === "paid" ? "Paid" : "Pending"}</StatusPill> }
+    { key: "by", header: "Paid by / reason", width: "190px", render: (p) => p.paidBy ?? p.rejectReason ?? "" },
+    { key: "status", header: "Status", width: "120px", render: pill }
   ];
   return (
-    <div className="screen"><TopBar title="Payouts" subtitle={`${action.length} to pay · ${history.length} paid`} /><div className="scrollarea"><div className="content">
+    <div className="screen"><TopBar title="Payouts" subtitle={`${action.length} to pay · ${history.length} done`} /><div className="scrollarea"><div className="content">
+      <ReleaseUpi />
       {loading ? <Loading /> : null}
       {error ? <ErrorBox message={error} onRetry={reload} /> : null}
       {!loading && !error ? (wide ? (<>
@@ -548,16 +550,44 @@ function PayoutsScreen({ wide, rev, onOpen }: { wide: boolean; rev: number; onOp
   );
 }
 
+/** For a worker who lost their old account and wants their UPI ID on the new one (they ask through a support ticket). */
+function ReleaseUpi() {
+  const { api } = useServices();
+  const [open, setOpen] = useState(false); const [upi, setUpi] = useState(""); const [busy, setBusy] = useState(false); const [msg, setMsg] = useState(""); const [bad, setBad] = useState(false);
+  async function release() {
+    setBusy(true); setMsg("");
+    try { await api.admin.releaseUpi(upi.trim()); setBad(false); setMsg("Done. That UPI ID can now be used on another account."); setUpi(""); }
+    catch (e) { setBad(true); setMsg(messageOf(e)); }
+    setBusy(false);
+  }
+  if (!open) return <p className="hint" style={{ marginTop: 0 }}>A worker lost their old account? <button className="expander" style={{ padding: 0, minHeight: 0 }} onClick={() => setOpen(true)}>Release their UPI ID</button></p>;
+  return (
+    <Card>
+      <Field label="UPI ID to release" hint="Only after the worker has asked through a support ticket. It stops being linked to the old account, and the action is logged with your name.">
+        <Input value={upi} onChange={(e) => setUpi(e.target.value)} placeholder="name@bank" autoComplete="off" />
+      </Field>
+      {msg ? <div className={bad ? "field-error" : "hint"} role={bad ? "alert" : "status"}>{msg}</div> : null}
+      <Button disabled={busy || !upi.includes("@")} onClick={() => { void release(); }}>{busy ? "Releasing…" : "Release UPI ID"}</Button>
+    </Card>
+  );
+}
+
 function PayoutItemScreen({ id, adminName, rev, onBack, onPaid }: { id: string; adminName: string; rev: number; onBack: () => void; onPaid: () => void }) {
   const { api } = useServices();
   const first = useAsync(() => (id ? Promise.resolve(id) : api.admin.listPayouts().then((l) => (l.find((p) => p.status === "pending") ?? l[0])?.id ?? "")), [id]);
   const pid = id || first.data || "";
   const q = useAsync(() => (pid ? api.admin.getPayout(pid) : Promise.resolve(null)), [pid, rev], { enabled: !first.loading });
   const [proof, setProof] = useState<File | null>(null); const [busy, setBusy] = useState(false); const [err, setErr] = useState("");
+  const [rejecting, setRejecting] = useState(false); const [reason, setReason] = useState("");
   const payout = q.data;
   if (q.loading || first.loading) return <div className="screen"><TopBar title="Payout request" onBack={onBack} /><Loading /></div>;
   if (!payout) return <div className="screen"><TopBar title="Payout request" onBack={onBack} /><div className="content"><ErrorBox message={q.error ?? "Nothing to pay."} onRetry={q.reload} /></div></div>;
   const paid = payout.status === "paid";
+  const rejected = payout.status === "rejected";
+  async function reject() {
+    setBusy(true); setErr("");
+    try { await api.admin.rejectPayout((payout as PayoutRequest).id, reason); onPaid(); } catch (e) { setErr(messageOf(e)); setBusy(false); }
+  }
   async function pay() {
     if (!proof) return;
     setBusy(true); setErr("");
@@ -574,13 +604,20 @@ function PayoutItemScreen({ id, adminName, rev, onBack, onPaid }: { id: string; 
       {paid ? (<>
         <p className="muted">Paid by {payout.paidBy}{payout.paidAt ? ` on ${whenLabel(payout.paidAt)}` : ""}. The payment proof is stored with this record.</p>
         {payout.proofUrl ? <a href={payout.proofUrl} target="_blank" rel="noreferrer noopener" className="proof-link"><img className="proof-img" src={payout.proofUrl} alt="Payment screenshot" /></a> : null}
+      </>) : rejected ? (
+        <p className="muted">Rejected{payout.rejectedAt ? ` on ${whenLabel(payout.rejectedAt)}` : ""}: {payout.rejectReason}. Nothing was paid, and the amount is back in the worker's balance.</p>
+      ) : rejecting ? (<>
+        <Field label="Why is it rejected? (the worker sees this)" error={err}><Textarea rows={3} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="For example: UPI ID is invalid. Check it and try again." /></Field>
+        <Button block variant="danger" disabled={busy || reason.trim().length < 3} onClick={() => { void reject(); }}>{busy ? "Saving…" : "Reject request"}</Button>
+        <Button block style={{ marginTop: 8 }} onClick={() => { setRejecting(false); setErr(""); }}>Go back</Button>
       </>) : (<>
         <p className="muted">After you transfer the money, attach the payment screenshot. It is required and is saved with your name.</p>
         <FileUpload label="Tap to upload payment screenshot" onFile={setProof} />
         {err ? <div className="field-error" role="alert">{err}</div> : null}
+        <p className="hint">Can't pay it (wrong UPI ID, the bank refuses)? <button className="expander" style={{ padding: 0, minHeight: 0 }} onClick={() => { setRejecting(true); setErr(""); }}>Reject the request</button> and tell the worker why.</p>
       </>)}
     </div></div>
-    {paid ? null : <div className="screen-footer"><Button variant="primary" block disabled={!proof || busy} onClick={() => { void pay(); }}>{busy ? "Saving…" : `Mark as paid by ${adminName}`}</Button></div>}
+    {paid || rejected || rejecting ? null : <div className="screen-footer"><Button variant="primary" block disabled={!proof || busy} onClick={() => { void pay(); }}>{busy ? "Saving…" : `Mark as paid by ${adminName}`}</Button></div>}
     </div>
   );
 }

@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- the test client reads loosely-typed JSON bodies */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApi } from "./handler";
-import { PNG, createTestCtx, engines, type TestCtx } from "../testing";
+import { PNG, createTestCtx, engines, fund, makeAdmin, type TestCtx } from "../testing";
 
 const BASE = "https://tasks.test";
 
@@ -250,6 +250,47 @@ for (const engine of engines()) {
 
         const dash = (await owner.get("/api/admin/dashboard")).body;
         expect(dash.payoutsDue).toBeGreaterThanOrEqual(0);
+      });
+
+      it("a payer rejects a request with a reason over HTTP; the worker sees it and can ask again; a taken UPI ID gets the generic message", async () => {
+        const owner = browser(api, "10.3.0.1"); const o = await signUp(owner, "Meera"); await makeAdminFor(o.email, "all");
+        const worker = browser(api, "10.3.0.2"); const w = await signUp(worker, "Ravi");
+        const other = browser(api, "10.3.0.3"); const x = await signUp(other, "Kiran");
+        const idOf = async (email: string) => {
+          const [r] = await ctx.db.query<{ user_id: string; id: string }>("select user_id, id from identities where lower(email) = $1", [email]);
+          return { userId: r!.user_id, identityId: r!.id, email, name: email };
+        };
+        const staff = await makeAdmin(ctx, "all");
+        await fund(ctx, await idOf(w.email), staff, staff, 100n);
+        await fund(ctx, await idOf(x.email), staff, staff, 100n);
+        const upi = `http${Date.now().toString(36)}@okbank`;
+        const req = await worker.post("/api/payouts", { amountPaise: "3000", upi });
+        expect(req.status).toBe(200);
+        // another worker cannot use the same ID: generic message, no mention of who holds it
+        const taken = await other.post("/api/payouts", { amountPaise: "3000", upi });
+        expect(taken.status).toBe(409);
+        expect(taken.body.error.code).toBe("upi_unavailable");
+        expect(taken.body.error.message).not.toMatch(/Ravi|another/i);
+        // the payer refuses it
+        expect((await owner.post(`/api/admin/payouts/${req.body.id}/reject`, { reason: "x" })).status).toBe(400);
+        expect((await owner.post(`/api/admin/payouts/${req.body.id}/reject`, { reason: "UPI ID is invalid. Check it and try again." })).status).toBe(200);
+        const mine = (await worker.get("/api/wallet")).body.payouts[0];
+        expect(mine).toMatchObject({ status: "rejected", rejectReason: "UPI ID is invalid. Check it and try again." });
+        expect((await owner.post(`/api/admin/payouts/${req.body.id}/reject`, { reason: "again please" })).body.error.code).toBe("not_pending");
+        expect((await worker.post("/api/payouts", { amountPaise: "3000", upi })).status).toBe(200); // the amount is free again
+        // a non-admin cannot reject or release
+        expect((await worker.post(`/api/admin/payouts/${req.body.id}/reject`, { reason: "nope nope" })).status).toBe(403);
+        expect((await worker.post("/api/admin/upi/release", { upi })).status).toBe(403);
+      });
+
+      it("every visit renews the session cookie for another week", async () => {
+        const b = browser(api, "10.3.1.1"); await signUp(b, "Nila");
+        const first = await b.get("/api/me");
+        expect(first.headers.get("set-cookie")).toBeNull(); // too soon after sign-in: nothing to renew
+        ctx.clock.advance(10 * 60_000);
+        const later = await b.get("/api/me");
+        expect(later.headers.get("set-cookie")).toMatch(/Max-Age=604[0-9]{3}/); // 168 hours = 604800 seconds
+        expect(later.headers.get("set-cookie")).toContain("HttpOnly");
       });
 
       it("support ticket round trip", async () => {

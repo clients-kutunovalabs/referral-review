@@ -31,3 +31,8 @@ export function pgCode(err: unknown): string | undefined {
   return typeof code === "string" ? code : undefined;
 }
 export const isUniqueViolation = (err: unknown): boolean => pgCode(err) === "23505";
+/** Name of the index or constraint a failed statement hit (both drivers report it), so a caller can tell which rule was broken. */
+export const violatedConstraint = (err: unknown): string | undefined => {
+  const c = (err as { constraint?: unknown } | null)?.constraint;
+  return typeof c === "string" ? c : undefined;
+};

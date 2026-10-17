@@ -15,6 +15,9 @@ const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR
 const browser = await chromium.launch({ ...(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {}), args: ["--no-sandbox"] });
 let passed = 0; let failed = 0;
 const problems = [];
+const TAG = Date.now().toString(36);
+const UPI = `asha${TAG}@okhdfc`; // one UPI ID belongs to one worker, so every run uses its own
+const BAD_UPI = `ashx${TAG}@okhdfc`;
 const step = async (name, fn) => {
   try { await fn(); passed++; console.log("PASS", name); }
   catch (e) { failed++; console.log("FAIL", name, "\n     ", String(e).split("\n")[0]); }
@@ -175,10 +178,29 @@ await step("worker: sees the partial approval, the note and the money in the wal
   const text = await w.locator(".screen").innerText();
   if (!/Total earned\s*₹30/.test(text) || !/Withdrawable balance\s*₹30/.test(text)) throw new Error("wallet totals wrong:\n" + text);
 });
+await step("worker: asks for a payout to a wrong UPI ID; the payer rejects it with a reason; the money is free again and the worker sees why", async () => {
+  await w.getByRole("button", { name: "Payout", exact: true }).click();
+  await w.getByLabel("Amount (₹)").fill("20");
+  await w.getByLabel("UPI ID").fill(BAD_UPI);
+  await w.getByRole("button", { name: "Request payout" }).click();
+  await see(w, "Payout requested");
+  await a.locator(".bottomnav").getByRole("button", { name: "Payouts" }).click();
+  await a.getByRole("row", { name: new RegExp(NAME) }).first().click();
+  await a.getByRole("button", { name: "Reject the request" }).click();
+  await a.getByLabel(/Why is it rejected/).fill("UPI ID is invalid. Check it and try again.");
+  await a.getByRole("button", { name: "Reject request" }).click();
+  await w.reload();
+  await w.getByRole("button", { name: "Payout", exact: true }).click();
+  await see(w, "was rejected: UPI ID is invalid");
+  await w.getByRole("button", { name: "Wallet" }).click();
+  await see(w, "Withdrawable balance");
+  const t = await w.locator(".screen").innerText();
+  if (!/Withdrawable balance\s*₹30/.test(t)) throw new Error("rejected amount was not released:\n" + t);
+});
 await step("worker: requests a payout, which is held from the balance at once", async () => {
   await w.getByRole("button", { name: "Payout", exact: true }).click();
   await w.getByLabel("Amount (₹)").fill("500");
-  await w.getByLabel("UPI ID").fill("asha@okhdfc");
+  await w.getByLabel("UPI ID").fill(UPI);
   await w.getByRole("button", { name: "Request payout" }).click();
   await see(w, "You can withdraw up to ₹30");
   await w.getByLabel("Amount (₹)").fill("20");
@@ -193,11 +215,12 @@ await step("worker: requests a payout, which is held from the balance at once", 
 
 // -------- admin pays --------
 await step("admin: sees the full UPI ID only on the payout screen, pays with a screenshot", async () => {
+  await a.reload(); // the open list refreshes itself every 30 seconds; the test does not wait for that
   await a.locator(".bottomnav").getByRole("button", { name: "Payouts" }).click();
   const list = await a.locator(".screen").innerText();
-  if (list.includes("asha@okhdfc")) throw new Error("full UPI ID leaked into the list");
-  await a.getByRole("row", { name: new RegExp(NAME) }).click();
-  await see(a, "asha@okhdfc");
+  if (list.includes(UPI)) throw new Error("full UPI ID leaked into the list");
+  await a.getByRole("row", { name: new RegExp(NAME) }).first().click(); // the open request is listed above the rejected one
+  await see(a, UPI);
   const pay = a.getByRole("button", { name: new RegExp(`Mark as paid by ${OWNER_NAME}`) });
   if (await pay.isEnabled()) throw new Error("Mark as paid must need the screenshot first");
   await upload(a, "payment.png");

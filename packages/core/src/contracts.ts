@@ -81,7 +81,7 @@ export interface Wallet {
   entries: WalletEntry[];
 }
 
-export type PayoutStatus = "pending" | "paid";
+export type PayoutStatus = "pending" | "paid" | "rejected";
 export interface PayoutRequest {
   id: string;
   who: string;
@@ -92,6 +92,8 @@ export interface PayoutRequest {
   at: string; // ISO: when requested
   paidAt?: string; // ISO: when marked paid
   paidBy?: string;
+  rejectReason?: string; // why a payer refused it; the held amount is back in the worker's balance
+  rejectedAt?: string; // ISO
   proofUrl?: string; // payment screenshot, admin side only
 }
 

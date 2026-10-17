@@ -21,6 +21,8 @@ openssl rand -base64 48     # SESSION_SECRET
 openssl rand -base64 32     # UPI_ENCRYPTION_KEY
 ```
 
+Never set `DEV_LOGIN`: it is a development-only shortcut that signs anyone in without a password, and the site refuses to start in production with it on.
+
 The full list of settings, with comments, is in [`.env.example`](../.env.example). The site checks them at start-up and refuses to run in production if a required one is missing or unsafe (console email, http URL, no database, short secret).
 
 ## 2. Run it

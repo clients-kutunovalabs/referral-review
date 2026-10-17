@@ -156,6 +156,12 @@ for (const engine of engines()) {
         ctx.clock.advance(15 * 60_000);
         await expect(auth.signIn(a.email, a.password)).resolves.toBeDefined();
       });
+      it("thirty guesses fired at once get five tries, not thirty", async () => {
+        const a = await signUp();
+        const out = await Promise.all(Array.from({ length: 30 }, (_, i) => code(auth.signIn(a.email, `wrong-guess-${i}`))));
+        expect(out.filter((c) => c === "invalid_credentials")).toHaveLength(5);
+        expect(out.filter((c) => c === "rate_limited")).toHaveLength(25);
+      });
       it("a suspended account cannot sign in, and a deleted one has no credentials", async () => {
         const a = await signUp();
         await ctx.db.query("update users set status = 'suspended' where id = $1", [a.userId]);
@@ -185,6 +191,33 @@ for (const engine of engines()) {
         const t2 = await createSession(ctx, u.userId);
         ctx.clock.advance(15 * 86_400_000);
         expect(await resolveSession(ctx, t2.token)).toBeNull();
+      });
+      it("stays open for a week after the last visit, and every visit restarts that week", async () => {
+        const HOUR = 3_600_000;
+        const u = await makeUser(ctx);
+        const s = await createSession(ctx, u.userId);
+        expect(s.expiresAt.getTime() - ctx.now().getTime()).toBe(168 * HOUR);
+        // visit on day 4: the week starts again from that moment
+        ctx.clock.advance(96 * HOUR);
+        const day4 = await resolveSession(ctx, s.token);
+        expect(day4).toMatchObject({ userId: u.userId, refreshed: true });
+        expect(day4!.expiresAt.getTime() - ctx.now().getTime()).toBe(168 * HOUR);
+        // 167 hours after that visit it is still open (that is day 10 and 23 hours: past the original week)
+        ctx.clock.advance(167 * HOUR);
+        expect(await resolveSession(ctx, s.token)).toMatchObject({ userId: u.userId });
+        // and a week of silence after the latest visit ends it
+        const last = ctx.now();
+        ctx.clock.advance(168 * HOUR + 60_000);
+        expect(await resolveSession(ctx, s.token)).toBeNull();
+        expect(last.getTime()).toBeLessThan(ctx.now().getTime());
+      });
+      it("busy use does not write on every request, only every few minutes", async () => {
+        const u = await makeUser(ctx);
+        const s = await createSession(ctx, u.userId);
+        ctx.clock.advance(60_000);
+        expect(await resolveSession(ctx, s.token)).toMatchObject({ refreshed: false });
+        ctx.clock.advance(5 * 60_000);
+        expect(await resolveSession(ctx, s.token)).toMatchObject({ refreshed: true });
       });
       it("a suspended user's session stops working at once", async () => {
         const u = await makeUser(ctx);

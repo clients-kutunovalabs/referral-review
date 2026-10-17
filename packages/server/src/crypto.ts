@@ -60,6 +60,11 @@ export function decryptUpi(key: Buffer, stored: string): string {
   return Buffer.concat([d.update(Buffer.from(ct, "base64url")), d.final()]).toString("utf8");
 }
 
+/** Keyed hash of a UPI ID (lower-cased), so "is this ID already used" can be answered without storing it in the clear. */
+export function upiHash(key: Buffer, upi: string): string {
+  return createHmac("sha256", key).update(`upi:${upi.trim().toLowerCase()}`).digest("hex");
+}
+
 export function maskUpi(upi: string): string {
   const [name = "", bank = ""] = upi.split("@");
   return `${name.slice(0, 3)}••@${bank}`;

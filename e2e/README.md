@@ -28,4 +28,4 @@ BASE=http://localhost:3100 pnpm e2e
 
 Screenshots of key screens are written to `e2e/out/`. The script exits non-zero if any step fails, and lists any browser console errors or 5xx responses it saw.
 
-It is safe to run repeatedly against the same database: every run uses fresh names. It is **not** for a real site: it creates accounts and pays out fake money.
+It is safe to run repeatedly against the same database: every run uses fresh names and fresh UPI IDs (one UPI ID can belong to only one worker). It is **not** for a real site: it creates accounts and pays out fake money.

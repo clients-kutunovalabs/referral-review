@@ -19,10 +19,11 @@ const schema = z.object({
   DATABASE_SSL: bool(false),
   PGLITE_DIR: z.string().default(".data/pglite"),
   AUTO_MIGRATE: bool(true),
+  DEV_LOGIN: bool(false), // development only: one-click sign-in as a demo worker or admin. Refused in production.
 
   SESSION_SECRET: z.string().optional(),
   UPI_ENCRYPTION_KEY: z.string().optional(),
-  SESSION_DAYS: int(14, 1, 90),
+  SESSION_IDLE_HOURS: int(168, 1, 2160), // a session ends after this long without a visit; every visit restarts the count
   MAX_IDENTITIES_PER_USER: int(10, 1, 50),
   TRUST_PROXY_HOPS: int(1, 0, 5),
 
@@ -49,9 +50,10 @@ export interface AppConfig {
   databaseSsl: boolean;
   pgliteDir: string;
   autoMigrate: boolean;
+  devLogin: boolean;
   secret: string;
   upiKey: Buffer;
-  sessionDays: number;
+  sessionIdleHours: number;
   maxIdentitiesPerUser: number;
   trustProxyHops: number;
   uploadDir: string;
@@ -89,12 +91,13 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
   if (production && emailMode === "console") problems.push("EMAIL_MODE=console would print sign-in codes into the logs. Use smtp in production.");
   if (emailMode === "smtp" && !e.SMTP_URL) problems.push("SMTP_URL is required when EMAIL_MODE=smtp (e.g. smtps://user:pass@smtp.example.com:465).");
   if ((e.OWNER_EMAIL && !e.OWNER_PASSWORD) || (!e.OWNER_EMAIL && e.OWNER_PASSWORD)) problems.push("Set both OWNER_EMAIL and OWNER_PASSWORD, or neither.");
+  if (production && e.DEV_LOGIN) problems.push("DEV_LOGIN would let anyone sign in without a password. It must never be on in production.");
   if (problems.length) throw new ConfigError(problems);
 
   return {
     env: e.APP_ENV ?? e.NODE_ENV, production, appUrl: e.APP_URL.replace(/\/$/, ""), workspaceId: e.WORKSPACE_ID,
-    databaseUrl: e.DATABASE_URL, databaseSsl: e.DATABASE_SSL, pgliteDir: e.PGLITE_DIR, autoMigrate: e.AUTO_MIGRATE,
-    secret: e.SESSION_SECRET ?? DEV_SECRET, upiKey, sessionDays: e.SESSION_DAYS, maxIdentitiesPerUser: e.MAX_IDENTITIES_PER_USER, trustProxyHops: e.TRUST_PROXY_HOPS,
+    databaseUrl: e.DATABASE_URL, databaseSsl: e.DATABASE_SSL, pgliteDir: e.PGLITE_DIR, autoMigrate: e.AUTO_MIGRATE, devLogin: e.DEV_LOGIN,
+    secret: e.SESSION_SECRET ?? DEV_SECRET, upiKey, sessionIdleHours: e.SESSION_IDLE_HOURS, maxIdentitiesPerUser: e.MAX_IDENTITIES_PER_USER, trustProxyHops: e.TRUST_PROXY_HOPS,
     uploadDir: e.UPLOAD_DIR, emailMode, smtpUrl: e.SMTP_URL, mailFrom: e.MAIL_FROM,
     anthropicApiKey: e.ANTHROPIC_API_KEY, aiModel: e.AI_MODEL,
     owner: e.OWNER_EMAIL && e.OWNER_PASSWORD ? { email: e.OWNER_EMAIL, name: e.OWNER_NAME, password: e.OWNER_PASSWORD } : undefined

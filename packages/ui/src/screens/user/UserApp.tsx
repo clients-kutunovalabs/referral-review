@@ -401,11 +401,12 @@ function TxRow({ id, at, title, sub, amount, income, badge, details, open, onTog
 
 function payoutDetails(p: PayoutRequest): [string, string][] {
   return [
-    ["Status", p.status === "paid" ? "Paid" : "Processing. The amount is blocked until an admin pays and confirms it."],
+    ["Status", p.status === "paid" ? "Paid" : p.status === "rejected" ? "Rejected. The amount is back in your balance." : "Processing. The amount is blocked until an admin pays and confirms it."],
     ["Amount", formatRupees(p.amount)],
     ["UPI ID", p.upiMasked],
     ["Requested", when(p.at)],
-    ...(p.status === "paid" ? [["Paid on", when(p.paidAt)] as [string, string], ["Paid by", p.paidBy ?? ""] as [string, string]] : [])
+    ...(p.status === "paid" ? [["Paid on", when(p.paidAt)] as [string, string], ["Paid by", p.paidBy ?? ""] as [string, string]] : []),
+    ...(p.status === "rejected" ? [["Reason", p.rejectReason ?? ""] as [string, string], ["Rejected on", when(p.rejectedAt)] as [string, string]] : [])
   ];
 }
 
@@ -459,6 +460,8 @@ function PayoutScreen({ available, inProcess, payouts, onRequest, onDemoPaid, on
   const [amount, setAmount] = useState(""); const [upi, setUpi] = useState(""); const [errs, setErrs] = useState<{ amount?: string; upi?: string; form?: string }>({});
   const [openTx, setOpenTx] = useState<string | null>(null); const [busy, setBusy] = useState(false);
   const pending = inProcess > 0n;
+  const latest = [...payouts].sort((a, b) => (a.at < b.at ? 1 : -1))[0];
+  const lastRejected = latest?.status === "rejected" ? latest : undefined;
   async function submit() {
     const e: typeof errs = {};
     const amt = parseRupees(amount);
@@ -479,6 +482,7 @@ function PayoutScreen({ available, inProcess, payouts, onRequest, onDemoPaid, on
         {pending ? <p className="small" style={{ marginTop: 4, color: "var(--amber)" }}>{formatRupees(inProcess)} is processing and blocked until it is paid.</p> : null}
       </Card>
       {pending ? <div className="banner">You already have a payout request processing. You can request again once it's paid.</div> : null}
+      {!pending && lastRejected ? <div className="banner" role="status">Your last request ({formatRupees(lastRejected.amount)} to {lastRejected.upiMasked}) was rejected: {lastRejected.rejectReason}. The amount is back in your balance. Fix it and request again.</div> : null}
       <Field label="Amount (₹)" error={errs.amount} hint={`Minimum ${formatRupees(MIN_PAYOUT)}`}><Input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="10" disabled={pending} /></Field>
       <Field label="UPI ID" error={errs.upi} hint="You'll enter this each time. It isn't saved as a payment method."><Input id="upi-input" value={upi} onChange={(e) => setUpi(e.target.value)} placeholder="yourname@upi" disabled={pending} autoComplete="off" /></Field>
       {errs.form ? <div className="field-error" role="alert" style={{ marginBottom: 8 }}>{errs.form}</div> : null}
@@ -488,7 +492,7 @@ function PayoutScreen({ available, inProcess, payouts, onRequest, onDemoPaid, on
       {payouts.length === 0 ? <EmptyState>No payout requests yet.</EmptyState> : null}
       {[...payouts].sort((a, b) => (a.at < b.at ? 1 : -1)).map((p) => (
         <TxRow key={p.id} id={`po-${p.id}`} at={p.at} title="Payout request" sub={p.upiMasked} amount={formatRupees(p.amount)}
-          badge={<StatusPill tone={p.status === "paid" ? "green" : "amber"}>{p.status === "paid" ? "Paid" : "Processing"}</StatusPill>}
+          badge={<StatusPill tone={p.status === "paid" ? "green" : p.status === "rejected" ? "coral" : "amber"}>{p.status === "paid" ? "Paid" : p.status === "rejected" ? "Rejected" : "Processing"}</StatusPill>}
           details={payoutDetails(p)} open={openTx === p.id} onToggle={() => setOpenTx(openTx === p.id ? null : p.id)} />
       ))}
       {pending && onDemoPaid ? <p className="hint">Demo: <button className="expander" style={{ padding: 0, minHeight: 0 }} onClick={() => { void onDemoPaid(); }}>admin marks the request as paid</button></p> : null}

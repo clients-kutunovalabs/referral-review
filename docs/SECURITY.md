@@ -9,7 +9,8 @@ Frontend code cannot be made uncopyable. Protection is server-side: authorisatio
 | Passwords | scrypt, per-password salt, parameters stored with the hash. Unknown and known emails cost the same time to check. |
 | One-time codes | 6 digits, 10 minutes, only a hash stored, 5 wrong guesses lock the code (counted even though the request errors), 30 s resend, 5 codes an hour per email. Single-use step tickets. |
 | Sign-in | Generic error for wrong password or unknown email; 5 failures lock the email for 15 minutes; a password reset signs out every device. Only the main email can log in. |
-| Sessions | Random token, only its hash stored, HttpOnly, SameSite=Lax, Secure with the `__Host-` prefix, 14 days, 20 per person, ended at once when a person is suspended or deleted. |
+| Sessions | Random token, only its hash stored, HttpOnly, SameSite=Lax, Secure with the `__Host-` prefix, one week (168 hours) of inactivity that restarts at every visit (renewed at most every 5 minutes, cookie re-issued with it), 20 per person, ended at once when a person is suspended or deleted. |
+| Development quick login | `/dev` and `/dev/login` sign a tester in without a password. They exist only when `DEV_LOGIN=1` (set by `npm run dev` alone), never in production (configuration refuses to start; the route checks again), and only for a browser on `localhost` (anything else gets a 404). Tested. |
 | CSRF | Cross-site writes refused (Origin must be the site); every logged-in write also needs a token bound to that session. API accepts JSON only. |
 | Authorisation | Admin roles are read from the database on every admin request. Workers can only read their own tickets, claims, wallet and files. |
 | Review | Nobody can review their own work, even an admin who also works tasks. |

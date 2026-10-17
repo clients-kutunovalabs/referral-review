@@ -86,8 +86,17 @@ const port = await pickPort();
 process.env.PORT = String(port);
 // The site refuses writes whose origin differs from APP_URL, so in development it always follows the port actually chosen.
 process.env.APP_URL = `http://localhost:${port}`;
+process.env.DEV_LOGIN = "1"; // one-click sign-in for testing; the server refuses it in production
 
 console.log(`\nStarting the site at http://localhost:${port}${port !== FIRST_PORT && !process.env.RR_PORT_QUIET ? `  (${FIRST_PORT} is taken by another program)` : ""}`);
 if (fromEnvFile.length) console.log(`Loaded from .env: ${fromEnvFile.join(", ")}`);
-console.log("Sign-up codes are printed in this window.\n");
+console.log(`
+  Worker app:   http://localhost:${port}/
+  Admin app:    http://localhost:${port}/admin
+  Launch pad:   http://localhost:${port}/dev            (one-click sign-in for both, with demo data)
+    signed in as worker: http://localhost:${port}/dev/login?as=worker
+    signed in as admin:  http://localhost:${port}/dev/login?as=admin
+  Demo password for every demo account: dev password 123
+  Sign-up codes are printed in this window.
+`);
 exec("--filter @rr/web dev");

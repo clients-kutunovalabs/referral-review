@@ -21,11 +21,12 @@ export async function balanceOf(q: Queryable, userId: string): Promise<Balance> 
 }
 
 interface PayoutRow {
-  id: string; name: string; amount_paise: bigint; status: "pending" | "paid"; upi_masked: string; requested_at: Date; paid_at: Date | null; paid_by: string | null; proof_file_id?: string | null;
+  id: string; name: string; amount_paise: bigint; status: "pending" | "paid"; upi_masked: string; requested_at: Date; paid_at: Date | null; paid_by: string | null; proof_file_id?: string | null; reject_reason?: string | null; rejected_at?: Date | null;
 }
 export const toPayout = (r: PayoutRow, extra: Partial<PayoutRequest> = {}): PayoutRequest => ({
   id: r.id, who: r.name, amount: r.amount_paise, status: r.status, upiMasked: r.upi_masked, at: r.requested_at.toISOString(),
-  ...(r.paid_at ? { paidAt: r.paid_at.toISOString() } : {}), ...(r.paid_by ? { paidBy: r.paid_by } : {}), ...extra
+  ...(r.paid_at ? { paidAt: r.paid_at.toISOString() } : {}), ...(r.paid_by ? { paidBy: r.paid_by } : {}),
+  ...(r.reject_reason ? { rejectReason: r.reject_reason } : {}), ...(r.rejected_at ? { rejectedAt: r.rejected_at.toISOString() } : {}), ...extra
 });
 
 export async function walletView(ctx: Ctx, userId: string): Promise<WalletView> {
@@ -37,7 +38,7 @@ export async function walletView(ctx: Ctx, userId: string): Promise<WalletView> 
      join task_templates t on t.id = c.template_id join reviews r on r.submission_id = s.id
      where w.user_id = $1 and w.kind = 'credit' order by w.created_at desc limit 500`, [userId]);
   const payouts = await ctx.db.query<PayoutRow>(
-    `select p.id, u.name, p.amount_paise, p.status, p.upi_masked, p.requested_at, p.paid_at, pb.name as paid_by
+    `select p.id, u.name, p.amount_paise, p.status, p.upi_masked, p.requested_at, p.paid_at, pb.name as paid_by, p.reject_reason, p.rejected_at
      from payout_requests p join users u on u.id = p.user_id
      left join payout_payments pp on pp.payout_request_id = p.id left join users pb on pb.id = pp.paid_by
      where p.user_id = $1 order by p.requested_at desc limit 200`, [userId]);

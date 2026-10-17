@@ -2,3 +2,4 @@
 export { createRuntime, prepare, type Runtime } from "./runtime";
 export { createApi } from "./http/handler";
 export { seedOwner } from "./seed";
+export { devLogin, DEV_ACCOUNTS, DEV_PASSWORD } from "./devlogin";

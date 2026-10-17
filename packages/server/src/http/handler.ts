@@ -8,7 +8,7 @@ import { dashboard } from "../dashboard";
 import { UPLOAD_KINDS } from "../constants";
 import { mayUpload, readFile, saveUpload } from "../files";
 import { addIdentity, getMe, sendIdentityCode } from "../identities";
-import { getPayout, listPayouts, markPaid, requestPayout } from "../payouts";
+import { getPayout, listPayouts, markPaid, rejectPayout, releaseUpi, requestPayout } from "../payouts";
 import { hit } from "../ratelimit";
 import { loadAdmin, type AdminActor } from "../rbac";
 import { addMember, createRole, deleteRole, listMembers, listRoles, setMemberRoles, setRolePermissions } from "../roles";
@@ -177,6 +177,8 @@ export function createApi(ctx: Ctx, deps: { auth?: AuthProvider } = {}): (req: R
 
     mk("GET", "/api/admin/payouts", "admin", undefined, (rc) => listPayouts(rc.ctx, rc.admin)),
     mk("GET", "/api/admin/payouts/:id", "admin", lim("view-upi", 120, HOUR), (rc) => getPayout(rc.ctx, rc.admin, rc.params["id"] as string)),
+    mk("POST", "/api/admin/payouts/:id/reject", "admin", undefined, async (rc) => { await rejectPayout(rc.ctx, rc.admin, rc.params["id"] as string, (await rc.body(schemas.rejectPayout)).reason); return OK; }),
+    mk("POST", "/api/admin/upi/release", "admin", lim("release-upi", 30, HOUR), async (rc) => { await releaseUpi(rc.ctx, rc.admin, (await rc.body(schemas.releaseUpi)).upi); return OK; }),
     mk("POST", "/api/admin/payouts/:id/pay", "admin", undefined, async (rc) => { await markPaid(rc.ctx, rc.admin, rc.params["id"] as string, (await rc.body(schemas.pay)).proofFileId); return OK; }),
 
     mk("GET", "/api/admin/users", "admin", undefined, (rc) => listUsers(rc.ctx, rc.admin)),
@@ -257,7 +259,10 @@ export function createApi(ctx: Ctx, deps: { auth?: AuthProvider } = {}): (req: R
         }
       };
       const out = await found.run(rc);
-      return out instanceof Response ? out : json(out);
+      const res = out instanceof Response ? out : json(out);
+      // A visit restarted the idle count on the server, so the browser's copy of the cookie must be pushed out too.
+      if (session?.refreshed && token && !res.headers.has("set-cookie")) res.headers.append("set-cookie", sessionCookie(ctx, token, session.expiresAt));
+      return res;
     } catch (err) {
       return errorResponse(err);
     }

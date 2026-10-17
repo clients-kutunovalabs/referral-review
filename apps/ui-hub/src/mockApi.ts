@@ -108,6 +108,7 @@ export function createMockApi(opts: MockOptions): Mock {
     wallet: () => wait({ earned, entries: [...entries].sort((a, b) => (a.at < b.at ? 1 : -1)), identities, payouts: myPayouts.map((p) => { const { upiFull: _f, ...rest } = p; void _f; return rest; }) }),
     async requestPayout(amount, upi) {
       if (myPayouts.some((p) => p.status === "pending")) throw new ApiError("payout_pending", "You already have a payout request processing.", 409);
+      if (upi.toLowerCase() === "taken@okhdfc") throw new ApiError("upi_unavailable", "This UPI ID can't be used for a payout. Check it and try again, or contact support.", 409);
       const [name = "", bank = ""] = upi.split("@");
       const p: PayoutRequest = { id: id("p"), who: WORKER, amount, status: "pending", upiMasked: `${name.slice(0, 3)}••@${bank}`, upiFull: upi, at: now() };
       myPayouts.unshift(p);
@@ -212,6 +213,17 @@ export function createMockApi(opts: MockOptions): Mock {
       const p = findPayout(pid);
       if (!p || p.status !== "pending") throw new ApiError("not_pending", "This payout was already paid.", 409);
       p.status = "paid"; p.paidAt = now(); p.paidBy = "Anil (Payments)";
+    },
+    async rejectPayout(pid, reason) {
+      must("payout.mark_paid");
+      const p = findPayout(pid);
+      if (!p || p.status !== "pending") throw new ApiError("not_pending", "This payout is no longer pending.", 409);
+      if (reason.trim().length < 3) throw new ApiError("bad_request", "Say why it is rejected, so the worker knows what to fix.", 400);
+      p.status = "rejected"; p.rejectReason = reason.trim(); p.rejectedAt = now();
+    },
+    async releaseUpi(upi) {
+      must("payout.mark_paid");
+      if (upi.trim().toLowerCase() !== "taken@okhdfc") throw new ApiError("not_found", "A link for that UPI ID was not found.", 404);
     },
     async listUsers() { must("user.manage"); return clone(users); },
     async setUserStatus(uid, status) {

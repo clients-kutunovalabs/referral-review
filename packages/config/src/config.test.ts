@@ -5,6 +5,13 @@ const prod = { NODE_ENV: "production", APP_URL: "https://tasks.example.com", DAT
 const problems = (env: Record<string, string>) => { try { loadConfig(env); return []; } catch (e) { return (e as ConfigError).problems; } };
 
 describe("loadConfig", () => {
+  it("never allows the one-click dev sign-in in production, and it is off by default", () => {
+    expect(loadConfig({}).devLogin).toBe(false);
+    expect(loadConfig({ DEV_LOGIN: "1" }).devLogin).toBe(true);
+    expect(problems({ ...prod, DEV_LOGIN: "1" }).join(" ")).toContain("DEV_LOGIN");
+    expect(problems({ ...prod, NODE_ENV: "development", APP_ENV: "production", DEV_LOGIN: "true" }).join(" ")).toContain("DEV_LOGIN");
+  });
+
   it("runs in development with nothing set", () => {
     const c = loadConfig({});
     expect(c).toMatchObject({ production: false, appUrl: "http://localhost:3000", emailMode: "console", autoMigrate: true, trustProxyHops: 1 });
@@ -30,6 +37,6 @@ describe("loadConfig", () => {
     expect(problems({ NODE_ENV: "development", APP_ENV: "production" }).length).toBeGreaterThan(0);
   });
   it("treats empty strings as unset and parses booleans and numbers", () => {
-    expect(loadConfig({ DATABASE_URL: "", AUTO_MIGRATE: "0", SESSION_DAYS: "30", TRUST_PROXY_HOPS: "2" })).toMatchObject({ databaseUrl: undefined, autoMigrate: false, sessionDays: 30, trustProxyHops: 2 });
+    expect(loadConfig({ DATABASE_URL: "", AUTO_MIGRATE: "0", SESSION_IDLE_HOURS: "72", TRUST_PROXY_HOPS: "2" })).toMatchObject({ databaseUrl: undefined, autoMigrate: false, sessionIdleHours: 72, trustProxyHops: 2 });
   });
 });

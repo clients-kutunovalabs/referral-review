@@ -27,7 +27,7 @@ What was built, what went wrong and how it was fixed, and what is deliberately n
 
 ### Sign-in and security
 - Built-in provider (so the site is launchable without Authgate): scrypt password hashes, one-time codes stored only as hashes (6 digits, 10 minutes, 5 wrong attempts, 30-second resend, 5 codes an hour), single-use step tickets, sign-in lockout after 5 failures, identical answers for unknown and known emails on reset, a reset signs out every device.
-- Sessions: random token, only its hash stored, HttpOnly + SameSite=Lax + Secure (`__Host-` prefix), 14 days, at most 20 per person, ended at once when someone is suspended.
+- Sessions: random token, only its hash stored, HttpOnly + SameSite=Lax + Secure (`__Host-` prefix), one week (168 hours) of inactivity that restarts at every visit, at most 20 per person, ended at once when someone is suspended.
 - CSRF: cross-site writes are refused outright (Origin check) and every logged-in write needs a token tied to that session.
 - Rate limits kept in the database (so they hold across several servers) on sign-in, codes, claims, payouts, uploads, tickets.
 - Per-request Content-Security-Policy with a fresh nonce, `X-Frame-Options: DENY`, HSTS, no public source maps, request bodies capped on the bytes actually received.
@@ -78,6 +78,13 @@ What was built, what went wrong and how it was fixed, and what is deliberately n
 | 23 | Windows line endings could change the embedded migration text. | Review | `.gitattributes` forces LF. |
 | 24 | Unused dependencies and exports (worker, client, auth, schemas, gallery). | knip | Removed. The rest of knip's list is intentional (see DEPLOY.md: `pg`, `nodemailer` are direct deps so the standalone build carries them). |
 
+| 25 | **A payout could not be rejected**: a wrong UPI ID left the money held and the worker unable to ask again. | Money review | Payers reject with a reason (migration 0002); the hold is released, the worker sees why. Final once rejected; tested, including that the database refuses to move it back to pending. |
+| 26 | **Sign-in lockout could be bypassed**: 30 parallel guesses against a limit of 5 were all processed. | Tested | The attempt is counted before the password is checked. 30 at once now get 5 tries. |
+| 27 | One UPI ID could be used by any number of accounts. | Decision | One UPI ID, one worker (keyed hash, unique while pending, linked when paid, released by an admin). Generic error message; races tested on Postgres. |
+| 28 | A flat 14-day session did not match the rule "a week after the last visit". | Decision | 168-hour sliding window, cookie renewed with it. |
+| 29 | Authgate placeholder was on the wrong layer and unused. | Review | Deleted. The seam is the server `AuthProvider`; Authgate will implement that. |
+| 30 | Testing the real screens meant signing up or in every time, with no way to see both apps quickly. | User request | Development-only quick login at `/dev` (worker and admin, sample data). Off in production by configuration, double-checked in the route, `localhost` only; tested. |
+
 Test-harness mistakes made along the way, in the open: two shell commands that killed their own shell (`pkill -f` matched itself); test data that assumed an empty database; one test that asserted nothing and was deleted.
 
 ## 3. Decisions that differ from `PLAN.md`
@@ -86,7 +93,7 @@ Test-harness mistakes made along the way, in the open: two shell commands that k
 |---|---|---|
 | Drizzle ORM | Plain SQL migrations and typed queries | Triggers, row locks and partial indexes are written as SQL anyway; Vista handles migrations and wants SQL files; one fewer layer between the code and the money. |
 | Next.js (version unspecified) | Next 15.5, React 19 | Version 14 has unpatched critical advisories. |
-| Authgate for all sign-in | Built-in provider now; Authgate adapter still a placeholder | Authgate's protocol is not known, and the site could not launch without something. Switching is one adapter. |
+| Authgate for all sign-in | Built-in provider now; the Authgate adapter is not written (the placeholder was deleted) | Authgate's protocol is not known, and the site could not launch without something. Switching is one adapter. |
 | Object storage with signed URLs | Local disk, served only through an access check | Needs no account; one web server only. S3 adapter is deferred. |
 | `workspace_id` everywhere | Kept | Vista gives each workspace its own database, which makes the column redundant, but removing it later is easy and adding it later is not. |
 | Playwright visual regression on ui-hub | Browser journey against the real site instead | Tests the product rather than pictures of mock data. |

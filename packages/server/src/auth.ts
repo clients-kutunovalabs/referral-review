@@ -4,7 +4,7 @@ import { checkCode, issueCode } from "./codes";
 import type { Ctx } from "./ctx";
 import { dummyHash, hashPassword, randomToken, sha256, verifyPassword } from "./crypto";
 import { ApiError, fail } from "./errors";
-import { clear, hit, peek } from "./ratelimit";
+import { clear, hit } from "./ratelimit";
 import { revokeUserSessions } from "./sessions";
 
 export const normaliseEmail = (e: string): string => e.trim().toLowerCase();
@@ -126,17 +126,16 @@ export function createBuiltinAuth(ctx: Ctx): AuthProvider {
       const email = normaliseEmail(rawEmail);
       const key = `signin:${email}`;
       const now = ctx.now();
-      const state = await peek(ctx.db, key, SIGN_IN_FAILURES.limit, SIGN_IN_FAILURES.windowSeconds, now);
+      // The attempt is counted BEFORE the password is checked. Counting afterwards let many parallel guesses all pass the check
+      // while the counter was still low. A correct password clears the count, so honest users never accumulate it.
+      const state = await hit(ctx.db, key, SIGN_IN_FAILURES.limit, SIGN_IN_FAILURES.windowSeconds, now);
       if (!state.allowed) throw new ApiError("rate_limited", "Too many failed attempts. Try again later.", 429, state.retryAfterSeconds);
       const [row] = await ctx.db.query<{ user_id: string; password_hash: string; status: string }>(
         `select i.user_id, c.password_hash, u.status from identities i join users u on u.id = i.user_id join auth_credentials c on c.user_id = i.user_id
          where i.workspace_id = $1 and lower(i.email) = $2 and i.is_primary`, [ctx.cfg.workspaceId, email]);
       // Same work whether or not the account exists, so response time does not reveal it.
       const ok = await verifyPassword(password, row?.password_hash ?? (await dummyHash()));
-      if (!row || !ok) {
-        await hit(ctx.db, key, SIGN_IN_FAILURES.limit, SIGN_IN_FAILURES.windowSeconds, now);
-        return fail("invalid_credentials", "Email or password is incorrect.", 401);
-      }
+      if (!row || !ok) return fail("invalid_credentials", "Email or password is incorrect.", 401);
       if (row.status !== "active") return fail("suspended", "This account is suspended. Contact support.", 403);
       await clear(ctx.db, key);
       return { userId: row.user_id };
