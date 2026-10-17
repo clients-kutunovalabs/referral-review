@@ -116,38 +116,44 @@ export const identities: Identity[] = [
   { id: "i2", email: "priya.sales@outlook.com", isPrimary: false, earned: rupees(110) }
 ];
 
-export const activeClaim: Claim = {
-  id: "c1",
-  taskId: "t1",
-  identityId: "i1",
+const ago0 = (hours: number): string => new Date(Date.now() - hours * 3_600_000).toISOString();
+
+/** A claim for a demo task: the task snapshot fields are filled from the task and the email from the identity. */
+function claimOf(id: string, taskId: string, identityId: string, rest: Partial<Claim> & Pick<Claim, "status">): Claim {
+  const t = tasks.find((x) => x.id === taskId)!;
+  const i = identities.find((x) => x.id === identityId)!;
+  return { id, taskId, identityId, identityEmail: i.email, taskTitle: t.title, siteUrl: t.siteUrl, keywords: t.keywords, reward: t.reward, ...rest };
+}
+
+export const activeClaim: Claim = claimOf("c1", "t1", "i1", {
   status: "claimed",
   minutesLeft: 18,
   assignedText:
     "Hi Dr. Rao, I help clinics cut no-shows with automatic appointment reminders and keep patient records in one place. Can I show you a 10-minute demo this week? There's a free 14-day trial, no card needed."
-};
+});
 
 export const claims: Claim[] = [
   activeClaim,
-  { id: "c6", taskId: "t2", identityId: "i2", status: "claimed" },
-  { id: "c7", taskId: "t4", identityId: "i1", status: "claimed", minutesLeft: 11 },
-  { id: "c8", taskId: "t5", identityId: "i1", status: "claimed", minutesLeft: 22, assignedText: scriptPool[1] },
-  { id: "c2", taskId: "t2", identityId: "i1", status: "under_review", submittedLabel: "2 hours ago" },
-  { id: "c3", taskId: "t3", identityId: "i2", status: "approved", outcome: 100, credited: rupees(60), reviewerNote: "Email sent, screenshot clear.", reviewedLabel: "4 Sep, 6:12 PM" },
-  { id: "c4", taskId: "t6", identityId: "i1", status: "partial", outcome: 75, credited: outcomeAmount(rupees(60), 75), reviewerNote: "Screenshot was missing the call duration.", reviewedLabel: "3 Sep, 11:04 AM" },
-  { id: "c5", taskId: "t1", identityId: "i2", status: "rejected", outcome: 0, credited: 0n, reviewerNote: "Screenshot did not show a sent message.", reviewedLabel: "2 Sep, 4:40 PM" },
+  claimOf("c6", "t2", "i2", { status: "claimed" }),
+  claimOf("c7", "t4", "i1", { status: "claimed", minutesLeft: 11 }),
+  claimOf("c8", "t5", "i1", { status: "claimed", minutesLeft: 22, assignedText: scriptPool[1] as string }),
+  claimOf("c2", "t2", "i1", { status: "under_review", submittedAt: ago0(2) }),
+  claimOf("c3", "t3", "i2", { status: "approved", outcome: 100, credited: rupees(60), reviewerNote: "Email sent, screenshot clear.", reviewedAt: "2026-09-04T18:12:00" }),
+  claimOf("c4", "t6", "i1", { status: "partial", outcome: 75, credited: outcomeAmount(rupees(60), 75), reviewerNote: "Screenshot was missing the call duration.", reviewedAt: "2026-09-03T11:04:00" }),
+  claimOf("c5", "t1", "i2", { status: "rejected", outcome: 0, credited: 0n, reviewerNote: "Screenshot did not show a sent message.", reviewedAt: "2026-09-02T16:40:00" })
 ];
 
 export const wallet: Wallet = {
   earned: rupees(420),
   entries: [
-    { id: "w1", title: "Write and send a follow-up email", identityId: "i2", outcome: 100, reward: rupees(60), credited: rupees(60), whenLabel: "4 Sep, 6:12 PM", at: "2026-09-04T18:12:00", reviewerNote: "Email sent, screenshot clear." },
-    { id: "w2", title: "Sign up 3 leads for the newsletter (50%)", identityId: "i1", outcome: 50, reward: rupees(20), credited: rupees(10), whenLabel: "3 Sep, 11:04 AM", at: "2026-09-03T11:04:00", reviewerNote: "Only two of three signups visible, rest of proof was valid." },
-    { id: "w3", title: "Introduce our CRM to a local clinic", identityId: "i1", outcome: 100, reward: rupees(35), credited: rupees(35), whenLabel: "1 Sep, 9:30 AM", at: "2026-09-01T09:30:00" }
+    { id: "w1", title: "Write and send a follow-up email", identityId: "i2", outcome: 100, reward: rupees(60), credited: rupees(60), at: "2026-09-04T18:12:00", reviewerNote: "Email sent, screenshot clear." },
+    { id: "w2", title: "Sign up 3 leads for the newsletter (50%)", identityId: "i1", outcome: 50, reward: rupees(20), credited: rupees(10), at: "2026-09-03T11:04:00", reviewerNote: "Only two of three signups visible, rest of proof was valid." },
+    { id: "w3", title: "Introduce our CRM to a local clinic", identityId: "i1", outcome: 100, reward: rupees(35), credited: rupees(35), at: "2026-09-01T09:30:00" }
   ]
 };
 
-const ago = (hours: number): string => new Date(Date.now() - hours * 3_600_000).toISOString();
-const paidEarlier: PayoutRequest = { id: "p1", who: "You", amount: rupees(250), status: "paid", upiMasked: "pri••@okhdfc", upiFull: "priya@okhdfc", whenLabel: "6 Sep, 2:15 PM", at: "2026-09-06T14:15:00", paidAt: "2026-09-07T17:30:00", paidBy: "Anil (Payments)" };
+const ago = ago0;
+const paidEarlier: PayoutRequest = { id: "p1", who: "You", amount: rupees(250), status: "paid", upiMasked: "pri••@okhdfc", upiFull: "priya@okhdfc", at: "2026-09-06T14:15:00", paidAt: "2026-09-07T17:30:00", paidBy: "Anil (Payments)" };
 
 /** Payout lifecycle scenarios for ui-hub. Wallet numbers are derived (see walletTotals): earned - paid - processing. */
 export const payoutScenarios: Record<PayoutScenario, PayoutRequest[]> = {
@@ -155,12 +161,12 @@ export const payoutScenarios: Record<PayoutScenario, PayoutRequest[]> = {
   none: [],
   /** the default demo: one request is Processing (its amount is blocked, it is not yet in wallet transactions) next to an old paid one */
   processing: [
-    { id: "p2", who: "You", amount: rupees(100), status: "pending", upiMasked: "pri••@okhdfc", upiFull: "priya@okhdfc", whenLabel: "today", at: ago(3) },
+    { id: "p2", who: "You", amount: rupees(100), status: "pending", upiMasked: "pri••@okhdfc", upiFull: "priya@okhdfc", at: ago(3) },
     paidEarlier
   ],
   /** the admin paid and confirmed it: it moved from Processing into Total withdrawn and shows in wallet transactions */
   paid: [
-    { id: "p2", who: "You", amount: rupees(100), status: "paid", upiMasked: "pri••@okhdfc", upiFull: "priya@okhdfc", whenLabel: "yesterday", at: ago(30), paidAt: ago(5), paidBy: "Sneha (Payments)" },
+    { id: "p2", who: "You", amount: rupees(100), status: "paid", upiMasked: "pri••@okhdfc", upiFull: "priya@okhdfc", at: ago(30), paidAt: ago(5), paidBy: "Sneha (Payments)" },
     paidEarlier
   ]
 };
@@ -168,9 +174,9 @@ export const payoutScenarios: Record<PayoutScenario, PayoutRequest[]> = {
 export const userPayouts: PayoutRequest[] = payoutScenarios.processing;
 
 export const adminPayouts: PayoutRequest[] = [
-  { id: "a1", who: "Rahul K.", amount: rupees(170), status: "pending", upiMasked: "rahul••@upi", upiFull: "rahul.kumar@okhdfc", whenLabel: "1 hour ago" },
-  { id: "a2", who: "Sara M.", amount: rupees(90), status: "pending", upiMasked: "sara••@upi", upiFull: "sara.m@oksbi", whenLabel: "4 hours ago" },
-  { id: "a3", who: "Karan D.", amount: rupees(220), status: "pending", upiMasked: "9876•••@upi", upiFull: "9876543210@ybl", whenLabel: "yesterday" }
+  { id: "a1", who: "Rahul K.", amount: rupees(170), status: "pending", upiMasked: "rahul••@upi", upiFull: "rahul.kumar@okhdfc", at: ago(1) },
+  { id: "a2", who: "Sara M.", amount: rupees(90), status: "pending", upiMasked: "sara••@upi", upiFull: "sara.m@oksbi", at: ago(4) },
+  { id: "a3", who: "Karan D.", amount: rupees(220), status: "pending", upiMasked: "9876•••@upi", upiFull: "9876543210@ybl", at: ago(26) }
 ];
 
 export const reviewQueue: ReviewQueueItem[] = [
@@ -180,14 +186,14 @@ export const reviewQueue: ReviewQueueItem[] = [
     identityEmail: "priya••@gmail.com",
     taskTitle: "Introduce our CRM to a local clinic",
     reward: rupees(40),
-    waitingLabel: "12 min ago", waitingMinutes: 12, timeLimitMinutes: 30, timeTakenMinutes: 23,
+    submittedAt: ago(0.2), waitingMinutes: 12, timeLimitMinutes: 30, timeTakenMinutes: 23,
     workerNote: "Presented to Dr. Rao, demo booked for Friday. Screenshot attached above.",
     keywords: ["appointment reminders", "patient records", "free 14-day trial"],
     keywordsMatched: ["appointment reminders", "free 14-day trial"],
     assignedText: activeClaim.assignedText
   },
-  { id: "r2", worker: "Amit V.", identityEmail: "amit••@gmail.com", taskTitle: "Sign up 3 leads for the newsletter", reward: rupees(15), waitingLabel: "1 hour ago", waitingMinutes: 60, timeLimitMinutes: null, timeTakenMinutes: 42, keywords: [], keywordsMatched: [] },
-  { id: "r3", worker: "Neha J.", identityEmail: "neha••@gmail.com", taskTitle: "Write and send a follow-up email", reward: rupees(60), waitingLabel: "3 hours ago", waitingMinutes: 180, timeLimitMinutes: 45, timeTakenMinutes: 38, workerNote: "Sent the follow-up email with pricing and offered onboarding help. Screenshot of the sent mail attached.", keywords: ["pricing", "onboarding support"], keywordsMatched: ["pricing"] }
+  { id: "r2", worker: "Amit V.", identityEmail: "amit••@gmail.com", taskTitle: "Sign up 3 leads for the newsletter", reward: rupees(15), submittedAt: ago(1), waitingMinutes: 60, timeLimitMinutes: null, timeTakenMinutes: 42, keywords: [], keywordsMatched: [] },
+  { id: "r3", worker: "Neha J.", identityEmail: "neha••@gmail.com", taskTitle: "Write and send a follow-up email", reward: rupees(60), submittedAt: ago(3), waitingMinutes: 180, timeLimitMinutes: 45, timeTakenMinutes: 38, workerNote: "Sent the follow-up email with pricing and offered onboarding help. Screenshot of the sent mail attached.", keywords: ["pricing", "onboarding support"], keywordsMatched: ["pricing"] }
 ];
 
 export const adminUsers: AdminUserRow[] = [

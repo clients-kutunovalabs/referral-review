@@ -1,8 +1,8 @@
 import {
-  AuthError, PASSWORD_MIN_LENGTH,
+  AuthError, OTP_RULES, PASSWORD_MIN_LENGTH,
   type AuthPort, type AuthSession, type CodePurpose, type EmailSenderPort, type EmailVerificationPort, type OutgoingEmail
 } from "@rr/core";
-import { OTP_RULES, OtpStore, type OtpOptions } from "./otp";
+import { OtpStore, type OtpOptions } from "./otp";
 
 /** In-memory adapters for ui-hub and tests. Passwords are held in the clear here; the real adapter never sees one. */
 
@@ -113,8 +113,8 @@ export function createMockAuth(opts: MockAuthOptions = {}): AuthPort {
   };
 }
 
-/** Extra emails on one account. The site verifies them itself with a code; `isTaken` lets the data layer veto an email another account already holds. */
-export function createMockEmailVerification(opts: OtpOptions & { sender?: EmailSenderPort; isTaken?: (email: string) => boolean } = {}): EmailVerificationPort {
+/** Extra emails on one account: sends the one-time code. `isTaken` lets the data layer veto an email another account already holds. */
+export function createMockEmailVerification(opts: OtpOptions & { sender?: EmailSenderPort; isTaken?: (email: string) => boolean } = {}): EmailVerificationPort & { check: (email: string, code: string) => void } {
   const sender = opts.sender ?? createOutbox();
   const otp = new OtpStore(opts);
   return {
@@ -126,6 +126,7 @@ export function createMockEmailVerification(opts: OtpOptions & { sender?: EmailS
       if (code) await sender.send({ to: email, kind: "identity_code", code, expiresInMinutes: OTP_RULES.ttlMs / 60_000 });
       return sent;
     },
-    async verify(rawEmail, code) { otp.check(`identity:${normalise(rawEmail)}`, code); }
+    /** What UserApi.addIdentity does with the code on the server. Exposed so the mock API can do the same. */
+    check(rawEmail, code) { otp.check(`identity:${normalise(rawEmail)}`, code); }
   };
 }

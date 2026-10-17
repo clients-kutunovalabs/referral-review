@@ -125,8 +125,8 @@ describe("extra email verification (site-owned)", () => {
     const v = createMockEmailVerification({ sender: outbox });
     await v.send("Second@Example.com");
     expect(outbox.sent[0]).toMatchObject({ to: "second@example.com", kind: "identity_code" });
-    await expect(v.verify("second@example.com", code(outbox))).resolves.toBeUndefined();
-    await failsWith(v.verify("second@example.com", code(outbox)), "invalid_code");
+    expect(() => v.check("second@example.com", code(outbox))).not.toThrow();
+    expect(() => v.check("second@example.com", code(outbox))).toThrow(/not valid/);
   });
   it("refuses an email another account holds", async () => {
     const v = createMockEmailVerification({ isTaken: (e) => e === "taken@b.co" });

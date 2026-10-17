@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { activeTill } from "./time";
+import { activeTill, agoLabel } from "./time";
 
 const now = Date.parse("2026-10-01T10:00:00Z");
 const at = (ms: number) => new Date(now + ms).toISOString();
@@ -59,5 +59,22 @@ describe("time limit", () => {
     expect(formatLimit(60)).toBe("1 h");
     expect(formatLimit(90)).toBe("1 h 30 min");
     expect(formatLimit(1440)).toBe("24 h");
+  });
+});
+
+describe("agoLabel", () => {
+  const now = Date.parse("2026-09-10T12:00:00Z");
+  const ago = (ms: number) => new Date(now - ms).toISOString();
+  it("reads naturally at each scale", () => {
+    expect(agoLabel(ago(10_000), now)).toBe("just now");
+    expect(agoLabel(ago(12 * 60_000), now)).toBe("12 min ago");
+    expect(agoLabel(ago(60 * 60_000), now)).toBe("1 hour ago");
+    expect(agoLabel(ago(3 * 3_600_000), now)).toBe("3 hours ago");
+    expect(agoLabel(ago(30 * 3_600_000), now)).toBe("yesterday");
+    expect(agoLabel(ago(5 * 86_400_000), now)).toBe("5 Sep");
+  });
+  it("never shows a negative time and survives bad input", () => {
+    expect(agoLabel(new Date(now + 60_000).toISOString(), now)).toBe("just now");
+    expect(agoLabel("not a date", now)).toBe("");
   });
 });

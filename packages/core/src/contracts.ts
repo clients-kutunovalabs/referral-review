@@ -33,16 +33,25 @@ export interface Task {
 }
 
 export type ClaimStatus = "claimed" | "under_review" | "approved" | "partial" | "rejected" | "expired" | "void";
+/** Script hand-out for a claim: "pending" while an AI script is still being written, "failed" if it could not be (worker can retry). */
+export type TextStatus = "none" | "ready" | "pending" | "failed";
 
 export interface Claim {
   id: string;
   taskId: string;
   identityId: string;
+  identityEmail: string;
   status: ClaimStatus;
-  minutesLeft?: number; // active claims only
-  submittedLabel?: string;
-  reviewedLabel?: string; // when it was reviewed / ended
+  /** the task as it was when claimed: later edits or removal never change what a worker sees on an existing claim */
+  taskTitle: string;
+  siteUrl: string;
+  keywords: string[];
+  reward: Paise;
+  minutesLeft?: number; // active claims only; undefined = no time limit
+  submittedAt?: string; // ISO
+  reviewedAt?: string; // ISO: when it was reviewed / ended
   assignedText?: string; // script given at claim time
+  textStatus?: TextStatus;
   outcome?: OutcomePercent;
   credited?: Paise;
   reviewerNote?: string;
@@ -62,8 +71,7 @@ export interface WalletEntry {
   outcome: OutcomePercent;
   reward: Paise;
   credited: Paise;
-  whenLabel: string;
-  at: string; // ISO, for ordering
+  at: string; // ISO, for ordering and display
   reviewerNote?: string;
 }
 
@@ -79,11 +87,11 @@ export interface PayoutRequest {
   amount: Paise;
   status: PayoutStatus;
   upiMasked: string;
-  upiFull: string; // only ever rendered on the admin payout detail screen
-  whenLabel: string;
-  at?: string; // ISO: when requested
+  upiFull?: string; // only ever sent for, and rendered on, the admin payout detail screen
+  at: string; // ISO: when requested
   paidAt?: string; // ISO: when marked paid
   paidBy?: string;
+  proofUrl?: string; // payment screenshot, admin side only
 }
 
 export interface ReviewQueueItem {
@@ -92,8 +100,9 @@ export interface ReviewQueueItem {
   identityEmail: string;
   taskTitle: string;
   reward: Paise;
-  waitingLabel: string;
-  waitingMinutes: number; // for sorting
+  submittedAt: string; // ISO
+  waitingMinutes: number; // for sorting and the "12 min ago" label
+  proofUrl?: string; // the screenshot
   timeLimitMinutes: number | null; // the task's limit, null = unlimited
   timeTakenMinutes: number; // claim start to proof submitted
   workerNote?: string;
@@ -178,5 +187,7 @@ export interface Ticket {
   createdAt: string; // ISO
   updatedAt: string; // ISO
   resolvedAt?: string; // ISO, set when an admin marks it resolved
+  /** Lists send tickets without messages and say here whether the customer spoke last. */
+  needsReply?: boolean;
   messages: TicketMessage[];
 }

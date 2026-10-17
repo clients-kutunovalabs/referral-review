@@ -72,3 +72,16 @@ export function hoursToMinutes(input: string): number | null | "invalid" {
   const minutes = Math.round(Number(t) * 60);
   return minutes >= 1 ? minutes : "invalid";
 }
+
+/** "just now", "12 min ago", "3 hours ago", "yesterday", then a date. Pure; pass `now` for tests. */
+export function agoLabel(iso: string, now: number = Date.now()): string {
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return "";
+  const mins = Math.max(0, Math.floor((now - t) / 60_000));
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins} min ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
+  if (hours < 48) return "yesterday";
+  return shortDate(new Date(t), new Date(now));
+}

@@ -1,12 +1,4 @@
-import { AuthError, CODE_LENGTH, type CodeSent } from "@rr/core";
-
-/** One-time code rules from docs/PLAN.md. Mock stores the code itself; a real store keeps only a hash. */
-export const OTP_RULES = {
-  ttlMs: 10 * 60_000,
-  resendMs: 30_000,
-  maxWrongAttempts: 5,
-  maxRequestsPerHour: 5
-} as const;
+import { AuthError, CODE_LENGTH, OTP_RULES, type CodeSent } from "@rr/core";
 
 export interface OtpOptions {
   now?: () => number;

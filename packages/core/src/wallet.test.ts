@@ -4,7 +4,7 @@ import { walletTotals } from "./wallet";
 import type { PayoutRequest } from "./contracts";
 
 const p = (id: string, amount: bigint, status: PayoutRequest["status"]): PayoutRequest => ({
-  id, who: "You", amount, status, upiMasked: "pri••@okhdfc", upiFull: "priya@okhdfc", whenLabel: ""
+  id, who: "You", amount, status, upiMasked: "pri••@okhdfc", upiFull: "priya@okhdfc", at: "2026-09-06T14:15:00.000Z"
 });
 const earned = rupees(420);
 

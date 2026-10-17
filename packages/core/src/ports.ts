@@ -32,7 +32,16 @@ export type CodePurpose = "signup" | "reset";
 export interface CodeSent { expiresInSeconds: number; resendAfterSeconds: number }
 
 export const PASSWORD_MIN_LENGTH = 8;
+export const PASSWORD_MAX_LENGTH = 128;
 export const CODE_LENGTH = 6;
+
+/** One-time code rules (docs/PLAN.md). Shared by the mock and the real server so they cannot drift. */
+export const OTP_RULES = {
+  ttlMs: 10 * 60_000,
+  resendMs: 30_000,
+  maxWrongAttempts: 5,
+  maxRequestsPerHour: 5
+} as const;
 
 export interface AuthPort {
   /** Email a one-time code. For "signup", `profile` (name, phone, ...) is kept with the account. Unknown emails on "reset" resolve silently so accounts cannot be enumerated. */
@@ -50,9 +59,9 @@ export interface AuthPort {
 
 /* ---------- Extra emails (identities): verified by the site itself, not by Authgate ---------- */
 
+/** Sends the one-time code. Checking it happens in UserApi.addIdentity, so "code is right" and "email is linked" are one atomic step. */
 export interface EmailVerificationPort {
   send(email: string): Promise<CodeSent>;
-  verify(email: string, code: string): Promise<void>;
 }
 
 /* ---------- Outgoing email ---------- */
@@ -70,6 +79,8 @@ export const UPLOAD_RULES = { maxBytes: 5 * 1024 * 1024, contentTypes: ["image/p
 export interface StoragePort {
   /** Rejects wrong types and oversize files itself; the browser check is only a convenience. */
   put(input: { kind: UploadKind; contentType: string; bytes: Uint8Array }): Promise<{ key: string }>;
+  /** Reads a stored file back. The server streams it after checking who is asking. */
+  get(key: string): Promise<{ bytes: Uint8Array; contentType: string }>;
   signedUrl(key: string, ttlSeconds: number): Promise<string>;
 }
 
