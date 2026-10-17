@@ -1,9 +1,11 @@
 import { useState } from "react";
-import { AdminApp, type AdminScreen } from "@rr/ui";
+import { AdminApp, ServicesProvider, type AdminScreen } from "@rr/ui";
+import { adminDemo, services } from "../services";
 import { fixtures } from "@rr/core";
-import { Gallery, GalleryItem, HubPage, JumpPanel, PhoneFrame, type JumpGroup } from "@rr/ui/hub";
+import { DeviceFrame, DeviceSwitch, Gallery, GalleryItem, HubPage, JumpPanel, PhoneFrame, type Device, type JumpGroup } from "@rr/ui/hub";
 
 const JUMPS: Record<string, { screen: AdminScreen; tab?: "users" | "team" | "roles"; label: string }> = {
+  login: { screen: "login", label: "Log in" },
   dashboard: { screen: "dashboard", label: "Dashboard" },
   tasks: { screen: "tasks", label: "Task list" },
   newtask: { screen: "newtask", label: "New task (task script, AI fields)" },
@@ -20,7 +22,7 @@ const JUMPS: Record<string, { screen: AdminScreen; tab?: "users" | "team" | "rol
   ticket: { screen: "ticket", label: "Support: ticket chat" }
 };
 const GROUPS: JumpGroup<string>[] = [
-  { label: "Overview", items: ["dashboard", "access", "accessTeam", "accessRoles"].map((id) => ({ id, label: JUMPS[id]!.label })) },
+  { label: "Overview", items: ["login", "dashboard", "access", "accessTeam", "accessRoles"].map((id) => ({ id, label: JUMPS[id]!.label })) },
   { label: "Tasks", items: ["tasks", "newtask", "taskdetail"].map((id) => ({ id, label: JUMPS[id]!.label })) },
   { label: "Review", items: ["reviewqueue", "reviewitem"].map((id) => ({ id, label: JUMPS[id]!.label })) },
   { label: "Payments", items: ["payouts", "payoutitem"].map((id) => ({ id, label: JUMPS[id]!.label })) },
@@ -31,9 +33,11 @@ const GROUPS: JumpGroup<string>[] = [
 export function AdminHub({ ownerOnly = false }: { ownerOnly?: boolean } = {}) {
   const [jump, setJump] = useState("dashboard");
   const [all, setAll] = useState(false);
+  const [device, setDevice] = useState<Device>("desktop");
   const [rev, setRev] = useState(0);
   const [viewer, setViewer] = useState("role-owner");
   return (
+    <ServicesProvider services={services} demo={adminDemo}>
     <HubPage>
       <JumpPanel title="Admin side" hint={ownerOnly ? "Viewing as the Owner role." : "Switch the viewing role to see permission-gated navigation and 403 screens."} groups={GROUPS} active={jump} onPick={(id) => { setJump(id); setRev(rev + 1); setAll(false); }}>
         {ownerOnly ? null : <label className="field" style={{ marginBottom: 10 }}>View as
@@ -41,6 +45,7 @@ export function AdminHub({ ownerOnly = false }: { ownerOnly?: boolean } = {}) {
             {fixtures.roles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
           </select>
         </label>}
+        <DeviceSwitch value={device} onChange={(d) => { setDevice(d); setAll(false); }} />
         <button className={`jumpbtn${all ? " on" : ""}`} onClick={() => setAll(!all)} style={{ marginBottom: 14 }}>{all ? "Back to interactive" : "Show all screens at once"}</button>
       </JumpPanel>
       {all ? (
@@ -50,8 +55,9 @@ export function AdminHub({ ownerOnly = false }: { ownerOnly?: boolean } = {}) {
           ))}
         </Gallery>
       ) : (
-        <PhoneFrame><AdminApp key={`${jump}-${rev}-${viewer}`} initialScreen={JUMPS[jump]!.screen} {...(JUMPS[jump]!.tab ? { initialAccessTab: JUMPS[jump]!.tab } : {})} viewerRoleIds={[viewer]} /></PhoneFrame>
+        <DeviceFrame device={device}><AdminApp key={`${jump}-${rev}-${viewer}`} initialScreen={JUMPS[jump]!.screen} {...(JUMPS[jump]!.tab ? { initialAccessTab: JUMPS[jump]!.tab } : {})} viewerRoleIds={[viewer]} /></DeviceFrame>
       )}
     </HubPage>
+    </ServicesProvider>
   );
 }

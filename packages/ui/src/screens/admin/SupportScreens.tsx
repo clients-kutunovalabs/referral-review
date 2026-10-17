@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { whenLabel } from "@rr/core";
-import { Button, EmptyState, ListRow, Select, StatusPill, Tabs, TopBar } from "../../primitives";
+import { Button, DataTable, EmptyState, ListRow, Select, StatusPill, Tabs, TopBar, useLayout } from "../../primitives";
 import { Composer, Conversation } from "../shared/Conversation";
 import { assignTicket, needsReply, resolveTicket, sendMessage, useTickets } from "../../demo/ticketStore";
 
@@ -11,12 +11,24 @@ export function AdminTicketList({ tab, setTab, onOpen }: { tab: SupportTab; setT
   const open = tickets.filter((t) => t.status === "open");
   const closed = tickets.filter((t) => t.status === "closed");
   const list = tab === "open" ? open : closed;
+  const wide = useLayout() !== "phone";
+  const waiting = open.filter(needsReply).length;
   return (
-    <div className="screen"><TopBar title="Support" />
+    <div className="screen"><TopBar title="Support" subtitle={`${open.length} open · ${waiting} need a reply`} />
       <Tabs<SupportTab> value={tab} onChange={setTab} tabs={[{ id: "open", label: `Open (${open.length})` }, { id: "closed", label: `Closed (${closed.length})` }]} />
       <div className="scrollarea"><div className="content">
         {list.length === 0 ? <EmptyState>{tab === "open" ? "No open tickets." : "No closed tickets yet."}</EmptyState> : null}
-        {list.map((t) => (
+        {wide && list.length ? (
+          <DataTable caption="Support tickets" rows={list} rowKey={(t) => t.id} onRowClick={(t) => onOpen(t.id)} columns={[
+            { key: "no", header: "#", width: "80px", render: (t) => `#${t.number}` },
+            { key: "title", header: "Title", render: (t) => t.title },
+            { key: "who", header: "Customer", render: (t) => t.customerName },
+            { key: "assignee", header: "Assigned to", width: "160px", render: (t) => t.assignee ?? "Unassigned" },
+            { key: "when", header: tab === "open" ? "Updated" : "Resolved", width: "130px", render: (t) => whenLabel(tab === "open" ? t.updatedAt : t.resolvedAt ?? t.updatedAt) },
+            { key: "state", header: "Status", width: "130px", render: (t) => (tab === "open" && needsReply(t) ? <StatusPill tone="coral">Needs reply</StatusPill> : <StatusPill tone={t.status === "closed" ? "gray" : "teal"}>{t.status === "closed" ? "Resolved" : "Open"}</StatusPill>) }
+          ]} />
+        ) : null}
+        {wide ? null : list.map((t) => (
           <ListRow key={t.id} onClick={() => onOpen(t.id)} title={<strong style={{ fontWeight: 500 }}>{t.title}</strong>}
             right={tab === "open" && needsReply(t) ? <StatusPill tone="coral">Needs reply</StatusPill> : <span className="sub">#{t.number}</span>}
             sub={`${t.customerName} · ${t.assignee ? `Assigned to ${t.assignee}` : "Unassigned"} · ${t.status === "closed" ? `Resolved ${whenLabel(t.resolvedAt ?? t.updatedAt)}` : `Updated ${whenLabel(t.updatedAt)}`}`} />

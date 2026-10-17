@@ -26,12 +26,21 @@ importers:
 
   apps/ui-hub:
     dependencies:
+      '@rr/ai':
+        specifier: workspace:*
+        version: link:../../packages/ai
+      '@rr/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
       '@rr/core':
         specifier: workspace:*
         version: link:../../packages/core
       '@rr/money':
         specifier: workspace:*
         version: link:../../packages/money
+      '@rr/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
       '@rr/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -62,9 +71,25 @@ importers:
 
   apps/worker: {}
 
-  packages/ai: {}
+  packages/ai:
+    dependencies:
+      '@rr/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.4)
 
-  packages/auth: {}
+  packages/auth:
+    dependencies:
+      '@rr/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.4)
 
   packages/config: {}
 
@@ -86,7 +111,15 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.4)
 
-  packages/storage: {}
+  packages/storage:
+    dependencies:
+      '@rr/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.4)
 
   packages/ui:
     dependencies:

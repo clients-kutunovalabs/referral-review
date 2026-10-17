@@ -12,8 +12,11 @@
     "fonts:standalone": "node scripts/fetch-fonts.mjs"
   },
   "dependencies": {
+    "@rr/ai": "workspace:*",
+    "@rr/auth": "workspace:*",
     "@rr/core": "workspace:*",
     "@rr/money": "workspace:*",
+    "@rr/storage": "workspace:*",
     "@rr/ui": "workspace:*",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"

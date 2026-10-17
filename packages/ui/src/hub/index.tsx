@@ -1,8 +1,19 @@
 import "../styles/index.css";
 import "./hub.css";
 import type { ReactNode } from "react";
+import { Segmented, type Device } from "../primitives";
 
-export { PhoneFrame } from "../primitives";
+export { DeviceFrame, PhoneFrame, type Device } from "../primitives";
+
+/** Switches the interactive preview between a phone, a tablet and a desktop browser window. */
+export function DeviceSwitch({ value, onChange }: { value: Device; onChange: (d: Device) => void }) {
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <div className="glabel">Preview as</div>
+      <Segmented<Device> label="Preview as" value={value} onChange={onChange} options={[{ id: "phone", label: "Phone" }, { id: "tablet", label: "Tablet" }, { id: "desktop", label: "Desktop" }]} />
+    </div>
+  );
+}
 
 export interface HubLink { href: string; label: string }
 export function HubNav({ links, path, env }: { links: HubLink[]; path: string; env: string }) {

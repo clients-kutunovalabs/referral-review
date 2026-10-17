@@ -1,13 +1,18 @@
 import { useState } from "react";
-import { UserApp, type MyTab, type UserScreen } from "@rr/ui";
+import { ServicesProvider, UserApp, isUserAuthScreen, type MyTab, type UserScreen } from "@rr/ui";
+import { services, userDemo } from "../services";
 import type { PayoutScenario } from "@rr/core";
-import { Gallery, GalleryItem, HubPage, JumpPanel, PhoneFrame, type JumpGroup } from "@rr/ui/hub";
+import { DeviceFrame, DeviceSwitch, Gallery, GalleryItem, HubPage, JumpPanel, PhoneFrame, type Device, type JumpGroup } from "@rr/ui/hub";
 
 interface Jump { screen: UserScreen; tab?: MyTab; scenario?: PayoutScenario; ticketId?: string; helpTab?: "open" | "closed" }
 const JUMPS: Record<string, Jump & { label: string }> = {
   login: { screen: "login", label: "Log in" },
   register: { screen: "register", label: "Create account" },
   verifyEmail: { screen: "verifyEmail", label: "Verify email (one-time code)" },
+  createPassword: { screen: "createPassword", label: "Create a password" },
+  forgot: { screen: "forgot", label: "Forgot password" },
+  resetVerify: { screen: "resetVerify", label: "Reset: enter the code" },
+  resetPassword: { screen: "resetPassword", label: "Reset: set a new password" },
   board: { screen: "board", label: "Task board" },
   detail: { screen: "detail", label: "Task detail (overlay)" },
   claimed: { screen: "claimed", label: "Task accepted" },
@@ -35,7 +40,7 @@ const JUMPS: Record<string, Jump & { label: string }> = {
   payoutPaid: { screen: "payout", scenario: "paid", label: "Payout: request paid" }
 };
 const GROUPS: JumpGroup<string>[] = [
-  { label: "Account", items: ["login", "register", "verifyEmail", "identities"].map((id) => ({ id, label: JUMPS[id]!.label })) },
+  { label: "Account", items: ["login", "register", "verifyEmail", "createPassword", "forgot", "resetVerify", "resetPassword", "identities"].map((id) => ({ id, label: JUMPS[id]!.label })) },
   { label: "Tasks", items: ["board", "detail", "claimed", "active", "review", "completed", "rejected", "submit", "submitted"].map((id) => ({ id, label: JUMPS[id]!.label })) },
   { label: "Money", items: ["wallet", "payout", "payoutSent"].map((id) => ({ id, label: JUMPS[id]!.label })) },
   { label: "Help and support", items: ["help", "helpClosed", "createTicket", "ticketOpen", "ticketNew", "ticketClosed"].map((id) => ({ id, label: JUMPS[id]!.label })) },
@@ -45,24 +50,28 @@ const GROUPS: JumpGroup<string>[] = [
 export function UserHub() {
   const [jump, setJump] = useState("board");
   const [all, setAll] = useState(false);
+  const [device, setDevice] = useState<Device>("phone");
   const [rev, setRev] = useState(0);
   const j = JUMPS[jump]!;
   return (
+    <ServicesProvider services={services} demo={userDemo}>
     <HubPage>
       <JumpPanel title="User side" hint="Jump to any screen, or tap through the phone like a real user." groups={GROUPS} active={jump} onPick={(id) => { setJump(id); setRev(rev + 1); setAll(false); }}>
+        <DeviceSwitch value={device} onChange={(d) => { setDevice(d); setAll(false); }} />
         <button className={`jumpbtn${all ? " on" : ""}`} onClick={() => setAll(!all)} style={{ marginBottom: 14 }}>{all ? "Back to interactive" : "Show all screens at once"}</button>
       </JumpPanel>
       {all ? (
         <Gallery>
           {Object.entries(JUMPS).map(([id, s]) => (
             <GalleryItem key={id} caption={s.label}>
-              <PhoneFrame><UserApp initialScreen={s.screen} {...(s.tab ? { initialTab: s.tab } : {})} {...(s.scenario ? { payoutScenario: s.scenario } : {})} {...(s.ticketId ? { initialTicketId: s.ticketId } : {})} {...(s.helpTab ? { initialHelpTab: s.helpTab } : {})} loggedIn={id !== "login" && id !== "register" && id !== "verifyEmail"} /></PhoneFrame>
+              <PhoneFrame><UserApp initialScreen={s.screen} {...(s.tab ? { initialTab: s.tab } : {})} {...(s.scenario ? { payoutScenario: s.scenario } : {})} {...(s.ticketId ? { initialTicketId: s.ticketId } : {})} {...(s.helpTab ? { initialHelpTab: s.helpTab } : {})} loggedIn={!isUserAuthScreen(s.screen)} /></PhoneFrame>
             </GalleryItem>
           ))}
         </Gallery>
       ) : (
-        <PhoneFrame><UserApp key={`${jump}-${rev}`} initialScreen={j.screen} {...(j.tab ? { initialTab: j.tab } : {})} {...(j.scenario ? { payoutScenario: j.scenario } : {})} {...(j.ticketId ? { initialTicketId: j.ticketId } : {})} {...(j.helpTab ? { initialHelpTab: j.helpTab } : {})} loggedIn={jump !== "login" && jump !== "register" && jump !== "verifyEmail"} /></PhoneFrame>
+        <DeviceFrame device={device}><UserApp key={`${jump}-${rev}`} initialScreen={j.screen} {...(j.tab ? { initialTab: j.tab } : {})} {...(j.scenario ? { payoutScenario: j.scenario } : {})} {...(j.ticketId ? { initialTicketId: j.ticketId } : {})} {...(j.helpTab ? { initialHelpTab: j.helpTab } : {})} loggedIn={!isUserAuthScreen(j.screen)} /></DeviceFrame>
       )}
     </HubPage>
+    </ServicesProvider>
   );
 }

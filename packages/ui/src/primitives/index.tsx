@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode, type InputHTMLAttributes, type TextareaHTMLAttributes, type SelectHTMLAttributes } from "react";
+import { createContext, useContext, useEffect, useId, useLayoutEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode, type InputHTMLAttributes, type TextareaHTMLAttributes, type SelectHTMLAttributes } from "react";
 import { copyText } from "../lib/clipboard";
 
 export type Tone = "teal" | "amber" | "coral" | "green" | "gray";
@@ -40,6 +40,29 @@ export function Field({ label, error, hint, children }: { label: string; error?:
 }
 
 export function Input(props: InputHTMLAttributes<HTMLInputElement>) { return <input {...props} />; }
+
+/** Password box with a Show/Hide switch. The switch sits outside the <label> so it does not become part of the field's name. */
+export function PasswordField({ label, error, hint, autoComplete, value, onChange, disabled }: {
+  label: string; error?: string | undefined; hint?: string; autoComplete: "current-password" | "new-password";
+  value: string; onChange: (value: string) => void; disabled?: boolean;
+}) {
+  const [shown, setShown] = useState(false);
+  const id = useId();
+  return (
+    <div className="field-group">
+      <label htmlFor={id}>{label}</label>
+      <div className="pw">
+        <input id={id} type={shown ? "text" : "password"} autoComplete={autoComplete} value={value} disabled={disabled}
+          onChange={(e) => onChange(e.target.value)} aria-invalid={error ? true : undefined} />
+        <button type="button" className="pw-toggle" aria-pressed={shown} aria-label={shown ? "Hide password" : "Show password"} onClick={() => setShown(!shown)}>
+          {shown ? "Hide" : "Show"}
+        </button>
+      </div>
+      {hint && !error ? <div className="hint">{hint}</div> : null}
+      {error ? <div className="field-error" role="alert">{error}</div> : null}
+    </div>
+  );
+}
 export function Textarea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) { return <textarea {...props} />; }
 export function Select(props: SelectHTMLAttributes<HTMLSelectElement>) { return <select {...props} />; }
 
@@ -55,12 +78,18 @@ export function Tabs<T extends string>({ tabs, value, onChange, inline }: { tabs
   );
 }
 
-export function TopBar({ title, onBack, right }: { title: string; onBack?: () => void; right?: ReactNode }) {
+/** Phone: a slim bar. Tablet and desktop: the page header, with the title, an optional subtitle and the page's main action on the right. */
+export function TopBar({ title, onBack, right, subtitle, actions }: { title: string; onBack?: () => void; right?: ReactNode; subtitle?: ReactNode; actions?: ReactNode }) {
+  const layout = useLayout();
   return (
     <div className="topbar">
       {onBack ? <button className="back" aria-label="Back" onClick={onBack}>&larr;</button> : null}
-      <span className="grow">{title}</span>
+      <div className="grow">
+        <h1 className="page-title">{title}</h1>
+        {subtitle && layout !== "phone" ? <div className="page-sub">{subtitle}</div> : null}
+      </div>
       {right}
+      {layout !== "phone" && actions ? <div className="page-actions">{actions}</div> : null}
     </div>
   );
 }
@@ -89,16 +118,28 @@ export function Icon({ name }: { name: IconName }) {
   );
 }
 
-export interface NavItem { id: string; label: string; badge?: number; icon?: IconName }
-export function BottomNav({ items, active, onSelect }: { items: NavItem[]; active: string; onSelect: (id: string) => void }) {
+export interface NavItem {
+  id: string; label: string; badge?: number; icon?: IconName;
+  /** Wider label used in the desktop sidebar (e.g. "Review queue" for "Review"). */
+  longLabel?: string;
+  /** Only shown in the tablet rail and desktop sidebar; the phone bar stays at five items. */
+  wideOnly?: boolean;
+}
+/** Phone: bottom bar. Tablet: icon rail. Desktop: sidebar with the product name on top and `footer` at the bottom. */
+export function BottomNav({ items, active, onSelect, brand, footer }: { items: NavItem[]; active: string; onSelect: (id: string) => void; brand?: string; footer?: ReactNode }) {
+  const layout = useLayout();
+  const shown = items.filter((i) => !i.wideOnly || layout !== "phone");
   return (
-    <nav className={`bottomnav${items.length > 5 ? " dense" : ""}`} aria-label="Main">
-      {items.map((i) => (
+    <nav className={`bottomnav${shown.length > 5 && layout === "phone" ? " dense" : ""}`} aria-label="Main">
+      {brand ? <div className="nav-brand">{brand}</div> : null}
+      {shown.map((i) => (
         <button key={i.id} className={`navitem${i.id === active ? " on" : ""}`} aria-current={i.id === active ? "page" : undefined} onClick={() => onSelect(i.id)}>
-          {i.icon ? <span className="navicon"><Icon name={i.icon} />{i.badge ? <span className="badge">{i.badge}</span> : null}</span> : <span className="navdot" />}
-          <span>{i.label}{!i.icon && i.badge ? <span className="badge">{i.badge}</span> : null}</span>
+          {i.icon ? <span className="navicon"><Icon name={i.icon} />{i.badge ? <span className="badge on-icon">{i.badge}</span> : null}</span> : <span className="navdot" />}
+          <span className="navlabel">{layout === "desktop" ? i.longLabel ?? i.label : i.label}</span>
+          {i.badge ? <span className="badge in-row">{i.badge}</span> : null}
         </button>
       ))}
+      {footer ? <div className="nav-footer">{footer}</div> : null}
     </nav>
   );
 }
@@ -188,8 +229,39 @@ export function Countdown({ minutes }: { minutes: number }) {
   return <StatusPill tone={secs < 300 ? "coral" : "amber"}>{h > 0 ? `${h}:` : ""}{mm}:{ss} left</StatusPill>;
 }
 
+/* ---------- Layout: phone, tablet and desktop follow the width of the app frame, not the browser window ---------- */
+
+export type Layout = "phone" | "tablet" | "desktop";
+export const BREAKPOINTS = { tablet: 640, desktop: 1024 } as const;
+export const layoutFor = (width: number): Layout => (width >= BREAKPOINTS.desktop ? "desktop" : width >= BREAKPOINTS.tablet ? "tablet" : "phone");
+
+const LayoutContext = createContext<Layout>("phone");
+/** The layout of the frame this component is drawn in. Screens use it to choose cards or a table, a footer button or a header action. */
+export const useLayout = (): Layout => useContext(LayoutContext);
+
+/** Root of an app. Measures itself, so the same screens work inside ui-hub's phone, tablet and desktop previews and on a real site. */
+export function AppFrame({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [layout, setLayout] = useState<Layout>("phone");
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    setLayout(layoutFor(el.clientWidth));
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(([entry]) => { if (entry) setLayout(layoutFor(entry.contentRect.width)); });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return <LayoutContext.Provider value={layout}><div ref={ref} className="app-frame" data-layout={layout}>{children}</div></LayoutContext.Provider>;
+}
+
+export type Device = "phone" | "tablet" | "desktop";
+/** ui-hub preview: the app inside a phone, a tablet or a desktop browser window. */
+export function DeviceFrame({ device = "phone", children }: { device?: Device; children: ReactNode }) {
+  return <div className={`device ${device}`}><AppFrame>{children}</AppFrame></div>;
+}
 export function PhoneFrame({ children }: { children: ReactNode }) {
-  return <div className="phone"><div className="app-frame">{children}</div></div>;
+  return <DeviceFrame device="phone">{children}</DeviceFrame>;
 }
 
 /** Overlay panel: slides up over the current screen. Closes on backdrop tap, close button or Esc. */
@@ -247,5 +319,25 @@ export function ConfirmSheet({ title, children, confirmLabel, tone = "primary", 
       <Button variant={tone === "danger" ? "dangerSolid" : "primary"} block style={{ margin: "14px 0 8px" }} onClick={onConfirm}>{confirmLabel}</Button>
       <Button block onClick={onCancel}>Cancel</Button>
     </Sheet>
+  );
+}
+
+export interface Column<T> { key: string; header: string; render: (row: T) => ReactNode; align?: "right"; width?: string; /** Drop this column on tablet, where the table is narrow. */ hideOnTablet?: boolean }
+/** Full-width table used on tablet and desktop in place of the phone's card list. A row is a button when `onRowClick` is given. */
+export function DataTable<T>({ columns, rows, rowKey, onRowClick, caption }: {
+  columns: Column<T>[]; rows: T[]; rowKey: (row: T) => string; onRowClick?: (row: T) => void; caption: string;
+}) {
+  return (
+    <table className="data-table">
+      <caption className="sr-only">{caption}</caption>
+      <thead><tr>{columns.map((c) => <th key={c.key} scope="col" className={c.hideOnTablet ? "hide-tablet" : ""} style={{ ...(c.width ? { width: c.width } : {}), ...(c.align ? { textAlign: c.align } : {}) }}>{c.header}</th>)}</tr></thead>
+      <tbody>
+        {rows.map((r) => (
+          <tr key={rowKey(r)} className={onRowClick ? "clickable" : ""} {...(onRowClick ? { onClick: () => onRowClick(r), tabIndex: 0, onKeyDown: (e: React.KeyboardEvent) => { if (e.key === "Enter") onRowClick(r); } } : {})}>
+            {columns.map((c) => <td key={c.key} className={c.hideOnTablet ? "hide-tablet" : ""} style={c.align ? { textAlign: c.align } : undefined}>{c.render(r)}</td>)}
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }

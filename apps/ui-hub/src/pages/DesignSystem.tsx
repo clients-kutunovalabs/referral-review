@@ -1,6 +1,6 @@
 import { useState } from "react";
 import {
-  BottomNav, Button, Card, Chips, CopyButton, Countdown, EmptyState, Field, FileUpload, Input, ListRow, Select,
+  BREAKPOINTS, BottomNav, Button, Card, Chips, CopyButton, Countdown, DataTable, EmptyState, Field, FileUpload, Input, ListRow, PasswordField, Select,
   StatusPill, Tabs, Textarea, TopBar, colorTokens, fontTokens, radiusTokens, sizeTokens, spaceTokens, allTokens
 } from "@rr/ui";
 
@@ -25,6 +25,7 @@ function Swatches({ group, against }: { group: Record<string, string>; against?:
 }
 
 export function DesignSystem() {
+  const [pw, setPw] = useState("");
   const [tab, setTab] = useState("a");
   return (
     <main className="ds">
@@ -100,6 +101,19 @@ export function DesignSystem() {
         <Tabs value={tab} onChange={setTab} tabs={[{ id: "a", label: "Active" }, { id: "b", label: "Under review" }, { id: "c", label: "Completed" }]} />
         <div className="frame-box" style={{ marginTop: 12 }}><div className="app-frame"><TopBar title="Top bar" onBack={() => undefined} /><div style={{ flex: 1 }} /><BottomNav items={[{ id: "1", label: "Tasks" }, { id: "2", label: "My tasks" }, { id: "3", label: "Review", badge: 3 }]} active="1" onSelect={() => undefined} /></div></div>
       </div>
+
+      <h2>Password field and table</h2>
+      <div className="specimen state-box">
+        <PasswordField label="Password" autoComplete="new-password" value={pw} onChange={setPw} hint="At least 8 characters." />
+        <PasswordField label="With an error" autoComplete="current-password" value="" onChange={() => undefined} error="Email or password is incorrect." />
+      </div>
+      <div className="specimen">
+        <DataTable caption="Example table" rows={[{ id: "1", t: "Introduce our CRM", r: "₹40" }, { id: "2", t: "Sign up for newsletter", r: "₹15" }]} rowKey={(r) => r.id} onRowClick={() => undefined}
+          columns={[{ key: "t", header: "Title", render: (r) => r.t }, { key: "r", header: "Reward", width: "120px", render: (r) => r.r }]} />
+      </div>
+
+      <h2>Layouts</h2>
+      <p className="lead">The app picks its layout from the width of its own frame, never the browser window, so ui-hub can show all three side by side. Phone is under {BREAKPOINTS.tablet}px: bottom bar, cards, a footer action. Tablet is {BREAKPOINTS.tablet} to {BREAKPOINTS.desktop - 1}px: icon rail, page header with the action on the right, tables. Desktop is {BREAKPOINTS.desktop}px and up: labelled sidebar, page header, tables, two-column forms. Use the "Preview as" switch on the User and Admin pages.</p>
 
       <h2>Accessibility baseline</h2>
       <ul>

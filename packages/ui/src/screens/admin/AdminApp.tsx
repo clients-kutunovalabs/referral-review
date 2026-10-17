@@ -4,15 +4,17 @@ import {
 } from "@rr/core";
 import { OUTCOME_PERCENTS, formatRupees, outcomeAmount, rupees, type OutcomePercent, type Paise } from "@rr/money";
 import {
-  BottomNav, Icon, Segmented, Sheet, type IconName, Button, Card, Chips, ConfirmSheet, CopyButton, EmptyState, Field, FileUpload, Input, ListRow, Select,
+  BottomNav, DataTable, Icon, Segmented, Sheet, useLayout, type Column, type IconName, Button, Card, Chips, ConfirmSheet, CopyButton, EmptyState, Field, FileUpload, Input, ListRow, Select,
   StatusPill, Tabs, Textarea, Toast, TopBar
 } from "../../primitives";
 import { AdminTicketChat, AdminTicketList, type SupportTab } from "./SupportScreens";
 import { needsReply, useTickets } from "../../demo/ticketStore";
 import { markPaid, usePayouts } from "../../demo/payoutStore";
+import { AuthFlow } from "../auth/AuthFlow";
+import { useServices } from "../../services";
 
 export type AdminScreen =
-  | "dashboard" | "tasks" | "newtask" | "taskdetail"
+  | "login" | "dashboard" | "tasks" | "newtask" | "taskdetail"
   | "reviewqueue" | "reviewitem" | "payouts" | "payoutitem"
   | "userdetail" | "tickets" | "ticket" | "access";
 type AccessTab = "users" | "team" | "roles";
@@ -22,26 +24,31 @@ const NEEDS: Partial<Record<AdminScreen, PermissionKey[]>> = {
   tasks: ["task.manage", "task.assign"], newtask: ["task.manage"], taskdetail: ["task.manage", "task.assign"],
   reviewqueue: ["review.decide"], reviewitem: ["review.decide"],
   payouts: ["payout.mark_paid"], payoutitem: ["payout.mark_paid"],
-  userdetail: ["user.manage"],
+  userdetail: ["user.manage"], access: ["user.manage", "role.manage"],
   tickets: ["ticket.manage"], ticket: ["ticket.manage"]
 };
-const NAV_DEF: { id: AdminScreen; tab: string; label: string; icon: IconName }[] = [
-  { id: "dashboard", tab: "dashboard", label: "Home", icon: "home" },
-  { id: "tasks", tab: "tasks", label: "Tasks", icon: "tasks" },
-  { id: "reviewqueue", tab: "review", label: "Review", icon: "review" },
-  { id: "payouts", tab: "payouts", label: "Payouts", icon: "payout" },
-  { id: "tickets", tab: "support", label: "Support", icon: "support" }
+const NAV_DEF: { id: AdminScreen; tab: string; label: string; longLabel: string; icon: IconName; wideOnly?: boolean }[] = [
+  { id: "dashboard", tab: "dashboard", label: "Home", longLabel: "Dashboard", icon: "home" },
+  { id: "tasks", tab: "tasks", label: "Tasks", longLabel: "Tasks", icon: "tasks" },
+  { id: "reviewqueue", tab: "review", label: "Review", longLabel: "Review queue", icon: "review" },
+  { id: "payouts", tab: "payouts", label: "Payouts", longLabel: "Payouts", icon: "payout" },
+  { id: "tickets", tab: "support", label: "Support", longLabel: "Support", icon: "support" },
+  // Phone reaches this from the dashboard's profile button; tablet and desktop get a nav item of its own.
+  { id: "access", tab: "access", label: "Users", longLabel: "Users and roles", icon: "people", wideOnly: true }
 ];
 const TAB_OF: Partial<Record<AdminScreen, string>> = {
   dashboard: "dashboard", tasks: "tasks", newtask: "tasks", taskdetail: "tasks",
   reviewqueue: "review", reviewitem: "review", payouts: "payouts", payoutitem: "payouts",
-  userdetail: "dashboard", tickets: "support", ticket: "support", access: "dashboard"
+  userdetail: "access", tickets: "support", ticket: "support", access: "access"
 };
 
-const extraTasks: { id: string; title: string; status: "closed" | "removed"; reward: Paise; claimed: string; timer: number | null; mode: string }[] = [
-  { id: "x1", title: "Rate us on the App Store", status: "closed", reward: rupees(25), claimed: "100 of 100 claimed", timer: 20, mode: TEXT_MODE_LABEL.none },
-  { id: "x2", title: "Follow our Instagram", status: "removed", reward: rupees(20), claimed: "unlimited slots", timer: 10, mode: TEXT_MODE_LABEL.none }
+const extraTasks: { id: string; title: string; status: "closed" | "removed"; reward: Paise; claimed: number | null; total: number | null; timer: number | null; mode: string }[] = [
+  { id: "x1", title: "Rate us on the App Store", status: "closed", reward: rupees(25), claimed: 100, total: 100, timer: 20, mode: TEXT_MODE_LABEL.none },
+  { id: "x2", title: "Follow our Instagram", status: "removed", reward: rupees(20), claimed: null, total: null, timer: 10, mode: TEXT_MODE_LABEL.none }
 ];
+const claimedText = (claimed: number | null, total: number | null) => (total === null ? "unlimited slots" : `${claimed ?? 0} of ${total} claimed`);
+
+interface TaskRow { key: string; title: string; reward: Paise; claimed: number | null; total: number | null; timer: number | null; mode: string; pill: React.ReactNode; onOpen?: () => void }
 
 /** Same card idea as the user board: title, reward line, then a compact row with the status pill and the action button. */
 function isClosed(t: Task): boolean {
@@ -65,6 +72,8 @@ function AdminTaskCard({ title, reward, claimed, timer, mode, pill, onOpen }: {
 
 export interface AdminAppProps {
   initialScreen?: AdminScreen;
+  /** Start signed in (default). ui-hub's "Log in" screen starts signed out. */
+  loggedIn?: boolean;
   /** Roles held by the viewing admin. Drives which nav items and screens are allowed. */
   viewerRoleIds?: string[];
   adminName?: string;
@@ -72,8 +81,11 @@ export interface AdminAppProps {
   initialAccessTab?: "users" | "team" | "roles";
 }
 
-export function AdminApp({ initialScreen = "dashboard", viewerRoleIds = ["role-owner"], adminName = "Hrishabh", initialTicketId = "tk1042", initialAccessTab = "users" }: AdminAppProps) {
-  const [screen, setScreen] = useState<AdminScreen>(initialScreen);
+export function AdminApp({ initialScreen = "dashboard", loggedIn: startLoggedIn = true, viewerRoleIds = ["role-owner"], adminName: defaultName = "Hrishabh", initialTicketId = "tk1042", initialAccessTab = "users" }: AdminAppProps) {
+  const { auth } = useServices();
+  const [loggedIn, setLoggedIn] = useState(startLoggedIn && initialScreen !== "login");
+  const [adminName, setAdminName] = useState(defaultName);
+  const [screen, setScreen] = useState<AdminScreen>(initialScreen === "login" ? "dashboard" : initialScreen);
   const [roles, setRoles] = useState<Role[]>(fixtures.roles);
   const [members, setMembers] = useState<AdminMember[]>(fixtures.members);
   const [accessTab, setAccessTab] = useState<AccessTab>(initialAccessTab);
@@ -90,6 +102,8 @@ export function AdminApp({ initialScreen = "dashboard", viewerRoleIds = ["role-o
   const [userStatus, setUserStatus] = useState<Record<string, string>>({});
   const [pending, setPending] = useState<{ title: string; text: string; label: string; tone: "primary" | "danger"; run: () => void } | null>(null);
   const [ticketId, setTicketId] = useState(initialTicketId);
+  const layout = useLayout();
+  const wide = layout !== "phone";
   const [reviewSort, setReviewSort] = useState<"oldest" | "newest">("oldest");
   const [adminTaskId, setAdminTaskId] = useState("t1");
   const [taskFilter, setTaskFilter] = useState<"active" | "closed">("active");
@@ -98,15 +112,18 @@ export function AdminApp({ initialScreen = "dashboard", viewerRoleIds = ["role-o
 
   const perms = new Set(roles.filter((r) => viewerRoleIds.includes(r.id)).flatMap((r) => r.permissions));
   const can = (s: AdminScreen) => { const n = NEEDS[s]; return !n || n.some((p) => perms.has(p)); };
-  const navItems = NAV_DEF.filter((n) => can(n.id)).map((n) => ({
-    id: n.tab, label: n.label, icon: n.icon, ...(n.id === "reviewqueue" && queue.length ? { badge: queue.length } : {}),
+  const navItems = NAV_DEF.filter((n) => (n.id === "access" ? perms.has("user.manage") || perms.has("role.manage") : can(n.id))).map((n) => ({
+    id: n.tab, label: n.label, longLabel: n.longLabel, icon: n.icon, ...(n.wideOnly ? { wideOnly: true } : {}), ...(n.id === "reviewqueue" && queue.length ? { badge: queue.length } : {}),
     ...(n.id === "tickets" && allTickets.some(needsReply) ? { badge: allTickets.filter(needsReply).length } : {})
   }));
   const show = (s: AdminScreen) => setScreen(s);
+  const logOut = async () => { await auth.signOut(); setLoggedIn(false); };
   const notify = (m: string) => setToast(m);
 
   let body: JSX.Element;
-  if (!can(screen)) {
+  if (!loggedIn) {
+    body = <AuthFlow brand="Admin panel" allowSignUp={false} onAuthenticated={(session) => { setAdminName(session.user.profile["name"] ?? defaultName); setLoggedIn(true); show("dashboard"); }} />;
+  } else if (!can(screen)) {
     body = (
       <div className="screen"><TopBar title="No access" /><div className="scrollarea"><div className="content">
         <Card alert><p style={{ color: "var(--coral)" }}>403. Your roles don't include permission for this screen.</p></Card>
@@ -114,6 +131,7 @@ export function AdminApp({ initialScreen = "dashboard", viewerRoleIds = ["role-o
       </div></div></div>
     );
   } else switch (screen) {
+    case "login": body = <></>; break; // never shown: signing in is handled by the loggedIn check above
     case "dashboard": {
       const payoutsDue = payouts.filter((p) => p.status !== "paid").length;
       const openTickets = allTickets.filter((t) => t.status === "open");
@@ -127,12 +145,11 @@ export function AdminApp({ initialScreen = "dashboard", viewerRoleIds = ["role-o
       ];
       body = (
         <div className="screen">
-          <div className="topbar">
-            <span className="grow">Admin panel</span>
+          <TopBar title={wide ? "Dashboard" : "Admin panel"} subtitle={`Welcome back, ${adminName}`} right={wide ? undefined : (
             <button className="profile-btn" aria-label="Roles and permissions" onClick={() => show("access")}>
               <Icon name="user" /><span>{adminName}</span><span className="chev" aria-hidden="true">&#9656;</span>
             </button>
-          </div>
+          )} />
           <div className="scrollarea"><div className="content">
             <p className="section-label" style={{ marginTop: 0 }}>Needs your attention</p>
             <div className="metric-grid">
@@ -143,50 +160,83 @@ export function AdminApp({ initialScreen = "dashboard", viewerRoleIds = ["role-o
               ))}
             </div>
             <p className="section-label">Recent activity</p>
-            {([
+            {(() => { const list = ([
               ["reviewqueue", 'Priya S. submitted proof for "Introduce our CRM to a local clinic"', "12 min ago"],
               ["tickets", 'Priya S. opened a ticket: "Screenshot upload fails on my phone"', "yesterday"],
               ["payouts", `Rahul K. requested a payout of ${formatRupees(17000n)}`, "1 hour ago"],
               ["tasks", '"Rate us on the App Store" reached its slot limit', "3 hours ago"]
             ] as const).filter(([go]) => can(go)).map(([go, text, when]) => (
               <ListRow key={text} onClick={() => show(go)} title={text} sub={when} />
-            ))}
+            )); return wide ? <Card>{list}</Card> : list; })()}
           </div></div>
         </div>
       );
       break;
     }
-    case "tasks": body = (
-      <div className="screen"><TopBar title="Tasks" /><div className="scrollarea"><div className="content">
-        <div style={{ margin: "0 calc(var(--space-7) * -1) var(--space-5)" }}><Tabs<"active" | "closed"> value={taskFilter} onChange={setTaskFilter} tabs={[{ id: "active", label: `Active (${fixtures.tasks.filter((t) => !isClosed(t)).length})` }, { id: "closed", label: `Closed (${fixtures.tasks.filter(isClosed).length + extraTasks.length})` }]} /></div>
-        {fixtures.tasks.filter((t) => (isClosed(t) ? "closed" : "active") === taskFilter).map((t) => {
+    case "tasks": {
+      const rows: TaskRow[] = [
+        ...fixtures.tasks.filter((t) => (isClosed(t) ? "closed" : "active") === taskFilter).map((t): TaskRow => {
           const till = activeTill(t.activeUntil);
           const closed = isClosed(t);
           const tone = closed ? "coral" : till.kind === "left" ? "amber" : "teal";
-          const pill = <StatusPill tone={tone}>{closed ? "Closed" : till.kind === "none" ? "Active · no end date" : `Active till: ${till.label}`}</StatusPill>;
-          return <AdminTaskCard key={t.id} title={t.title} reward={t.reward} timer={t.timerMinutes} mode={TEXT_MODE_LABEL[t.textMode]} pill={pill}
-            claimed={t.slotsTotal === null ? "unlimited slots" : `${t.slotsTotal - (t.slotsRemaining ?? 0)} of ${t.slotsTotal} claimed`}
-            onOpen={() => { setAdminTaskId(t.id); show("taskdetail"); }} />;
-        })}
-        {taskFilter === "closed" ? extraTasks.map((t) => (
-          <AdminTaskCard key={t.id} title={t.title} reward={t.reward} timer={t.timer} mode={t.mode} claimed={t.claimed}
-            pill={<StatusPill tone={t.status === "removed" ? "coral" : "gray"}>{t.status === "removed" ? "Removed" : "Closed"}</StatusPill>} />
-        )) : null}
-        {fixtures.tasks.filter((t) => (isClosed(t) ? "closed" : "active") === taskFilter).length === 0 && taskFilter === "active" ? <EmptyState>No active tasks.</EmptyState> : null}
-      </div></div>
-      {perms.has("task.manage") ? <div className="screen-footer"><Button variant="primary" block onClick={() => show("newtask")}>New task</Button></div> : null}
-      </div>
-    ); break;
+          return {
+            key: t.id, title: t.title, reward: t.reward, timer: t.timerMinutes, mode: TEXT_MODE_LABEL[t.textMode],
+            total: t.slotsTotal, claimed: t.slotsTotal === null ? null : t.slotsTotal - (t.slotsRemaining ?? 0),
+            pill: <StatusPill tone={tone}>{closed ? "Closed" : till.kind === "none" ? "Active · no end date" : `Active till: ${till.label}`}</StatusPill>,
+            onOpen: () => { setAdminTaskId(t.id); show("taskdetail"); }
+          };
+        }),
+        ...(taskFilter === "closed" ? extraTasks.map((t): TaskRow => ({
+          key: t.id, title: t.title, reward: t.reward, timer: t.timer, mode: t.mode, total: t.total, claimed: t.claimed,
+          pill: <StatusPill tone={t.status === "removed" ? "coral" : "gray"}>{t.status === "removed" ? "Removed" : "Closed"}</StatusPill>
+        })) : [])
+      ];
+      const activeCount = fixtures.tasks.filter((t) => !isClosed(t)).length;
+      const columns: Column<TaskRow>[] = [
+        { key: "title", header: "Title", render: (r) => r.title },
+        { key: "reward", header: "Reward", width: "90px", render: (r) => formatRupees(r.reward) },
+        { key: "slots", header: "Slots", width: "100px", render: (r) => (r.total === null ? "unlimited" : `${r.claimed ?? 0} / ${r.total}`) },
+        { key: "timer", header: "Timer", width: "110px", render: (r) => formatLimit(r.timer) },
+        { key: "script", header: "Script", width: "90px", hideOnTablet: true, render: (r) => r.mode },
+        { key: "status", header: "Status", width: "180px", render: (r) => r.pill }
+      ];
+      body = (
+        <div className="screen"><TopBar title={wide ? "Task templates" : "Tasks"} subtitle={`${fixtures.tasks.length + extraTasks.length} templates · ${activeCount} active`}
+          {...(perms.has("task.manage") ? { actions: <Button variant="primary" onClick={() => show("newtask")}>New task</Button> } : {})} />
+        <div className="scrollarea"><div className="content">
+          <div className="tabs-bleed"><Tabs<"active" | "closed"> value={taskFilter} onChange={setTaskFilter} tabs={[{ id: "active", label: `Active (${activeCount})` }, { id: "closed", label: `Closed (${fixtures.tasks.filter(isClosed).length + extraTasks.length})` }]} /></div>
+          {rows.length === 0 ? <EmptyState>{taskFilter === "active" ? "No active tasks." : "Nothing closed yet."}</EmptyState> : wide ? (
+            <DataTable caption="Task templates" columns={columns} rows={rows} rowKey={(r) => r.key} {...(rows.some((r) => r.onOpen) ? { onRowClick: (r: TaskRow) => r.onOpen?.() } : {})} />
+          ) : rows.map((r) => (
+            <AdminTaskCard key={r.key} title={r.title} reward={r.reward} timer={r.timer} mode={r.mode} pill={r.pill} claimed={claimedText(r.claimed, r.total)} {...(r.onOpen ? { onOpen: r.onOpen } : {})} />
+          ))}
+        </div></div>
+        {perms.has("task.manage") && !wide ? <div className="screen-footer"><Button variant="primary" block onClick={() => show("newtask")}>New task</Button></div> : null}
+        </div>
+      );
+      break;
+    }
     case "newtask": body = <NewTaskScreen onBack={() => show("tasks")} onPublish={() => { notify("Task published"); show("tasks"); }} />; break;
     case "taskdetail": body = <TaskDetailScreen task={fixtures.tasks.find((t) => t.id === adminTaskId) ?? fixtures.tasks[0]!} canManage={perms.has("task.manage")} canTexts={perms.has("task_text.manage")} onBack={() => show("tasks")} onRemove={() => { notify("Task removed"); show("tasks"); }} notify={notify} />; break;
     case "reviewqueue": body = (
-      <div className="screen"><TopBar title="Review queue" /><div className="scrollarea"><div className="content">
+      <div className="screen"><TopBar title="Review queue" subtitle={`${queue.length} submission${queue.length === 1 ? "" : "s"} waiting for a decision`} /><div className="scrollarea"><div className="content">
         <div className="list-toolbar">
           <span className="list-count"><strong>{queue.length}</strong> to review</span>
           <Tabs<"oldest" | "newest"> inline value={reviewSort} onChange={setReviewSort} tabs={[{ id: "oldest", label: "Oldest" }, { id: "newest", label: "Newest" }]} />
         </div>
         {queue.length === 0 ? <EmptyState>Queue is clear.</EmptyState> : null}
-        {[...queue].sort((x, y) => (reviewSort === "oldest" ? y.waitingMinutes - x.waitingMinutes : x.waitingMinutes - y.waitingMinutes)).map((q) => <ListRow key={q.id} onClick={() => { setReviewId(q.id); show("reviewitem"); }} title={q.worker} right={<span className="sub">{q.waitingLabel}</span>} sub={`${q.taskTitle} · ${q.identityEmail}`} />)}
+        {(() => {
+          const sorted = [...queue].sort((x, y) => (reviewSort === "oldest" ? y.waitingMinutes - x.waitingMinutes : x.waitingMinutes - y.waitingMinutes));
+          const open = (q: (typeof queue)[number]) => { setReviewId(q.id); show("reviewitem"); };
+          if (!wide) return sorted.map((q) => <ListRow key={q.id} onClick={() => open(q)} title={q.worker} right={<span className="sub">{q.waitingLabel}</span>} sub={`${q.taskTitle} · ${q.identityEmail}`} />);
+          return sorted.length ? <DataTable caption="Review queue" rows={sorted} rowKey={(q) => q.id} onRowClick={open} columns={[
+            { key: "worker", header: "Worker", render: (q) => q.worker },
+            { key: "task", header: "Task", render: (q) => q.taskTitle },
+            { key: "email", header: "Email used", render: (q) => q.identityEmail },
+            { key: "reward", header: "Reward", width: "110px", render: (q) => formatRupees(q.reward) },
+            { key: "wait", header: "Waiting", width: "130px", render: (q) => q.waitingLabel }
+          ]} /> : null;
+        })()}
       </div></div></div>
     ); break;
     case "reviewitem": {
@@ -204,12 +254,31 @@ export function AdminApp({ initialScreen = "dashboard", viewerRoleIds = ["role-o
           right={<StatusPill tone={p.status === "paid" ? "green" : "amber"}>{p.status === "paid" ? "Paid" : "Pending"}</StatusPill>}
           sub={`${p.upiMasked} · ${p.whenLabel}${p.paidBy ? ` · paid by ${p.paidBy}` : ""}`} />
       );
+      type PayoutRow = (typeof payouts)[number];
+      const openPayout = (p: PayoutRow) => { setPayoutId(p.id); show("payoutitem"); };
+      const payoutColumns: Column<PayoutRow>[] = [
+        { key: "who", header: "Worker", render: (p) => p.who },
+        { key: "amount", header: "Amount", width: "120px", render: (p) => formatRupees(p.amount) },
+        { key: "upi", header: "UPI ID", render: (p) => <span className="mono">{p.upiMasked}</span> },
+        { key: "when", header: "Requested", width: "140px", render: (p) => p.whenLabel },
+        { key: "by", header: "Paid by", width: "150px", render: (p) => p.paidBy ?? "" },
+        { key: "status", header: "Status", width: "120px", render: (p) => <StatusPill tone={p.status === "paid" ? "green" : "amber"}>{p.status === "paid" ? "Paid" : "Pending"}</StatusPill> }
+      ];
       body = (
-        <div className="screen"><TopBar title="Payouts" /><div className="scrollarea"><div className="content">
-          <p className="section-label" style={{ marginTop: 0 }}>Needs action ({action.length})</p>
-          {action.length ? action.map(row) : <EmptyState>Nothing to pay right now.</EmptyState>}
-          <p className="section-label">History ({history.length})</p>
-          {history.map(row)}
+        <div className="screen"><TopBar title="Payouts" subtitle={`${action.length} to pay · ${history.length} paid`} /><div className="scrollarea"><div className="content">
+          {wide ? (<>
+            <section className="table-section"><h2>Needs action ({action.length})</h2>
+              {action.length ? <DataTable caption="Payouts needing action" columns={payoutColumns} rows={action} rowKey={(p) => p.id} onRowClick={openPayout} /> : <EmptyState>Nothing to pay right now.</EmptyState>}
+            </section>
+            <section className="table-section"><h2>History ({history.length})</h2>
+              {history.length ? <DataTable caption="Payout history" columns={payoutColumns} rows={history} rowKey={(p) => p.id} onRowClick={openPayout} /> : <EmptyState>No payments yet.</EmptyState>}
+            </section>
+          </>) : (<>
+            <p className="section-label" style={{ marginTop: 0 }}>Needs action ({action.length})</p>
+            {action.length ? action.map(row) : <EmptyState>Nothing to pay right now.</EmptyState>}
+            <p className="section-label">History ({history.length})</p>
+            {history.map(row)}
+          </>)}
         </div></div></div>
       );
       break;
@@ -234,7 +303,7 @@ export function AdminApp({ initialScreen = "dashboard", viewerRoleIds = ["role-o
       ];
       const tab = tabs.some((t) => t.id === accessTab) ? accessTab : tabs[0]?.id;
       body = (
-        <div className="screen"><TopBar title="Roles and permissions" onBack={() => show("dashboard")} />
+        <div className="screen"><TopBar title={wide ? "Users and roles" : "Roles and permissions"} subtitle="People who use the app, your team and what each role can do" {...(wide ? {} : { onBack: () => show("dashboard") })} />
           <div className="scrollarea"><div className="content">
             <Card hero>
               <div className="card-split">
@@ -244,11 +313,19 @@ export function AdminApp({ initialScreen = "dashboard", viewerRoleIds = ["role-o
               <p className="section-label" style={{ margin: "14px 0 0" }}>Permissions</p>
               <div className="chips perm-chips">{myPerms.map((p) => <span key={p.key} className="chip">{p.label}</span>)}</div>
             </Card>
-            {tabs.length ? <div style={{ margin: "0 calc(var(--space-7) * -1)" }}><Tabs<AccessTab> value={tab as AccessTab} onChange={setAccessTab} tabs={tabs} /></div> : <p className="hint">Your roles do not include managing users or roles.</p>}
+            {wide ? null : <Button block style={{ marginBottom: 8 }} onClick={logOut}>Log out</Button>}
+            {tabs.length ? <div className="tabs-bleed" style={{ marginBottom: 0 }}><Tabs<AccessTab> value={tab as AccessTab} onChange={setAccessTab} tabs={tabs} /></div> : <p className="hint">Your roles do not include managing users or roles.</p>}
             <div style={{ paddingTop: 12 }}>
               {tab === "users" ? (<>
                 <p className="note-text" style={{ marginBottom: 10 }}>People who use the app. 142 total.</p>
-                {fixtures.adminUsers.map((u) => {
+                {wide ? <DataTable caption="Users" rows={fixtures.adminUsers} rowKey={(u) => u.id} onRowClick={(u) => { setUserId(u.id); show("userdetail"); }} columns={[
+                  { key: "name", header: "Name", render: (u) => u.name },
+                  { key: "email", header: "Email", render: (u) => u.emailMasked },
+                  { key: "emails", header: "Emails", width: "90px", render: (u) => u.identityCount },
+                  { key: "life", header: "Lifetime earned", width: "150px", render: (u) => formatRupees(u.lifetime) },
+                  { key: "status", header: "Status", width: "130px", render: (u) => { const st = userStatus[u.id] ?? u.status; return <StatusPill tone={st === "active" ? "teal" : st === "suspended" ? "amber" : st === "deleted" ? "gray" : "coral"}>{st[0]!.toUpperCase() + st.slice(1)}</StatusPill>; } }
+                ]} /> : null}
+                {wide ? null : fixtures.adminUsers.map((u) => {
                   const st = userStatus[u.id] ?? u.status;
                   return <ListRow key={u.id} onClick={() => { setUserId(u.id); show("userdetail"); }} title={u.name}
                     right={<StatusPill tone={st === "active" ? "teal" : st === "suspended" ? "amber" : st === "deleted" ? "gray" : "coral"}>{st[0]!.toUpperCase() + st.slice(1)}</StatusPill>}
@@ -268,7 +345,7 @@ export function AdminApp({ initialScreen = "dashboard", viewerRoleIds = ["role-o
       const st = userStatus[u.id] ?? u.status;
       const set = (s: string, m: string) => { setUserStatus({ ...userStatus, [u.id]: s }); notify(m); };
       body = (
-        <div className="screen"><TopBar title={u.name} onBack={() => { setAccessTab("users"); show("access"); }} /><div className="scrollarea"><div className="content">
+        <div className="screen"><TopBar title={u.name} onBack={() => { setAccessTab("users"); show("access"); }} /><div className="scrollarea"><div className="content narrow">
           <Card><h3>{u.name}</h3><p>{u.emailMasked} &middot; {u.identityCount} email{u.identityCount > 1 ? "s" : ""} &middot; {formatRupees(u.lifetime)} lifetime</p>
             <div className="row"><StatusPill tone={st === "active" ? "teal" : st === "suspended" ? "amber" : st === "deleted" ? "gray" : "coral"}>{st}</StatusPill></div></Card>
           <p className="hint" style={{ marginBottom: 12 }}>Suspending or deleting never removes records. Claims, ledger, payouts and payment proofs are kept for audit.</p>
@@ -287,7 +364,8 @@ export function AdminApp({ initialScreen = "dashboard", viewerRoleIds = ["role-o
       {body}
       {pending ? <ConfirmSheet title={pending.title} tone={pending.tone} confirmLabel={pending.label} onCancel={() => setPending(null)} onConfirm={() => { const run = pending.run; setPending(null); run(); }}>{pending.text}</ConfirmSheet> : null}
       {toast ? <Toast message={toast} onDone={() => setToast(null)} /> : null}
-      <BottomNav items={navItems} active={tab} onSelect={(t) => show(NAV_DEF.find((n) => n.tab === t)!.id)} />
+      {loggedIn ? <BottomNav brand="Admin panel" items={navItems} active={wide ? tab : tab === "access" ? "dashboard" : tab} onSelect={(t) => show(NAV_DEF.find((n) => n.tab === t)!.id)}
+        footer={<><span className="who">{adminName}</span><button className="link-btn" onClick={logOut}>Log out</button></>} /> : null}
     </>
   );
 }
@@ -348,7 +426,7 @@ function NewTaskScreen({ onBack, onPublish }: { onBack: () => void; onPublish: (
   const slotsNum = /^\d+$/.test(f.slots) ? Number(f.slots) : null;
 
   return (
-    <div className="screen"><TopBar title="New task template" onBack={onBack} /><div className="scrollarea"><div className="content">
+    <div className="screen"><TopBar title="New task template" onBack={onBack} /><div className="scrollarea"><div className="content narrow">
       <h3 className="section-title" style={{ marginTop: 0 }}>Task details</h3>
       <Field label="Title"><Input value={f.title} onChange={set("title")} placeholder="e.g. Introduce our CRM to a local clinic" /></Field>
       <Field label="Instructions"><Textarea rows={3} value={f.instructions} onChange={set("instructions")} placeholder="What exactly should the user do" /></Field>
@@ -420,7 +498,7 @@ function TaskDetailScreen({ task, canManage, canTexts, onBack, onRemove, notify 
   }
   return (
     <>
-    <div className="screen"><TopBar title="Task detail" onBack={onBack} /><div className="scrollarea"><div className="content">
+    <div className="screen"><TopBar title="Task detail" onBack={onBack} /><div className="scrollarea"><div className="content narrow">
       <Card>
         <h3>{task.title}</h3><p>{task.description}</p>
         <div className="row"><StatusPill tone="teal">{formatRupees(task.reward)} reward</StatusPill><StatusPill tone="gray">{task.slotsTotal === null ? "unlimited slots" : `${task.slotsTotal - (task.slotsRemaining ?? 0)} of ${task.slotsTotal} claimed`}</StatusPill><StatusPill tone="amber">{formatLimit(task.timerMinutes)}{task.timerMinutes === null ? "" : " limit"}</StatusPill></div>
@@ -467,7 +545,7 @@ function ReviewItemScreen({ item, onBack, onDone }: { item: (typeof fixtures.rev
   const [pct, setPct] = useState<OutcomePercent>(100); const [note, setNote] = useState(""); const [err, setErr] = useState(""); const [busy, setBusy] = useState(false);
   const misses = item.keywords.filter((k) => !item.keywordsMatched.includes(k));
   return (
-    <div className="screen"><TopBar title="Review submission" onBack={onBack} /><div className="scrollarea"><div className="content">
+    <div className="screen"><TopBar title="Review submission" onBack={onBack} /><div className="scrollarea"><div className="content"><div className="split">
       <div className="placeholder-img">Screenshot proof placeholder</div>
       {item.workerNote ? <Card><h3>Note from user</h3><p>{item.workerNote}</p></Card> : null}
       <Card>
@@ -491,7 +569,7 @@ function ReviewItemScreen({ item, onBack, onDone }: { item: (typeof fixtures.rev
       <p className="muted" style={{ marginTop: -6, marginBottom: 12 }}>Worker will be credited {formatRupees(outcomeAmount(item.reward, pct))} of {formatRupees(item.reward)}.</p>
       <Field label="Note to user (required)" error={err}><Textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Explain the outcome, even when approving in full" /></Field>
       <Button variant="primary" block disabled={busy} onClick={() => { if (!note.trim()) return setErr("A note is required for every outcome."); setBusy(true); onDone(pct); }}>Submit review</Button>
-    </div></div></div>
+    </div></div></div></div>
   );
 }
 
@@ -499,7 +577,7 @@ function PayoutItemScreen({ payout, adminName, onBack, onPaid }: { payout: (type
   const [proof, setProof] = useState<File | null>(null); const [busy, setBusy] = useState(false);
   const paid = payout.status === "paid";
   return (
-    <div className="screen"><TopBar title="Payout request" onBack={onBack} /><div className="scrollarea"><div className="content">
+    <div className="screen"><TopBar title="Payout request" onBack={onBack} /><div className="scrollarea"><div className="content narrow">
       <Card>
         <p style={{ fontSize: 13, margin: "0 0 6px", color: "var(--text-primary)" }}>{payout.who} &middot; {formatRupees(payout.amount)}</p>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}><span className="mono">{payout.upiFull}</span><CopyButton text={payout.upiFull} /></div>
@@ -520,7 +598,7 @@ function TeamPanel({ members, roles, setMembers, notify }: { members: AdminMembe
   const [editing, setEditing] = useState<string | null>(null);
   return (<>
     <p className="note-text" style={{ marginBottom: 10 }}>Members can hold several roles. Owner has everything.</p>
-    {members.map((m) => (
+    <div className="card-grid">{members.map((m) => (
       <Card key={m.id}>
         <div className="card-split">
           <div className="card-split-main">
@@ -537,7 +615,7 @@ function TeamPanel({ members, roles, setMembers, notify }: { members: AdminMembe
           </label>
         )) : null}
       </Card>
-    ))}
+    ))}</div>
   </>);
 }
 
@@ -561,7 +639,7 @@ function RolesPanel({ roles, setRoles, members, setMembers, notify }: {
   }
   return (<>
     <p className="note-text" style={{ marginBottom: 10 }}>A role is a bundle of permissions. Add or remove roles, and tick the permissions each role gets. Owner can't be edited or deleted.</p>
-    {roles.map((r) => {
+    <div className="card-grid">{roles.map((r) => {
       const holders = members.filter((m) => m.roleIds.includes(r.id)).length;
       return (
         <Card key={r.id}>
@@ -584,7 +662,7 @@ function RolesPanel({ roles, setRoles, members, setMembers, notify }: {
           </>) : null}
         </Card>
       );
-    })}
+    })}</div>
     {confirmDelete ? (() => {
       const r = roles.find((x) => x.id === confirmDelete); if (!r) return null;
       const holders = members.filter((m) => m.roleIds.includes(r.id)).length;

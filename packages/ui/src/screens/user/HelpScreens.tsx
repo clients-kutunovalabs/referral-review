@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { whenLabel, type Ticket } from "@rr/core";
-import { Button, EmptyState, Field, FileUpload, Input, ListRow, StatusPill, Tabs, Textarea, TopBar } from "../../primitives";
+import { Button, DataTable, EmptyState, Field, FileUpload, Input, ListRow, StatusPill, Tabs, Textarea, TopBar, useLayout } from "../../primitives";
 import { Composer, Conversation } from "../shared/Conversation";
 import { createTicket, sendMessage, useTickets } from "../../demo/ticketStore";
 
@@ -13,17 +13,25 @@ export function HelpScreen({ tab, setTab, onOpen, onCreate }: { tab: HelpTab; se
   const open = tickets.filter((t) => t.status === "open");
   const closed = tickets.filter((t) => t.status === "closed");
   const list = tab === "open" ? open : closed;
+  const wide = useLayout() !== "phone";
   return (
-    <div className="screen"><TopBar title="Help" />
+    <div className="screen"><TopBar title="Help" subtitle="Ask support a question and read the replies here" actions={<Button variant="primary" onClick={onCreate}>Create ticket</Button>} />
       <Tabs<HelpTab> value={tab} onChange={setTab} tabs={[{ id: "open", label: `Open (${open.length})` }, { id: "closed", label: `Closed (${closed.length})` }]} />
       <div className="scrollarea"><div className="content">
         {list.length === 0 ? <EmptyState>{tab === "open" ? "No open tickets. Tap Create ticket if you need help." : "No closed tickets yet."}</EmptyState> : null}
-        {list.map((t) => (
+        {wide && list.length ? (
+          <DataTable caption="Your tickets" rows={list} rowKey={(t) => t.id} onRowClick={(t) => onOpen(t.id)} columns={[
+            { key: "no", header: "#", width: "80px", render: (t) => `#${t.number}` },
+            { key: "title", header: "Title", render: (t) => t.title },
+            { key: "when", header: tab === "open" ? "Updated" : "Resolved", width: "150px", render: (t) => whenLabel(t.status === "closed" ? t.resolvedAt ?? t.updatedAt : t.updatedAt) }
+          ]} />
+        ) : null}
+        {wide ? null : list.map((t) => (
           <ListRow key={t.id} onClick={() => onOpen(t.id)} title={<strong style={{ fontWeight: 500 }}>{t.title}</strong>}
             right={<span className="sub">#{t.number}</span>} sub={t.status === "closed" ? `Resolved ${whenLabel(t.resolvedAt ?? t.updatedAt)}` : `Updated ${whenLabel(t.updatedAt)}`} />
         ))}
       </div></div>
-      <div className="screen-footer"><Button variant="primary" block onClick={onCreate}>Create ticket</Button></div>
+      {wide ? null : <div className="screen-footer"><Button variant="primary" block onClick={onCreate}>Create ticket</Button></div>}
     </div>
   );
 }

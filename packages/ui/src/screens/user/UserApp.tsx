@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { activeTill, dateParts, fixtures, formatLimit, walletTotals, type Claim, type Identity, type PayoutRequest, type PayoutScenario, type Task } from "@rr/core";
 import { formatRupees, parseRupees, rupees, type Paise } from "@rr/money";
 import {
@@ -7,9 +7,13 @@ import {
 } from "../../primitives";
 import { markPaid, maskUpi, requestPayout, usePayouts } from "../../demo/payoutStore";
 import { CreateTicketBody, HelpScreen, TicketChatScreen, type HelpTab } from "./HelpScreens";
+import { AuthFlow, type AuthView, type SignUpField } from "../auth/AuthFlow";
+import { CodeForm, messageOf } from "../auth/CodeForm";
+import { useServices } from "../../services";
+import type { CodeSent } from "@rr/core";
 
 export type UserScreen =
-  | "login" | "register" | "verifyEmail" | "board" | "detail" | "claimed" | "mytasks" | "submit" | "submitted"
+  | "login" | "register" | "verifyEmail" | "createPassword" | "forgot" | "resetVerify" | "resetPassword" | "board" | "detail" | "claimed" | "mytasks" | "submit" | "submitted"
   | "wallet" | "payout" | "payoutSent" | "identities" | "help" | "createTicket" | "ticket";
 export type MyTab = "active" | "review" | "completed" | "rejected";
 
@@ -28,6 +32,14 @@ const TAB_OF: Partial<Record<UserScreen, string>> = {
   help: "help", createTicket: "help", ticket: "help", identities: "board"
 };
 const MIN_PAYOUT = rupees(10);
+
+/** Screens that belong to the sign-in flow, mapped to the AuthFlow step they open on. */
+const AUTH_VIEW: Partial<Record<UserScreen, AuthView>> = {
+  login: "signIn", register: "signUp", verifyEmail: "verify", createPassword: "createPassword",
+  forgot: "forgot", resetVerify: "resetVerify", resetPassword: "resetPassword"
+};
+export const isUserAuthScreen = (s: UserScreen): boolean => s in AUTH_VIEW;
+const SIGN_UP_FIELDS: SignUpField[] = [{ key: "name", label: "Full name" }, { key: "phone", label: "Phone", type: "tel" }];
 
 /** Demo-only text assignment. The real balanced random bag lives on the server (step 6). */
 function demoText(task: Task, n: number): string | undefined {
@@ -60,14 +72,15 @@ export function UserApp({ initialScreen = "board", initialTab = "active", logged
   const [toast, setToast] = useState<string | null>(null);
   const [ticketId, setTicketId] = useState(initialTicketId);
   const [helpTab, setHelpTab] = useState<HelpTab>(initialHelpTab);
-  const [registerEmail, setRegisterEmail] = useState("you@example.com");
   const shared = usePayouts();
   const [local, setLocal] = useState<PayoutRequest[] | null>(() => (payoutScenario ? fixtures.payoutScenarios[payoutScenario] : null));
   const payouts = local ?? shared;
 
   const task = fixtures.tasks.find((t) => t.id === taskId) ?? fixtures.tasks[0]!;
   const identity = identities.find((i) => i.id === identityId) ?? identities[0]!;
+  const { auth } = useServices();
   const show = (s: UserScreen) => setScreen(s);
+  const logOut = async () => { await auth.signOut(); setLoggedIn(false); setNext(null); show("login"); };
   const notify = (m: string) => setToast(m);
 
   function claimTask() {
@@ -92,12 +105,10 @@ export function UserApp({ initialScreen = "board", initialTab = "active", logged
 
   let body: JSX.Element;
   switch (screen) {
-    case "login": body = <LoginScreen onLogin={() => { setLoggedIn(true); show(next ? "detail" : "board"); setNext(null); }} onRegister={() => show("register")} hasNext={!!next} />; break;
-    case "register": body = <RegisterScreen onDone={(email) => { setRegisterEmail(email); show("verifyEmail"); }} onBack={() => show("login")} />; break;
-    case "verifyEmail": body = (
-      <div className="screen"><TopBar title="Verify your email" onBack={() => show("register")} /><div className="scrollarea"><div className="content">
-        <OtpForm email={registerEmail} onVerified={() => { setLoggedIn(true); notify("Email verified"); show("board"); }} />
-      </div></div></div>
+    case "login": case "register": case "verifyEmail": case "createPassword": case "forgot": case "resetVerify": case "resetPassword": body = (
+      <AuthFlow key={screen} brand="Task board" signUpFields={SIGN_UP_FIELDS} initialView={AUTH_VIEW[screen]!} initialEmail={screen === "login" || screen === "register" || screen === "forgot" ? "" : "you@example.com"}
+        {...(next ? { notice: "Log in to claim this task. You'll come back to it." } : {})}
+        onAuthenticated={() => { setLoggedIn(true); show(next ? "detail" : "board"); setNext(null); }} />
     ); break;
     case "board": body = (
       <BoardScreen identity={identity} onIdentity={() => show("identities")} onOpen={(id) => { setTaskId(id); show("detail"); }} />
@@ -130,7 +141,7 @@ export function UserApp({ initialScreen = "board", initialTab = "active", logged
       break;
     }
     case "submitted": body = (
-      <div className="screen"><TopBar title="Submitted" /><div className="scrollarea"><div className="content">
+      <div className="screen"><TopBar title="Submitted" /><div className="scrollarea"><div className="content narrow center">
         <div className="center-icon">&#10003;</div>
         <p className="center-text">Proof submitted. Moved to Under review.</p>
         <Button block style={{ marginTop: 20 }} onClick={() => { setTab("review"); show("mytasks"); }}>View under review</Button>
@@ -156,7 +167,7 @@ export function UserApp({ initialScreen = "board", initialTab = "active", logged
     case "payoutSent": {
       const req = payouts.find((p) => p.status === "pending");
       body = (
-        <div className="screen"><TopBar title="Request sent" /><div className="scrollarea"><div className="content">
+        <div className="screen"><TopBar title="Request sent" /><div className="scrollarea"><div className="content narrow center">
           <div className="center-icon">&#10003;</div>
           <p className="center-text" style={{ fontWeight: 500 }}>Payout requested</p>
           {req ? (
@@ -185,6 +196,7 @@ export function UserApp({ initialScreen = "board", initialTab = "active", logged
     case "identities": body = (
       <IdentitiesScreen identities={identities} activeId={identityId} onSwitch={(id) => { setIdentityId(id); notify("Switched email"); }}
         onAdd={(email) => { setIdentities([...identities, { id: `i${identities.length + 1}`, email, isPrimary: false, earned: 0n }]); notify("Email verified and added"); }}
+        onLogout={logOut}
         onBack={() => show("board")} />
     ); break;
   }
@@ -194,48 +206,19 @@ export function UserApp({ initialScreen = "board", initialTab = "active", logged
     <>
       {body}
       {toast ? <Toast message={toast} onDone={() => setToast(null)} /> : null}
-      {tabId ? <BottomNav items={NAV} active={tabId} onSelect={(id) => { if (id === "mytasks") setTab("active"); show(id as UserScreen); }} /> : null}
+      {tabId ? <BottomNav brand="Task board" items={NAV} active={tabId} onSelect={(id) => { if (id === "mytasks") setTab("active"); show(id as UserScreen); }}
+        footer={<><span className="who">{identity.email}</span><button className="link-btn" onClick={() => show("identities")}>My emails</button><button className="link-btn" onClick={logOut}>Log out</button></>} /> : null}
     </>
   );
 }
 
 /* ---------- Screens ---------- */
 
-function LoginScreen({ onLogin, onRegister, hasNext }: { onLogin: () => void; onRegister: () => void; hasNext: boolean }) {
-  const [email, setEmail] = useState(""); const [pw, setPw] = useState(""); const [err, setErr] = useState("");
-  return (
-    <div className="screen"><TopBar title="Log in" /><div className="scrollarea"><div className="content">
-      {hasNext ? <div className="banner">Log in to claim this task. You'll come back to it.</div> : null}
-      <Field label="Email"><Input type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" /></Field>
-      <Field label="Password" error={err}><Input type="password" autoComplete="current-password" value={pw} onChange={(e) => setPw(e.target.value)} /></Field>
-      <Button variant="primary" block onClick={() => (email && pw ? onLogin() : setErr("Enter your email and password."))}>Log in</Button>
-      <Button block style={{ marginTop: 8 }} onClick={onRegister}>Create account</Button>
-      <p className="hint" style={{ textAlign: "center", marginTop: 14 }}>Only your main email can log in. Other emails are switched inside the app.</p>
-    </div></div></div>
-  );
-}
-
-function RegisterScreen({ onDone, onBack }: { onDone: (email: string) => void; onBack: () => void }) {
-  const [f, setF] = useState({ name: "", email: "", phone: "", pw: "" });
-  const [err, setErr] = useState("");
-  const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: e.target.value });
-  return (
-    <div className="screen"><TopBar title="Create account" onBack={onBack} /><div className="scrollarea"><div className="content">
-      <Field label="Full name"><Input value={f.name} onChange={set("name")} /></Field>
-      <Field label="Email (your main login)"><Input type="email" value={f.email} onChange={set("email")} /></Field>
-      <Field label="Phone"><Input type="tel" inputMode="numeric" value={f.phone} onChange={set("phone")} /></Field>
-      <Field label="Password" error={err}><Input type="password" value={f.pw} onChange={set("pw")} /></Field>
-      <p className="hint" style={{ marginBottom: 12 }}>We email you one code to confirm this address. That is the only email we ever send.</p>
-      <Button variant="primary" block onClick={() => (f.name && f.email && f.phone && f.pw.length >= 8 && /^\S+@\S+\.\S+$/.test(f.email) ? onDone(f.email) : setErr("Fill every field with a valid email. Password needs 8+ characters."))}>Create account</Button>
-    </div></div></div>
-  );
-}
-
 function BoardScreen({ identity, onIdentity, onOpen }: { identity: Identity; onIdentity: () => void; onOpen: (id: string) => void }) {
   return (
     <div className="screen">
-      <TopBar title="Tasks" right={<button className="identity-chip" onClick={onIdentity} aria-label="Switch email">{identity.email} &#9662;</button>} />
-      <div className="scrollarea"><div className="content">
+      <TopBar title="Tasks" subtitle={`${fixtures.tasks.filter((t) => t.status !== "closed" && t.status !== "removed").length} tasks you can claim`} right={<button className="identity-chip" onClick={onIdentity} aria-label="Switch email">{identity.email} &#9662;</button>} />
+      <div className="scrollarea"><div className="content"><div className="card-grid">
         {fixtures.tasks.map((t) => {
           const till = activeTill(t.activeUntil);
           const closed = till.kind === "closed" || t.status === "closed" || t.status === "removed";
@@ -251,7 +234,7 @@ function BoardScreen({ identity, onIdentity, onOpen }: { identity: Identity; onI
             </Card>
           );
         })}
-      </div></div>
+      </div></div></div>
     </div>
   );
 }
@@ -297,7 +280,7 @@ function DetailBody({ task, identities, identityId, setIdentityId, claims, logge
 
 function ClaimedScreen({ minutes, onGo, onMore }: { minutes: number | null; onGo: () => void; onMore: () => void }) {
   return (
-    <div className="screen"><TopBar title="Task accepted" /><div className="scrollarea"><div className="content">
+    <div className="screen"><TopBar title="Task accepted" /><div className="scrollarea"><div className="content narrow center">
       <div className="center-icon">&#10003;</div>
       <p className="center-text" style={{ fontWeight: 500 }}>Task accepted</p>
       <p className="center-text note-text">{minutes === null ? "There is no time limit." : `Complete it within ${formatLimit(minutes)}.`} Find it under My tasks &rarr; Active.</p>
@@ -323,7 +306,7 @@ function MyTasksScreen({ tab, setTab, claims, identities, onSubmit }: {
         { id: "active", label: "Active" }, { id: "review", label: "Under review" }, { id: "completed", label: "Completed" }, { id: "rejected", label: "Rejected" }]} />
       <div className="scrollarea"><div className="content">
         {list.length === 0 ? <EmptyState>Nothing here yet.</EmptyState> : null}
-        {list.map((c) => {
+        <div className="card-grid">{list.map((c) => {
           const t = fixtures.tasks.find((x) => x.id === c.taskId);
           return (
             <Card key={c.id}>
@@ -371,7 +354,7 @@ function MyTasksScreen({ tab, setTab, claims, identities, onSubmit }: {
               </>) : null}
             </Card>
           );
-        })}
+        })}</div>
       </div></div>
     </div>
   );
@@ -446,7 +429,7 @@ function WalletScreen({ identities, earned, withdrawn, inProcess, available, pay
     }))
   ].sort((a, b) => (a.at < b.at ? 1 : -1));
   return (
-    <div className="screen"><TopBar title="Wallet" /><div className="scrollarea"><div className="content">
+    <div className="screen"><TopBar title="Wallet" subtitle="Your earnings and withdrawals" /><div className="scrollarea"><div className="content"><div className="two-col"><div className="sticky">
       <Card hero>
         <div className="stat"><span>Total earned</span><span>{formatRupees(earned)}</span></div>
         <div className="stat"><span>Total withdrawn</span><span>{formatRupees(withdrawn)}</span></div>
@@ -455,13 +438,14 @@ function WalletScreen({ identities, earned, withdrawn, inProcess, available, pay
         <button className="expander" aria-expanded={open} onClick={() => setOpen(!open)}>{open ? "Hide" : "Show"} earnings by email</button>
         {open ? identities.map((i) => <div key={i.id} className="stat"><span>{i.email}</span><span>{formatRupees(i.earned)}</span></div>) : null}
       </Card>
+      </div><div>
       <h2 className="section-title">Transactions</h2>
       {txns.length === 0 ? <EmptyState>No transactions yet.</EmptyState> : null}
       {txns.map((t) => (
         <TxRow key={t.id} id={t.id} at={t.at} title={t.title} sub={t.sub} amount={t.amount} income={t.income} details={t.details}
           open={openTx === t.id} onToggle={() => setOpenTx(openTx === t.id ? null : t.id)} />
       ))}
-    </div></div></div>
+    </div></div></div></div></div>
   );
 }
 
@@ -484,7 +468,7 @@ function PayoutScreen({ available, inProcess, payouts, onRequest, onDemoPaid, on
     }
   }
   return (
-    <div className="screen"><TopBar title="Payout" right={<button className="identity-chip" onClick={onHelp}>Help</button>} /><div className="scrollarea"><div className="content">
+    <div className="screen"><TopBar title="Payout" subtitle="Withdraw your balance to your UPI ID" right={<button className="identity-chip" onClick={onHelp}>Help</button>} /><div className="scrollarea"><div className="content"><div className="two-col"><div>
       <Card hero>
         <p style={{ fontSize: 12, margin: "0 0 4px" }}>Withdrawable balance</p>
         <h3 style={{ fontSize: 20 }}>{formatRupees(available)}</h3>
@@ -494,6 +478,7 @@ function PayoutScreen({ available, inProcess, payouts, onRequest, onDemoPaid, on
       <Field label="Amount (₹)" error={errs.amount} hint={`Minimum ${formatRupees(MIN_PAYOUT)}`}><Input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="10" disabled={pending} /></Field>
       <Field label="UPI ID" error={errs.upi} hint="You'll enter this each time. It isn't saved as a payment method."><Input id="upi-input" value={upi} onChange={(e) => setUpi(e.target.value)} placeholder="yourname@upi" disabled={pending} autoComplete="off" /></Field>
       <Button variant="primary" block disabled={pending} onClick={submit}>Request payout</Button>
+      </div><div>
       <h2 className="section-title">Payout requests</h2>
       {payouts.length === 0 ? <EmptyState>No payout requests yet.</EmptyState> : null}
       {[...payouts].sort((a, b) => ((a.at ?? "") < (b.at ?? "") ? 1 : -1)).map((p) => (
@@ -502,16 +487,24 @@ function PayoutScreen({ available, inProcess, payouts, onRequest, onDemoPaid, on
           details={payoutDetails(p)} open={openTx === p.id} onToggle={() => setOpenTx(openTx === p.id ? null : p.id)} />
       ))}
       {pending ? <p className="hint">Demo: <button className="expander" style={{ padding: 0, minHeight: 0 }} onClick={onDemoPaid}>admin marks the request as paid</button></p> : null}
-    </div></div></div>
+    </div></div></div></div></div>
   );
 }
 
-function IdentitiesScreen({ identities, activeId, onSwitch, onAdd, onBack }: {
-  identities: Identity[]; activeId: string; onSwitch: (id: string) => void; onAdd: (email: string) => void; onBack: () => void;
+function IdentitiesScreen({ identities, activeId, onSwitch, onAdd, onLogout, onBack }: {
+  identities: Identity[]; activeId: string; onSwitch: (id: string) => void; onAdd: (email: string) => void; onLogout: () => void; onBack: () => void;
 }) {
-  const [email, setEmail] = useState(""); const [err, setErr] = useState(""); const [verifying, setVerifying] = useState<string | null>(null);
+  const { emailVerification } = useServices();
+  const [email, setEmail] = useState(""); const [err, setErr] = useState("");
+  const [verifying, setVerifying] = useState<{ email: string; sent: CodeSent } | null>(null);
+  async function sendCode() {
+    if (!/^\S+@\S+\.\S+$/.test(email)) return setErr("Enter a valid email.");
+    if (identities.some((i) => i.email.toLowerCase() === email.trim().toLowerCase())) return setErr("That email is already added.");
+    setErr("");
+    try { setVerifying({ email, sent: await emailVerification.send(email) }); } catch (e) { setErr(messageOf(e)); }
+  }
   return (
-    <div className="screen"><TopBar title="My emails" onBack={onBack} /><div className="scrollarea"><div className="content">
+    <div className="screen"><TopBar title="My emails" onBack={onBack} /><div className="scrollarea"><div className="content narrow">
       <p className="muted">One login, several emails. Pick the email you want to claim tasks with. Earnings from all emails go into one wallet.</p>
       {identities.map((i) => (
         <Card key={i.id}>
@@ -525,49 +518,17 @@ function IdentitiesScreen({ identities, activeId, onSwitch, onAdd, onBack }: {
       <p className="section-label">Add an email</p>
       {verifying ? (
         <Card>
-          <OtpForm email={verifying} onVerified={() => { onAdd(verifying); setVerifying(null); setEmail(""); }} onCancel={() => setVerifying(null)} />
+          <CodeForm email={verifying.email} sent={verifying.sent} cancelLabel="Use a different email" onCancel={() => setVerifying(null)}
+            intro={<p className="note-text" style={{ marginTop: 0 }}>We sent a 6-digit code to <strong>{verifying.email}</strong> to confirm it.</p>}
+            onVerify={async (code) => { await emailVerification.verify(verifying.email, code); onAdd(verifying.email); setVerifying(null); setEmail(""); }}
+            onResend={async () => { const sent = await emailVerification.send(verifying.email); setVerifying({ email: verifying.email, sent }); return sent; }} />
         </Card>
       ) : (<>
-        <Field label="New email" error={err} hint="We email one code to confirm it. That is the only email we send."><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="another@example.com" /></Field>
-        <Button block onClick={() => { if (!/^\S+@\S+\.\S+$/.test(email)) return setErr("Enter a valid email."); if (identities.some((i) => i.email === email)) return setErr("That email is already added."); setErr(""); setVerifying(email); }}>Send code</Button>
+        <Field label="New email" error={err} hint="We email one code to confirm it."><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="another@example.com" /></Field>
+        <Button block onClick={() => { void sendCode(); }}>Send code</Button>
       </>)}
+      <hr className="divider" />
+      <Button block onClick={onLogout}>Log out</Button>
     </div></div></div>
-  );
-}
-
-const DEMO_OTP = "123456";
-const MAX_OTP_TRIES = 5;
-
-/** One-time email verification. The code is sent once, when an email is registered or added. Demo accepts 123456. */
-function OtpForm({ email, onVerified, onCancel }: { email: string; onVerified: () => void; onCancel?: () => void }) {
-  const [code, setCode] = useState(""); const [err, setErr] = useState(""); const [tries, setTries] = useState(0); const [wait, setWait] = useState(30); const [sent, setSent] = useState(false);
-  useEffect(() => {
-    if (wait <= 0) return;
-    const t = setTimeout(() => setWait((w) => w - 1), 1000);
-    return () => clearTimeout(t);
-  }, [wait]);
-  const locked = tries >= MAX_OTP_TRIES;
-  function verify() {
-    if (locked) return;
-    if (code === DEMO_OTP) return onVerified();
-    const used = tries + 1;
-    setTries(used);
-    setErr(used >= MAX_OTP_TRIES ? "Too many wrong codes. Request a new code." : `That code is wrong. ${MAX_OTP_TRIES - used} attempt${MAX_OTP_TRIES - used === 1 ? "" : "s"} left.`);
-  }
-  return (
-    <>
-      <p className="note-text" style={{ marginTop: 0 }}>We sent a 6-digit code to <strong>{email}</strong>. We email a code once to confirm the address, nothing else.</p>
-      <Field label="Verification code" error={err}>
-        <Input inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} disabled={locked}
-          onChange={(e) => { setCode(e.target.value.replace(/\D/g, "")); setErr(""); }} placeholder="123456" />
-      </Field>
-      <Button variant="primary" block disabled={code.length !== 6 || locked} onClick={verify}>Verify email</Button>
-      <Button block style={{ marginTop: 8 }} disabled={wait > 0 && !locked} onClick={() => { setWait(30); setTries(0); setErr(""); setCode(""); setSent(true); }}>
-        {wait > 0 && !locked ? `Resend code in 0:${String(wait).padStart(2, "0")}` : "Resend code"}
-      </Button>
-      {sent ? <p className="hint" role="status">A new code was sent.</p> : null}
-      {onCancel ? <Button block style={{ marginTop: 8 }} onClick={onCancel}>Use a different email</Button> : null}
-      <p className="hint" style={{ marginTop: 12 }}>Demo: the code is <span className="mono">{DEMO_OTP}</span>.</p>
-    </>
   );
 }

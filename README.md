@@ -11,6 +11,7 @@ Full plan: [docs/PLAN.md](docs/PLAN.md).
 | 1. Repo structure | done |
 | 2. Design system (tokens, primitives) | done |
 | 3. Admin + user flow UI in ui-hub | done, waiting for sign-off |
+| 3b. Universal sign-in screens, ports + mock adapters, tablet and desktop layouts | done |
 | 4+. Backend (DB, auth/RBAC, claims, payouts) | not started |
 
 ## Run the UI hub
@@ -21,7 +22,8 @@ pnpm install
 pnpm dev:hub               # http://localhost:5173
 ```
 
-- `/` user app (all screens, tap-through or "show all screens")
+- `/` user app (all screens, tap-through or "show all screens"); "Preview as" switches phone, tablet and desktop
+  Demo logins: `priya@gmail.com` (user) and `hrishabh@example.com` (admin), password `password123`; every one-time code is `123456`
 - `/admin` admin app (switch "View as" role to see permission-gated navigation)
 - `/design-system` tokens, typography, every primitive
 
@@ -41,7 +43,8 @@ apps/worker     claim-expiry + reconciliation jobs (later)
 packages/ui     tokens, primitives, user + admin screens: the ONLY place UI code lives
 packages/money  integer-paise Money helpers + outcome maths (tested)
 packages/core   domain contracts + mock fixtures the UI consumes
-packages/db, auth, storage, ai, config   placeholders for the backend phase
+packages/auth, storage, ai   ports' mock adapters + placeholders for Authgate, object storage, AI
+packages/db, config   placeholders for the backend phase (Vista = managed Postgres)
 ```
 
 ## Rules

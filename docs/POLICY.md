@@ -5,4 +5,5 @@
 - Minimum payout, payout cadence, TDS and entity structure: decide with a CA before real money moves.
 - Terms of Service and Privacy Policy (DPDP Act) need review before launch.
 
-- Email: we send no emails except a one-time verification code (OTP) when an email is registered or added. Workers see review results, payments and status in the app only.
+- Email: we send no emails except one-time verification codes: when an account is created, when an extra email is added, and when someone resets a forgotten password (a code, never a link). Workers see review results, payments and status in the app only.
+- Sign-in: Authgate owns identity (sign-up, password, sessions, reset). The account's first email is verified once at sign-up. Extra emails are added and verified inside the site, one code each. Admins are invited, so the admin sign-in has no sign-up.
