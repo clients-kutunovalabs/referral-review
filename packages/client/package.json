@@ -7,11 +7,10 @@
   "types": "src/index.ts",
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
-    "test": "vitest run"
+    "test": "vitest run --no-fsModuleCache"
   },
   "dependencies": {
-    "@rr/core": "workspace:*",
-    "@rr/money": "workspace:*"
+    "@rr/core": "workspace:*"
   },
   "devDependencies": {
     "vitest": "^5.0.5"

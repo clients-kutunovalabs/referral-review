@@ -4,8 +4,8 @@ import type { DemoInfo } from "@rr/ui";
 import { createMockApi, type Mock } from "./mockApi";
 
 /** ui-hub runs entirely on mock adapters. The real site swaps these for HTTP clients that talk to the server. */
-export const DEMO_CODE = "123456";
-export const DEMO_PASSWORD = "password123";
+const DEMO_CODE = "123456";
+const DEMO_PASSWORD = "password123";
 
 const auth = createMockAuth({
   fixedCode: DEMO_CODE,

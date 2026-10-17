@@ -7,7 +7,8 @@
     "node": ">=20"
   },
   "scripts": {
-    "dev": "pnpm dev:web",
+    "preinstall": "node scripts/only-pnpm.mjs",
+    "dev": "node scripts/dev.mjs",
     "dev:hub": "pnpm --filter @rr/ui-hub dev",
     "build": "pnpm -r build",
     "build:hub": "pnpm --filter @rr/ui-hub build",

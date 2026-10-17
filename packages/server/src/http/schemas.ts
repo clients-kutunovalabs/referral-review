@@ -6,7 +6,7 @@ const text = (max: number) => z.string().max(max);
 const email = z.string().trim().min(3).max(254);
 const id = z.string().uuid();
 /** Money arrives as a string of paise, never a JSON number. */
-export const paise = z.string().regex(/^\d{1,12}$/, "Amount must be whole paise.").transform((s) => BigInt(s));
+const paise = z.string().regex(/^\d{1,12}$/, "Amount must be whole paise.").transform((s) => BigInt(s));
 const permission = z.enum(PERMISSIONS.map((p) => p.key) as [string, ...string[]]);
 
 export const schemas = {

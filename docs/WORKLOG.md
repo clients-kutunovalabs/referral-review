@@ -71,6 +71,12 @@ What was built, what went wrong and how it was fixed, and what is deliberately n
 | 16 | The phone-sized layout flashed on desktop before the app measured itself. | Design | The app renders in the browser only, after measuring. |
 | 17 | Seeding the owner could overwrite an existing owner's password. | Design | Seeding only creates what is missing. |
 | 18 | **An admin who also has a worker account could approve their own work** (and so pay themselves). The plan waived maker-checker for payouts, not for reviews. | Security review | Nobody can review their own work; tested. Payouts keep the plan's rule. |
+| 19 | **`npm run dev` did not exist**, and plain `npm install` cannot install a pnpm workspace. | User report | `npm run dev` now finds or fetches pnpm, installs once, and starts the site. `npm install` stops with a clear message instead of failing halfway. Proven from a fresh clone. |
+| 20 | **A fresh checkout's dev server returned 503**: the embedded database folder was not created. | `npm run dev` | The folder is created first. Tests missed it because they use in-memory databases. |
+| 21 | The gallery and UI package were tested on React 18 while production runs React 19. | Dependency review | All on React 19; full tests, build and the 17-step browser journey pass on it. |
+| 22 | Test runs failed at random (`ENOTEMPTY ... .vitest-cache`): parallel packages shared one cache folder. | `pnpm check` | The shared cache is switched off for tests. Two full runs in a row pass. |
+| 23 | Windows line endings could change the embedded migration text. | Review | `.gitattributes` forces LF. |
+| 24 | Unused dependencies and exports (worker, client, auth, schemas, gallery). | knip | Removed. The rest of knip's list is intentional (see DEPLOY.md: `pg`, `nodemailer` are direct deps so the standalone build carries them). |
 
 Test-harness mistakes made along the way, in the open: two shell commands that killed their own shell (`pkill -f` matched itself); test data that assumed an empty database; one test that asserted nothing and was deleted.
 

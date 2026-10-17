@@ -19,9 +19,9 @@ Everything done, every issue found and fixed, and everything deferred: [docs/WOR
 ## Run it
 
 ```
-corepack enable && pnpm install
-pnpm dev:web          # http://localhost:3000, no setup: embedded database, sign-in codes printed in this terminal
+npm run dev           # http://localhost:3000. Installs with pnpm on first run (fetches pnpm if you lack it). Embedded database; sign-in codes are printed in this terminal.
 ```
+(Plain `npm install` is blocked on purpose: the workspace needs pnpm. `npm run dev` does the install for you. Windows, macOS and Linux; Node 20+.)
 Set `OWNER_EMAIL` and `OWNER_PASSWORD` first to get an admin login at `/admin`.
 
 ```

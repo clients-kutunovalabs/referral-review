@@ -8,7 +8,7 @@ export interface OtpOptions {
 
 interface Pending { code: string; expiresAt: number; attempts: number }
 
-export function randomCode(): string {
+function randomCode(): string {
   const digits = new Uint32Array(CODE_LENGTH);
   globalThis.crypto.getRandomValues(digits);
   return Array.from(digits, (d) => String(d % 10)).join("");

@@ -7,7 +7,7 @@
   "types": "src/index.ts",
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
-    "test": "vitest run"
+    "test": "vitest run --no-fsModuleCache"
   },
   "devDependencies": {
     "vitest": "^5.0.5"
