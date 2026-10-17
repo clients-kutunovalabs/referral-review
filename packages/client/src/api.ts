@@ -20,6 +20,7 @@ export function createHttpApi(http: Http): Api {
     wallet: () => get("/api/wallet"),
     requestPayout: (amount, upi) => post("/api/payouts", { amountPaise: amount, upi }),
     addIdentity: (email, code) => post("/api/identities", { email, code }),
+    changePassword: (current, next) => post("/api/me/password", { current, next }),
     listTickets: () => get("/api/tickets"),
     getTicket: (id) => get(`/api/tickets/${enc(id)}`),
     async createTicket({ title, body, file }) {

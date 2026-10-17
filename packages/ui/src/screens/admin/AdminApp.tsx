@@ -11,6 +11,7 @@ import {
 import { ErrorBox, Loading, isUnauthenticated, messageOf, useAsync, useRefreshOnFocus } from "../../data";
 import { useServices } from "../../services";
 import { AuthFlow } from "../auth/AuthFlow";
+import { ChangePassword } from "../auth/ChangePassword";
 import { AdminTicketChat, AdminTicketList, type SupportTab } from "./SupportScreens";
 
 export type AdminScreen =
@@ -62,7 +63,7 @@ function AdminTaskCard({ t, onOpen }: { t: AdminTaskRow; onOpen?: () => void }) 
       <p>{formatRupees(t.reward)} reward &middot; {claimedText(t.claimed, t.slotsTotal)} &middot; {formatLimit(t.timerMinutes)}{t.timerMinutes === null ? "" : " limit"}</p>
       <div className="card-split" style={{ marginTop: "var(--space-3)" }}>
         <div className="card-split-main"><div className="chips stack" style={{ margin: 0 }}>{taskPill(t)}<StatusPill tone="gray">Script: {TEXT_MODE_LABEL[t.textMode]}</StatusPill></div></div>
-        {onOpen ? <Button compact>Manage</Button> : null}
+        {onOpen ? <Button compact onClick={(e) => { e.stopPropagation(); onOpen(); }}>Manage</Button> : null}
       </div>
     </Card>
   );
@@ -193,7 +194,7 @@ function DashboardScreen({ adminName, wide, can, rev, go, onProfile }: { adminNa
   return (
     <div className="screen">
       <TopBar title={wide ? "Dashboard" : "Admin panel"} subtitle={`Welcome back, ${adminName}`} right={wide ? undefined : (
-        <button className="profile-btn" aria-label="Roles and permissions" onClick={onProfile}>
+        <button className="profile-btn" aria-label={`${adminName}, roles and permissions`} onClick={onProfile}>
           <Icon name="user" /><span>{adminName}</span><span className="chev" aria-hidden="true">&#9656;</span>
         </button>
       )} />
@@ -648,6 +649,7 @@ function AccessScreen({ me, wide, perms, tab: want, setTab, rev, notify, guard, 
           <p className="section-label" style={{ margin: "14px 0 0" }}>Permissions</p>
           <div className="chips perm-chips">{myPerms.map((p) => <span key={p.key} className="chip">{p.label}</span>)}</div>
         </Card>
+        <div style={{ marginBottom: 8 }}><ChangePassword /></div>
         {wide ? null : <Button block style={{ marginBottom: 8 }} onClick={onLogout}>Log out</Button>}
         {tabs.length ? <div className="tabs-bleed" style={{ marginBottom: 0 }}><Tabs<AccessTab> value={tab as AccessTab} onChange={setTab} tabs={tabs} /></div> : <p className="hint">Your roles do not include managing users or roles.</p>}
         <div style={{ paddingTop: 12 }}>

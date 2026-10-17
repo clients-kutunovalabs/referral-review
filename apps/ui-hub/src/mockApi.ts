@@ -20,6 +20,7 @@ export interface MockOptions {
   viewerRoleId?: string;
   /** The one-time code the demo accepts when adding an email. */
   demoCode: string;
+  demoPassword?: string;
 }
 
 export interface Mock { api: Api; markNextPayoutPaid(): void }
@@ -114,6 +115,11 @@ export function createMockApi(opts: MockOptions): Mock {
       myPayouts.unshift(p);
       const { upiFull: _f, ...rest } = p; void _f;
       return clone(rest);
+    },
+    async changePassword(current, next) {
+      if (current !== (opts.demoPassword ?? "password123")) throw new ApiError("invalid_credentials", "Your current password is not right.", 400);
+      if (next.length < 8) throw new ApiError("weak_password", "Password needs at least 8 characters.", 400);
+      if (next === current) throw new ApiError("weak_password", "Choose a password that is different from the current one.", 400);
     },
     async addIdentity(email, code) {
       if (code !== opts.demoCode) throw new ApiError("invalid_code", "That code is wrong.", 400);

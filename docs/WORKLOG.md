@@ -84,6 +84,13 @@ What was built, what went wrong and how it was fixed, and what is deliberately n
 | 28 | A flat 14-day session did not match the rule "a week after the last visit". | Decision | 168-hour sliding window, cookie renewed with it. |
 | 29 | Authgate placeholder was on the wrong layer and unused. | Review | Deleted. The seam is the server `AuthProvider`; Authgate will implement that. |
 | 30 | Testing the real screens meant signing up or in every time, with no way to see both apps quickly. | User request | Development-only quick login at `/dev` (worker and admin, sample data). Off in production by configuration, double-checked in the route, `localhost` only; tested. |
+| 31 | **The Docker image could not be built**: the root `preinstall` check I added was not copied into the image, so `pnpm install` failed inside it. Nothing caught it because the image had never been built. | Building the image for the first time (a Docker daemon turned out to be usable here) | The script is now copied in the manifests layer. Both images build and run. |
+| 32 | **The worker image downloaded pnpm every time it started** (needs internet at start-up; fails offline). | Running the image | pnpm is prepared once into a shared folder at build time. |
+| 33 | The web image's health check always looked at port 3000, so a container on another port showed "unhealthy". | Running the image on port 3100 | The health check follows `PORT`. |
+| 34 | **A dead background worker was invisible**: claims would silently stop expiring. | Review | The worker checks in every minute; `/api/health?strict=1` returns 503 when it has been quiet for 10 minutes, for an uptime monitor. |
+| 35 | Accessibility scan (axe, 42 screens at phone/tablet/desktop) found 2 serious problems: a button inside a clickable card, and two buttons whose accessible name did not contain their visible text. | New scan, `e2e/a11y.mjs` | Fixed; the scan is clean. |
+| 36 | No way to change a password while logged in. | Launch list | Change-password on the worker's account screen and the admin's access screen: needs the current password (5 tries per 15 minutes), signs out other browsers. |
+| 37 | Errors were only `console.error` text lines; nobody would be told. | Launch list | JSON log lines, an optional alert webhook (`ALERT_WEBHOOK_URL`) for unexpected errors, failed jobs and money mismatches. |
 
 Test-harness mistakes made along the way, in the open: two shell commands that killed their own shell (`pkill -f` matched itself); test data that assumed an empty database; one test that asserted nothing and was deleted.
 
@@ -112,28 +119,29 @@ Test-harness mistakes made along the way, in the open: two shell commands that k
 ### Not built (known, and what it costs you)
 | Item | Effect today |
 |---|---|
-| **Docker image never built or run** (no Docker daemon here); CI does not build it yet | The Dockerfile is written carefully but unproven. The Next.js artifact it packages *was* run in isolation. First thing to do on a machine with Docker. |
+| ~~Docker image never built~~ | **Done**: both images build, run as a non-root user, pass the 18-step browser journey, the attack checks and a backup-restore test. CI repeats all of it on every push. First thing to do on a machine with Docker. |
 | **One web server only** | Screenshots live on local disk. Several servers need the S3 adapter. |
 | **Offline use** (service worker) | The site installs to the home screen but needs a connection for every screen. |
 | **Browser back button and links** | The app is one page; back leaves the site and a reload returns to the first screen. |
 | **Pagination** | Lists are capped (500 rows, 200 closed). Fine for a sales-team beta, not for thousands. |
 | **Cleaning up unused uploads; retention policy for screenshots** | Orphaned files accumulate on disk. |
-| **Change password / change main email screens** | Passwords change only through "Forgot password". |
+| **Change main email screen** | The main (login) email cannot be changed from the app. Change password is done. |
 | **Audit-log viewer, settings screen** (minimum payout is a database setting) | Read with SQL for now. |
 | **Notification badge / unread markers** | Replies appear by refresh only. |
 | **Account anonymisation tool** | Soft delete only; erasing personal details is a manual task. |
 | **Sign-up reveals whether an email has an account** | Common trade-off; reset does not reveal it. |
-| **Duplicate UPI check** | Deferred by policy until UPI IDs are saved per account. |
+
 | **Per-workspace roles, branding, row-level security** | For when this becomes a multi-tenant product. |
-| **Load test, penetration test, accessibility audit** | Not done. Do the first two before a large public launch. |
-| **Error tracking and metrics** | Logs only. |
+| **Penetration test by outside people** | Not done. Automated attack checks (`e2e/security.mjs`) and a basic load test were run; an outside test is still worth doing before a large public launch. Automated accessibility checks pass, but they find only part of the problems: try the screens with a screen reader and a keyboard. |
+| **Metrics dashboards** | Logs and alerts only (no graphs). |
 | **UPI key rotation** | One key; rotating needs a re-encryption script. |
 | **One dev-only advisory** (`braces`, inside the design gallery's build tool, no fix published) | Never reaches production. |
 
 ## 5. Before you tell people the site is live
 
-1. `docker compose up --build` on a machine with Docker; confirm it starts and `/api/health` answers.
-2. Run `pnpm e2e` against it.
+1. `docker compose up --build` on the real server; confirm `/api/health?strict=1` answers 200.
+2. Run `pnpm e2e` (and `node e2e/security.mjs`) against it.
 3. Put the real Vista, SMTP and domain in; run one task through to a real payout with your own account.
 4. `pnpm reconcile` says `reconcile.ok`.
-5. A backup exists and a restore has been tried.
+5. `ops/backup.sh` is scheduled, the copy leaves the machine, and `ops/verify-restore.sh` said `verify.ok`.
+6. The uptime monitor watches `/api/health?strict=1` and `ALERT_WEBHOOK_URL` is set.

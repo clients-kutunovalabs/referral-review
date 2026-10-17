@@ -1,3 +1,4 @@
+import { errorText, logEvent } from "./log";
 import type { Identity, Me } from "@rr/core";
 import { isUniqueViolation } from "@rr/db";
 import { OTP_RULES, type CodeSent } from "@rr/core";
@@ -34,7 +35,7 @@ export async function sendIdentityCode(ctx: Ctx, userId: string, rawEmail: strin
   if (n >= ctx.cfg.maxIdentitiesPerUser) fail("bad_request", `You can link up to ${ctx.cfg.maxIdentitiesPerUser} emails.`);
   const { sent, code } = await issueCode(ctx, key(userId, email), { deliver: true });
   try { await ctx.email.send({ to: email, kind: "identity_code", code: code as string, expiresInMinutes: OTP_RULES.ttlMs / 60_000 }); }
-  catch (err) { console.error("[email] could not send identity code:", err instanceof Error ? err.message : err); fail("internal", "We could not send the email. Please try again.", 502); }
+  catch (err) { logEvent("error", "email.identity_code_failed", { error: errorText(err) }); fail("internal", "We could not send the email. Please try again.", 502); }
   return sent;
 }
 

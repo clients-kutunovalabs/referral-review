@@ -7,7 +7,7 @@ export default tseslint.config(
   ...tseslint.configs.recommended,
   {
     files: ["scripts/**/*.mjs", "apps/*/scripts/**/*.mjs", "packages/*/scripts/**/*.mjs", "apps/*/*.config.mjs", "e2e/**/*.mjs"],
-    languageOptions: { globals: { URL: "readonly", console: "readonly", process: "readonly", fetch: "readonly", Buffer: "readonly", setTimeout: "readonly" } }
+    languageOptions: { globals: { URL: "readonly", console: "readonly", process: "readonly", fetch: "readonly", Buffer: "readonly", setTimeout: "readonly", FormData: "readonly", File: "readonly", crypto: "readonly" } }
   },
   {
     // Money safety: no floating point parsing or Math rounding in money code.

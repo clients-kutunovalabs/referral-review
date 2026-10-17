@@ -1,3 +1,4 @@
+import { errorName, errorText, logEvent } from "../log";
 import { ApiError } from "@rr/core";
 import type { Ctx } from "../ctx";
 import { secureCookies } from "../ctx";
@@ -23,7 +24,7 @@ export function errorResponse(err: unknown): Response {
     return json({ error: { code: err.code, message: err.message, ...(err.retryAfterSeconds ? { retryAfterSeconds: err.retryAfterSeconds } : {}) } },
       { status: err.status, headers: err.retryAfterSeconds ? { "retry-after": String(err.retryAfterSeconds) } : {} });
   }
-  console.error("[api] unexpected error:", err);
+  logEvent("error", "api.unexpected_error", { error: errorName(err), message: errorText(err) });
   return json({ error: { code: "internal", message: "Something went wrong on our side. Please try again." } }, { status: 500 });
 }
 

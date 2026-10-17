@@ -9,6 +9,7 @@ import { ErrorBox, Loading, isUnauthenticated, messageOf, useAsync, useRefreshOn
 import { useServices } from "../../services";
 import { CreateTicketBody, HelpScreen, TicketChatScreen, type HelpTab } from "./HelpScreens";
 import { AuthFlow, type AuthView, type SignUpField } from "../auth/AuthFlow";
+import { ChangePassword } from "../auth/ChangePassword";
 import { CodeForm } from "../auth/CodeForm";
 
 export type UserScreen =
@@ -214,7 +215,7 @@ export function UserApp({ initialScreen = "board", initialTab = "active", logged
 function BoardScreen({ tasks, identity, onIdentity, onOpen }: { tasks: Task[]; identity: Identity; onIdentity: () => void; onOpen: (id: string) => void }) {
   return (
     <div className="screen">
-      <TopBar title="Tasks" subtitle={`${tasks.filter((t) => t.status !== "closed" && t.status !== "removed").length} tasks you can claim`} right={<button className="identity-chip" onClick={onIdentity} aria-label="Switch email">{identity.email} &#9662;</button>} />
+      <TopBar title="Tasks" subtitle={`${tasks.filter((t) => t.status !== "closed" && t.status !== "removed").length} tasks you can claim`} right={<button className="identity-chip" onClick={onIdentity} aria-label={`Switch email, now ${identity.email}`}>{identity.email} &#9662;</button>} />
       <div className="scrollarea"><div className="content"><div className="card-grid">
         {tasks.length === 0 ? <EmptyState>No tasks right now. Check back soon.</EmptyState> : null}
         {tasks.map((t) => {
@@ -227,7 +228,7 @@ function BoardScreen({ tasks, identity, onIdentity, onOpen }: { tasks: Task[]; i
               <p>Reward {formatRupees(t.reward)} &middot; {t.slotsTotal === null ? "unlimited slots" : `${t.slotsRemaining} of ${t.slotsTotal} slots left`}</p>
               <div className="row tight">
                 <StatusPill tone={tone}>{closed ? "Closed" : till.kind === "none" ? "Active · no end date" : `Active till: ${till.label}`}</StatusPill>
-                <Button compact disabled={closed}>View</Button>
+                <Button compact disabled={closed} onClick={(e) => { e.stopPropagation(); onOpen(t.id); }}>View</Button>
               </div>
             </Card>
           );
@@ -537,7 +538,8 @@ function IdentitiesScreen({ identities, activeId, onSwitch, onAdded, onLogout, o
         <Button block onClick={() => { void sendCode(); }}>Send code</Button>
       </>)}
       <hr className="divider" />
-      <Button block onClick={onLogout}>Log out</Button>
+      <ChangePassword />
+      <Button block style={{ marginTop: 8 }} onClick={onLogout}>Log out</Button>
     </div></div></div>
   );
 }

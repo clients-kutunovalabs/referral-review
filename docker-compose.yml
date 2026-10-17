@@ -17,6 +17,7 @@ services:
 
   web:
     build: { context: ., target: web }
+    restart: unless-stopped
     env_file: .env
     environment:
       DATABASE_URL: postgres://rr:rr@db:5432/rr
@@ -27,6 +28,7 @@ services:
 
   worker:
     build: { context: ., target: worker }
+    restart: unless-stopped
     env_file: .env
     environment:
       DATABASE_URL: postgres://rr:rr@db:5432/rr

@@ -42,6 +42,11 @@ export async function revokeSession(ctx: Ctx, token: string): Promise<void> {
   await ctx.db.query("delete from sessions where token_hash = $1", [sha256(token)]);
 }
 
+/** Signs a person out everywhere except the browser they are using right now (after a password change). */
+export async function revokeOtherSessions(q: Queryable, userId: string, keepSessionId: string): Promise<void> {
+  await q.query("delete from sessions where user_id = $1 and id <> $2", [userId, keepSessionId]);
+}
+
 export async function revokeUserSessions(q: Queryable, userId: string): Promise<void> {
   await q.query("delete from sessions where user_id = $1", [userId]);
 }

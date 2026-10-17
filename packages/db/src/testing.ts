@@ -11,6 +11,21 @@ export const engines = (): Engine[] => (process.env["TEST_DATABASE_URL"] ? ["pgl
 
 export interface TestDb { db: Db; engine: Engine; close: () => Promise<void> }
 
+/** A fresh, isolated database with NO migrations applied, for tests that need to apply them one at a time. */
+export async function createBlankTestDb(engine: Engine): Promise<TestDb> {
+  if (engine === "pglite") {
+    const db = await createPgliteDb();
+    return { db, engine, close: () => db.close() };
+  }
+  const url = process.env["TEST_DATABASE_URL"];
+  if (!url) throw new Error("TEST_DATABASE_URL is not set");
+  const schema = `t_${randomBytes(6).toString("hex")}`;
+  const admin = createPgDb({ connectionString: url, max: 1 });
+  await admin.exec(`create schema ${schema}`);
+  const db = createPgDb({ connectionString: url, schema, max: 5 });
+  return { db, engine, close: async () => { await db.close(); await admin.exec(`drop schema ${schema} cascade`); await admin.close(); } };
+}
+
 /** A fresh, migrated, isolated database. Postgres gets its own schema (dropped on close). */
 export async function createTestDb(engine: Engine): Promise<TestDb> {
   if (engine === "pglite") {

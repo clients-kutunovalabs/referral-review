@@ -12,6 +12,8 @@ export interface ServerConfig {
   /** Number of trusted reverse proxies in front of the app (0 = ignore X-Forwarded-For). */
   trustProxyHops: number;
   sessionIdleHours: number;
+  /** Optional: where to post alerts (Slack, Discord, any JSON webhook). */
+  alertWebhookUrl?: string | undefined;
   maxIdentitiesPerUser: number;
   /** Whether an AI provider is configured. Without it, admins cannot publish AI-script tasks. */
   aiEnabled: boolean;

@@ -11,6 +11,7 @@ This is the checklist from "code works" to "people can use it". Nothing here nee
 | A domain with HTTPS | Cookies are `Secure`; the site refuses to start in production over http. | `APP_URL=https://...` |
 | A server that runs Docker (or Node 22) with a **persistent disk** | Screenshots are stored on disk. | `UPLOAD_DIR` (mount a volume) |
 | Two generated secrets | Sign CSRF tokens; encrypt UPI IDs. **Back up the UPI key.** Losing it makes stored UPI IDs unreadable. | `SESSION_SECRET`, `UPI_ENCRYPTION_KEY` |
+| (Optional) A webhook for alerts | Posts "money records disagree", "a background job failed" and "unexpected server error" to Slack, Discord or any JSON webhook. Messages carry no personal data. | `ALERT_WEBHOOK_URL` |
 | (Optional) Anthropic API key | AI-written scripts. Without it, admins cannot publish AI-script tasks. | `ANTHROPIC_API_KEY` |
 | First owner login | Created on first start if it does not exist. | `OWNER_EMAIL`, `OWNER_PASSWORD` |
 
@@ -32,7 +33,7 @@ cp .env.example .env        # fill it in
 docker compose up --build   # web on :3000, worker, and a local Postgres (drop the db service when using Vista)
 ```
 
-Two images come from one `Dockerfile`: `--target web` and `--target worker`. The design gallery (ui-hub) is never in either.
+Two images come from one `Dockerfile` (CI builds both on every push, starts them against a real Postgres, and runs the browser journey, the attack checks and a backup-restore test against them): `--target web` and `--target worker`. The design gallery (ui-hub) is never in either.
 
 Without Docker:
 
@@ -63,10 +64,14 @@ pnpm worker                                           # separate process: expire
 
 ## 5. Run-time checks
 
-- `GET /api/health` returns `{"ok":true}` when the site can reach the database. Point your monitor at it.
-- The worker logs one JSON line per event. `reconcile.PROBLEMS` means the money records disagree: **stop paying and investigate** (see the runbook).
-- Back up the database daily and the upload volume; test a restore (see [RUNBOOK](RUNBOOK.md)).
+**Monitoring (set these up before launch; 10 minutes):**
+- **Uptime monitor** (UptimeRobot, Better Stack, or any): check `https://<your site>/api/health?strict=1` every minute, and alert on anything but 200. It answers 200 only when the database is reachable **and the background worker has checked in within 10 minutes**. A dead worker is silent otherwise: timed-out claims never free their slots. Plain `/api/health` (no `strict`) is for the container health check and only tests the database.
+- **Alerts:** set `ALERT_WEBHOOK_URL` so a human hears about "money records disagree", "a background job failed" and "unexpected server error". Repeats of the same alert are held back for 5 minutes.
+- **Logs:** the site and the worker write one JSON line per event (`level`, `event`). Keep them for at least 30 days and alert on `"level":"error"` and `reconcile.PROBLEMS`. Logs can contain error text from the database, so treat them as private.
+- `reconcile.PROBLEMS` means the money records disagree: **stop paying and investigate** (see the runbook).
+
+**Backups (set up before launch):** `ops/backup.sh` daily from cron, copy the result off the machine (`AFTER_BACKUP`), then run `ops/verify-restore.sh` once now and monthly. Details in the [RUNBOOK](RUNBOOK.md). If Vista takes backups for you, still keep the uploads folder backup, and still do the restore test.
 
 ## 6. Things that are not finished
 
-See the "Deferred" section of [WORKLOG](WORKLOG.md). The ones that matter most before a public launch: the Docker image has not been built in CI yet; one web server only (screenshots are on local disk); legal pages and payout tax rules need your lawyer and CA ([POLICY](POLICY.md)).
+See the "Deferred" section of [WORKLOG](WORKLOG.md). The ones that matter most before a public launch: one web server only (screenshots are on local disk); legal pages and payout tax rules need your lawyer and CA ([POLICY](POLICY.md)).

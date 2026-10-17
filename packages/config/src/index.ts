@@ -19,6 +19,7 @@ const schema = z.object({
   DATABASE_SSL: bool(false),
   PGLITE_DIR: z.string().default(".data/pglite"),
   AUTO_MIGRATE: bool(true),
+  ALERT_WEBHOOK_URL: z.string().url().optional(), // where to post alerts (Slack, Discord, any JSON webhook); off when empty
   DEV_LOGIN: bool(false), // development only: one-click sign-in as a demo worker or admin. Refused in production.
 
   SESSION_SECRET: z.string().optional(),
@@ -51,6 +52,7 @@ export interface AppConfig {
   pgliteDir: string;
   autoMigrate: boolean;
   devLogin: boolean;
+  alertWebhookUrl: string | undefined;
   secret: string;
   upiKey: Buffer;
   sessionIdleHours: number;
@@ -96,7 +98,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
 
   return {
     env: e.APP_ENV ?? e.NODE_ENV, production, appUrl: e.APP_URL.replace(/\/$/, ""), workspaceId: e.WORKSPACE_ID,
-    databaseUrl: e.DATABASE_URL, databaseSsl: e.DATABASE_SSL, pgliteDir: e.PGLITE_DIR, autoMigrate: e.AUTO_MIGRATE, devLogin: e.DEV_LOGIN,
+    databaseUrl: e.DATABASE_URL, databaseSsl: e.DATABASE_SSL, pgliteDir: e.PGLITE_DIR, autoMigrate: e.AUTO_MIGRATE, devLogin: e.DEV_LOGIN, alertWebhookUrl: e.ALERT_WEBHOOK_URL,
     secret: e.SESSION_SECRET ?? DEV_SECRET, upiKey, sessionIdleHours: e.SESSION_IDLE_HOURS, maxIdentitiesPerUser: e.MAX_IDENTITIES_PER_USER, trustProxyHops: e.TRUST_PROXY_HOPS,
     uploadDir: e.UPLOAD_DIR, emailMode, smtpUrl: e.SMTP_URL, mailFrom: e.MAIL_FROM,
     anthropicApiKey: e.ANTHROPIC_API_KEY, aiModel: e.AI_MODEL,

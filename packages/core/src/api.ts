@@ -54,6 +54,8 @@ export interface UserApi {
   requestPayout(amount: Paise, upi: string): Promise<PayoutRequest>;
   /** Checks the one-time code sent by emailVerification.send and, if right, links the email to this account. */
   addIdentity(email: string, code: string): Promise<Identity>;
+  /** Set a new password by giving the current one. Other browsers are signed out; this one stays signed in. */
+  changePassword(current: string, next: string): Promise<void>;
   listTickets(): Promise<Ticket[]>;
   getTicket(id: string): Promise<Ticket>;
   createTicket(input: NewTicketInput): Promise<Ticket>;

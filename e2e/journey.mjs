@@ -18,6 +18,7 @@ const problems = [];
 const TAG = Date.now().toString(36);
 const UPI = `asha${TAG}@okhdfc`; // one UPI ID belongs to one worker, so every run uses its own
 const BAD_UPI = `ashx${TAG}@okhdfc`;
+let WORKER_PW = "a long password 1"; // changes mid-journey
 const step = async (name, fn) => {
   try { await fn(); passed++; console.log("PASS", name); }
   catch (e) { failed++; console.log("FAIL", name, "\n     ", String(e).split("\n")[0]); }
@@ -72,8 +73,8 @@ await step("worker: creates an account with an emailed one-time code", async () 
   await w.getByLabel("Verification code").fill(mail.code);
   await w.getByRole("button", { name: "Verify email" }).click();
   await see(w, "Choose a password");
-  await w.getByLabel("Password", { exact: true }).fill("a long password 1");
-  await w.getByLabel("Confirm password").fill("a long password 1");
+  await w.getByLabel("Password", { exact: true }).fill(WORKER_PW);
+  await w.getByLabel("Confirm password").fill(WORKER_PW);
   await w.getByRole("button", { name: "Create account" }).click();
   await w.getByRole("button", { name: /Switch email/ }).waitFor({ timeout: 10000 });
 });
@@ -283,6 +284,21 @@ await step("worker: adds an extra email with its own code, and can claim as that
   await see(w, alt);
 });
 
+await step("worker: changes the password (wrong current is refused), and the old password stops working", async () => {
+  await w.getByRole("button", { name: "Change password" }).click();
+  await w.getByLabel("Current password").fill("not my password");
+  await w.getByLabel("New password", { exact: true }).fill("a brand new pass 2");
+  await w.getByLabel("New password again").fill("a brand new pass 2");
+  await w.getByRole("button", { name: "Save new password" }).click();
+  await see(w, "Your current password is not right");
+  await w.getByLabel("Current password").fill(WORKER_PW);
+  await w.getByRole("button", { name: "Save new password" }).click();
+  await see(w, "Password changed");
+  const old = await w.evaluate(async ({ email, password }) => (await fetch("/api/auth/sign-in", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, password }) })).status, { email: WORKER, password: WORKER_PW });
+  if (old !== 401) throw new Error("the old password still signs in (status " + old + ")");
+  WORKER_PW = "a brand new pass 2";
+});
+
 // -------- sign out, sessions end --------
 await step("worker: logs out, and the session is really gone", async () => {
   await w.getByRole("button", { name: "Log out" }).click();
@@ -301,7 +317,7 @@ await step("a stranger cannot read another person's screenshot", async () => {
 // -------- layouts --------
 await step("the same site works at tablet and desktop widths too", async () => {
   await w.getByLabel("Email").fill(WORKER);
-  await w.getByLabel("Password", { exact: true }).fill("a long password 1");
+  await w.getByLabel("Password", { exact: true }).fill(WORKER_PW);
   await w.getByRole("button", { name: "Log in", exact: true }).click();
   await see(w, "Tasks");
   for (const [name, width, height] of [["tablet", 820, 1100], ["desktop", 1440, 900]]) {

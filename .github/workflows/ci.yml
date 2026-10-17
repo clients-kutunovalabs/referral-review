@@ -28,3 +28,61 @@ jobs:
       - name: Production build of the web app
         run: pnpm build:web
         env: { NODE_ENV: production }
+
+  # The images that actually ship: built from the Dockerfile, started with a real Postgres, driven through the whole product in a
+  # real browser, attacked with the security script, and the backup scripts proven on the resulting data.
+  docker:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env: { POSTGRES_USER: rr, POSTGRES_PASSWORD: rr, POSTGRES_DB: rr_e2e }
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U rr -d rr_e2e" --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      DATABASE_URL: postgres://rr:rr@localhost:5432/rr_e2e
+      BASE: http://localhost:3100
+      OWNER_PASSWORD: owner-password-123
+      OWNER_NAME: Olivia_Owner
+      CHROMIUM_PATH: /usr/bin/google-chrome
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build the web and worker images
+        run: |
+          docker build --target web -t tasks-web .
+          docker build --target worker -t tasks-worker .
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - name: Start the mail catcher, migrate, and start the site and the worker from the images
+        run: |
+          node e2e/smtp-sink.mjs &
+          SECRETS="-e SESSION_SECRET=$(openssl rand -base64 48) -e UPI_ENCRYPTION_KEY=$(openssl rand -base64 32)"
+          COMMON="--network host $SECRETS -e APP_ENV=development -e APP_URL=http://localhost:3100 -e DATABASE_URL -e EMAIL_MODE=smtp -e SMTP_URL=smtp://127.0.0.1:2525 -e TRUST_PROXY_HOPS=0 -e OWNER_EMAIL=owner@example.com -e OWNER_NAME -e OWNER_PASSWORD"
+          docker run --rm $COMMON tasks-worker migrate
+          docker run --rm $COMMON tasks-worker seed
+          docker run -d --name worker $COMMON tasks-worker
+          docker run -d --name web $COMMON -e PORT=3100 tasks-web
+          for i in $(seq 1 60); do curl -sf localhost:3100/api/health >/dev/null && break; sleep 1; done
+          curl -sf localhost:3100/api/health
+      - name: The whole product, in a real browser, against the containers
+        run: node e2e/journey.mjs
+      - name: Attack checks (headers, access control, forged and malformed requests, script injection)
+        run: EXPECT_HSTS=1 node e2e/security.mjs
+      - name: The worker is checking in (what an uptime monitor watches)
+        run: |
+          for i in $(seq 1 90); do curl -sf "localhost:3100/api/health?strict=1" >/dev/null && break; sleep 1; done
+          curl -sf "localhost:3100/api/health?strict=1"
+      - name: Backup, then restore into a scratch database and run the money check on the copy
+        run: |
+          mkdir -p "$RUNNER_TEMP/backups"
+          BACKUP_DIR="$RUNNER_TEMP/backups" ./ops/backup.sh
+          BACKUP_DIR="$RUNNER_TEMP/backups" RECONCILE_CMD="docker run --rm --network host -e DATABASE_URL -e APP_ENV=development tasks-worker reconcile" ./ops/verify-restore.sh
+      - name: Container logs (on failure)
+        if: failure()
+        run: |
+          docker logs web 2>&1 | tail -60 || true
+          docker logs worker 2>&1 | tail -60 || true

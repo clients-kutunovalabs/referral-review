@@ -1,4 +1,4 @@
-import { expireClaims, purgeExpired, reconcile, type Ctx } from "@rr/server";
+import { expireClaims, purgeExpired, recordHeartbeat, reconcile, sendAlert, type Ctx } from "@rr/server";
 
 export type Log = (event: string, data?: Record<string, unknown>) => void;
 
@@ -22,6 +22,7 @@ export async function runPurge(ctx: Ctx, log: Log) {
 export async function runReconcile(ctx: Ctx, log: Log) {
   const r = await reconcile(ctx);
   log(r.ok ? "reconcile.ok" : "reconcile.PROBLEMS", r.ok ? {} : { problems: r.problems });
+  if (!r.ok) await sendAlert(ctx, `Money records disagree (${r.problems.length} problem${r.problems.length === 1 ? "" : "s"}). Stop marking payouts as paid until it is understood: see the runbook.`, "reconcile");
   return r;
 }
 
@@ -30,14 +31,18 @@ export async function runReconcile(ctx: Ctx, log: Log) {
  * `now` and `sleep` are injectable so the schedule can be tested without waiting.
  */
 export async function work(ctx: Ctx, log: Log, signal: AbortSignal, schedule: Schedule = DEFAULT_SCHEDULE, clock: { now: () => number; sleep: (ms: number) => Promise<void> } = { now: Date.now, sleep: (ms) => new Promise((r) => setTimeout(r, ms)) }): Promise<void> {
-  const next = { expire: 0, purge: 0, reconcile: 0 };
+  const next = { heartbeat: 0, expire: 0, purge: 0, reconcile: 0 };
   const due = async (key: keyof typeof next, every: number, job: () => Promise<unknown>, name: string) => {
     if (clock.now() < next[key]) return;
     next[key] = clock.now() + every;
-    try { await job(); } catch (err) { log("job.failed", { job: name, error: err instanceof Error ? err.message : String(err) }); }
+    try { await job(); } catch (err) {
+      log("job.failed", { job: name, error: err instanceof Error ? err.message : String(err) });
+      await sendAlert(ctx, `Background job "${name}" failed. Check the worker logs.`, `job:${name}`);
+    }
   };
   log("worker.start");
   while (!signal.aborted) {
+    await due("heartbeat", 60_000, () => recordHeartbeat(ctx), "heartbeat");
     await due("expire", schedule.expireEveryMs, () => runExpire(ctx, log), "expire");
     await due("purge", schedule.purgeEveryMs, () => runPurge(ctx, log), "purge");
     await due("reconcile", schedule.reconcileEveryMs, () => runReconcile(ctx, log), "reconcile");

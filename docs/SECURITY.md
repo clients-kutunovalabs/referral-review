@@ -11,6 +11,7 @@ Frontend code cannot be made uncopyable. Protection is server-side: authorisatio
 | Sign-in | Generic error for wrong password or unknown email; 5 failures lock the email for 15 minutes; a password reset signs out every device. Only the main email can log in. |
 | Sessions | Random token, only its hash stored, HttpOnly, SameSite=Lax, Secure with the `__Host-` prefix, one week (168 hours) of inactivity that restarts at every visit (renewed at most every 5 minutes, cookie re-issued with it), 20 per person, ended at once when a person is suspended or deleted. |
 | Development quick login | `/dev` and `/dev/login` sign a tester in without a password. They exist only when `DEV_LOGIN=1` (set by `npm run dev` alone), never in production (configuration refuses to start; the route checks again), and only for a browser on `localhost` (anything else gets a 404). Tested. |
+| Password change | Needs the current password, counted before it is checked (5 tries per 15 minutes, so a stolen session cannot guess it), signs every other browser out and keeps this one. |
 | CSRF | Cross-site writes refused (Origin must be the site); every logged-in write also needs a token bound to that session. API accepts JSON only. |
 | Authorisation | Admin roles are read from the database on every admin request. Workers can only read their own tickets, claims, wallet and files. |
 | Review | Nobody can review their own work, even an admin who also works tasks. |
@@ -27,7 +28,7 @@ Frontend code cannot be made uncopyable. Protection is server-side: authorisatio
 
 ## Not in place (see [WORKLOG](WORKLOG.md))
 
-No site-wide request limit on reads (put one at the proxy; writes are limited), no breached-password check (8 characters minimum), penetration test, load test, error tracking/alerting, UPI key rotation, screenshot retention and clean-up, account anonymisation tool, S3 storage with a separate upload domain, change-password screen, an audit-log viewer.
+No site-wide request limit on reads (put one at the proxy; writes are limited), no breached-password check (8 characters minimum), an outside penetration test (the automated attack checks in `e2e/security.mjs` pass), UPI key rotation, screenshot retention and clean-up, account anonymisation tool, S3 storage with a separate upload domain, an audit-log viewer.
 
 ## Assumptions the deployment must keep
 

@@ -25,3 +25,6 @@ export * from "./http/handler";
 export { toJson, SECURITY_HEADERS } from "./http/util";
 export * from "./constants";
 export * from "./seed";
+export * from "./log";
+export * from "./alert";
+export * from "./heartbeat";

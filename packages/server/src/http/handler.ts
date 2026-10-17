@@ -1,3 +1,6 @@
+import { sendAlert } from "../alert";
+import { workerHealth } from "../heartbeat";
+import { errorName } from "../log";
 import { ApiError, type UploadKind } from "@rr/core";
 import type { OutcomePercent } from "@rr/money";
 import type { z } from "zod";
@@ -97,10 +100,22 @@ export function createApi(ctx: Ctx, deps: { auth?: AuthProvider } = {}): (req: R
       return sessionPayload(rc.ctx, rc.session.userId, rc.session.sessionId, rc.session.expiresAt);
     }),
 
-    mk("GET", "/api/health", "public", undefined, async (rc) => { await rc.ctx.db.query("select 1"); return { ok: true }; }),
+    // Answers 200 while the database is reachable. `?strict=1` also fails (503) when the background worker has not checked in for
+    // 10 minutes, which is what an uptime monitor should watch: without the worker, timed-out claims never free their slots.
+    mk("GET", "/api/health", "public", undefined, async (rc) => {
+      await rc.ctx.db.query("select 1");
+      const worker = await workerHealth(rc.ctx);
+      const body = { ok: true, worker };
+      return rc.query.get("strict") === "1" && worker.state !== "ok" ? json({ ...body, ok: false }, { status: 503 }) : body;
+    }),
 
     // --- worker ---
     mk("GET", "/api/me", "user", undefined, (rc) => getMe(rc.ctx, rc.userId)),
+    mk("POST", "/api/me/password", "user", lim("change-password", 10, HOUR), async (rc) => {
+      const b = await rc.body(schemas.changePassword);
+      await auth.changePassword(rc.userId, (rc.session as SessionInfo).sessionId, b.current, b.next);
+      return OK;
+    }),
     mk("GET", "/api/tasks", "user", undefined, (rc) => listBoard(rc.ctx)),
     mk("GET", "/api/claims", "user", undefined, (rc) => listClaims(rc.ctx, rc.userId)),
     mk("POST", "/api/claims", "user", lim("claim", 60, 10 * MIN), async (rc) => {
@@ -264,6 +279,7 @@ export function createApi(ctx: Ctx, deps: { auth?: AuthProvider } = {}): (req: R
       if (session?.refreshed && token && !res.headers.has("set-cookie")) res.headers.append("set-cookie", sessionCookie(ctx, token, session.expiresAt));
       return res;
     } catch (err) {
+      if (!(err instanceof ApiError)) void sendAlert(ctx, `Unexpected server error (${errorName(err)}). Check the logs.`, `api:${errorName(err)}`);
       return errorResponse(err);
     }
   };

@@ -5,9 +5,16 @@
 - Back up the database and the upload volume.
 
 ## Backups and restore
-- Back up PostgreSQL at least daily (`pg_dump -Fc`) and keep several days. Back up the upload volume with it: a restored database without its screenshots has proofs that open to nothing.
-- **Back up `UPI_ENCRYPTION_KEY` separately from the database.** Without it, stored UPI IDs cannot be read.
-- Try a restore into an empty database now and then: `pg_restore -d <new db> <dump>`, start the app against it, run `pnpm reconcile`.
+Run **daily**: `DATABASE_URL=... UPLOAD_DIR=/data/uploads BACKUP_DIR=/backups ./ops/backup.sh` (needs `pg_dump` 14 or newer). It writes a database dump and a tar of the uploads folder, keeps the newest 14 of each (`KEEP`), and prints `backup.ok`. A backup on the same disk as the site dies with it: set `AFTER_BACKUP` to a command that copies the two new files elsewhere (another machine or a bucket).
+**Prove it works** now and then monthly: `./ops/verify-restore.sh` restores the newest dump into a scratch database, compares record counts and money totals with the live database, runs the money check on the copy, and drops it. It prints `verify.ok`. Differences in counts are normal if the site was used since the backup.
+**Restore for real:** create a new empty database, then `./ops/restore.sh <dump> <new database url> [uploads.tar.gz /data/uploads]`. It refuses a database that already has tables. Point the site at the new database only after `pnpm reconcile` says `reconcile.ok` on it.
+**Not in the backup, on purpose:** `SESSION_SECRET` and `UPI_ENCRYPTION_KEY`. Keep them in a password manager. Without the UPI key the restored UPI IDs cannot be read.
+
+## An alert arrives
+- **"Money records disagree"**: stop marking payouts as paid. Follow "Money reconciliation" below.
+- **"Background job failed"**: look at the worker log line `job.failed` for the job name. If `expire` keeps failing, claims are not freeing their slots.
+- **"Unexpected server error"**: find the `api.unexpected_error` line in the site log at that time.
+- **Uptime monitor says the worker is down** (`/api/health?strict=1` returns 503 with `"worker":{"state":"stale"}` or `"never"`): the worker container is not running. Start it (`docker compose up -d worker`). Timed-out claims are freed on the next run; nothing is lost.
 
 ## Claims that never expire
 Symptom: tasks show slots taken by claims whose timer ran out. Cause: the worker is not running. Start it (`pnpm worker`, or the `worker` container). It catches up on its first minute.

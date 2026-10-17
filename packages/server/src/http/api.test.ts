@@ -283,6 +283,21 @@ for (const engine of engines()) {
         expect((await worker.post("/api/admin/upi/release", { upi })).status).toBe(403);
       });
 
+      it("changing the password over HTTP: wrong current is a 400 (the app stays signed in), other browsers are signed out", async () => {
+        const one = browser(api, "10.4.0.1"); const s = await signUp(one, "Pari");
+        const two = browser(api, "10.4.0.2");
+        expect((await two.post("/api/auth/sign-in", { email: s.email, password: "correct horse 1" })).status).toBe(200);
+        expect((await two.get("/api/me")).status).toBe(200);
+        const wrong = await one.post("/api/me/password", { current: "nope nope nope", next: "another pass 123" });
+        expect(wrong.status).toBe(400);
+        expect(wrong.body.error.code).toBe("invalid_credentials");
+        expect((await one.get("/api/me")).status).toBe(200);
+        expect((await one.post("/api/me/password", { current: "correct horse 1", next: "another pass 123" })).status).toBe(200);
+        expect((await one.get("/api/me")).status).toBe(200);
+        expect((await two.get("/api/me")).status).toBe(401);
+        expect((await browser(api, "10.4.0.3").post("/api/me/password", { current: "x", next: "y" })).status).toBe(401);
+      });
+
       it("every visit renews the session cookie for another week", async () => {
         const b = browser(api, "10.3.1.1"); await signUp(b, "Nila");
         const first = await b.get("/api/me");

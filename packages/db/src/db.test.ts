@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { MIGRATIONS } from "./migrations.generated";
 import { migrate } from "./migrate";
-import { createTestDb, engines } from "./testing";
+import { createBlankTestDb, createTestDb, engines } from "./testing";
 import { DEFAULT_WORKSPACE_ID, OWNER_ROLE_ID, isUniqueViolation, pgCode } from "./index";
 
 it("generated migrations match migrations/*.sql (run `pnpm --filter @rr/db embed` if this fails)", () => {
@@ -120,6 +120,46 @@ for (const engine of engines()) {
       await credit(db, u, s, 1000n);
       await expect(db.query("delete from users where id = $1", [u.userId])).rejects.toThrow();
       await close();
+    });
+  });
+}
+
+for (const engine of engines()) {
+  describe(`upgrading an existing database on ${engine}`, () => {
+    it("migration 0002 keeps existing payouts and the money records intact, and its rules apply to them", async () => {
+      const { db, close } = await createBlankTestDb(engine);
+      try {
+        const [first, ...rest] = MIGRATIONS;
+        // a site that launched on the first version: apply only it, as the real runner would have
+        await db.tx(async (t) => {
+          await t.exec("create table schema_migrations (id text primary key, applied_at timestamptz not null default now())");
+          await t.exec(first!.sql);
+          await t.query("insert into schema_migrations (id) values ($1)", [first!.id]);
+        });
+        const WS = DEFAULT_WORKSPACE_ID;
+        const [u] = await db.query<{ id: string }>("insert into users (workspace_id, name) values ($1,'Old') returning id", [WS]);
+        const [v] = await db.query<{ id: string }>("insert into users (workspace_id, name) values ($1,'Old2') returning id", [WS]);
+        const payout = async (user: string, status: string, paidAt: string | null) => (await db.query<{ id: string }>(
+          "insert into payout_requests (workspace_id, user_id, amount_paise, status, upi_encrypted, upi_masked, paid_at) values ($1,$2,2500,$3,'v1.x.y.z','pri••@okbank',$4) returning id", [WS, user, status, paidAt]))[0]!.id;
+        const paid = await payout(u!.id, "paid", "2026-01-01T00:00:00Z");
+        const pending = await payout(v!.id, "pending", null);
+
+        const applied = await migrate(db);
+        expect(applied).toEqual(rest.map((m) => m.id));
+
+        // nothing was lost, and old rows simply have no UPI hash or rejection yet
+        const rows = await db.query<{ id: string; status: string; amount_paise: bigint; upi_hash: string | null; reject_reason: string | null }>(
+          "select id, status, amount_paise, upi_hash, reject_reason from payout_requests order by status");
+        expect(rows.map((r) => [r.status, r.amount_paise, r.upi_hash, r.reject_reason])).toEqual([["paid", 2500n, null, null], ["pending", 2500n, null, null]]);
+
+        // the new rules hold for them: a pending request can be rejected (with all three fields), a paid one cannot change
+        await expect(db.query("update payout_requests set status = 'rejected' where id = $1", [pending])).rejects.toThrow(); // no reason recorded
+        await db.query("update payout_requests set status = 'rejected', reject_reason = 'UPI ID is invalid', rejected_at = now(), rejected_by = $2 where id = $1", [pending, u!.id]);
+        await expect(db.query("update payout_requests set status = 'pending' where id = $1", [pending])).rejects.toThrow();
+        await expect(db.query("update payout_requests set status = 'rejected', reject_reason = 'x', rejected_at = now(), rejected_by = $2 where id = $1", [paid, u!.id])).rejects.toThrow();
+        // running the migrations again changes nothing
+        expect(await migrate(db)).toEqual([]);
+      } finally { await close(); }
     });
   });
 }

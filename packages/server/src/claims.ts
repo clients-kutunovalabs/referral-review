@@ -1,3 +1,4 @@
+import { errorText, logEvent } from "./log";
 import type { AiConfig, Claim, ClaimStatus, TextStatus } from "@rr/core";
 import { isUniqueViolation, type Queryable } from "@rr/db";
 import { audit } from "./audit";
@@ -122,7 +123,7 @@ export async function generateClaimText(ctx: Ctx, claimId: string): Promise<void
     });
   } catch (err) {
     await ctx.db.query("update task_claims set text_status = 'failed' where id = $1 and text_status = 'pending'", [claimId]);
-    console.error("[ai] script generation failed:", err instanceof Error ? err.message : err);
+    logEvent("error", "ai.script_failed", { error: errorText(err) });
   }
 }
 

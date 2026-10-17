@@ -1,3 +1,4 @@
+import { errorText, logEvent } from "./log";
 import { OTP_RULES, PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH, type CodePurpose, type CodeSent } from "@rr/core";
 import { isUniqueViolation } from "@rr/db";
 import { checkCode, issueCode } from "./codes";
@@ -5,7 +6,7 @@ import type { Ctx } from "./ctx";
 import { dummyHash, hashPassword, randomToken, sha256, verifyPassword } from "./crypto";
 import { ApiError, fail } from "./errors";
 import { clear, hit } from "./ratelimit";
-import { revokeUserSessions } from "./sessions";
+import { revokeOtherSessions, revokeUserSessions } from "./sessions";
 
 export const normaliseEmail = (e: string): string => e.trim().toLowerCase();
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -23,6 +24,8 @@ export interface AuthProvider {
   completeSignup(ticket: string, password: string): Promise<{ userId: string }>;
   completeReset(ticket: string, password: string): Promise<{ userId: string }>;
   signIn(email: string, password: string): Promise<{ userId: string }>;
+  /** A logged-in person sets a new password by proving the current one. Every other browser is signed out; this one stays. */
+  changePassword(userId: string, sessionId: string, current: string, next: string): Promise<void>;
 }
 
 function checkPassword(password: string): void {
@@ -57,7 +60,7 @@ export function createBuiltinAuth(ctx: Ctx): AuthProvider {
         if (ident) fail("email_taken", "An account with this email already exists. Log in instead.");
         const { sent, code } = await issueCode(ctx, `signup:${email}`, { deliver: true, profile: clean });
         try { await sendCode(email, "signup_code", code as string); }
-        catch (err) { console.error("[email] could not send sign-up code:", err instanceof Error ? err.message : err); fail("internal", "We could not send the email. Please try again.", 502); }
+        catch (err) { logEvent("error", "email.signup_code_failed", { error: errorText(err) }); fail("internal", "We could not send the email. Please try again.", 502); }
         return sent;
       }
       // Reset: only a main (login) email of an active account gets a code, but the answer is identical either way.
@@ -69,7 +72,7 @@ export function createBuiltinAuth(ctx: Ctx): AuthProvider {
       const { sent, code } = await issueCode(ctx, `reset:${email}`, { deliver });
       if (code) {
         try { await sendCode(email, "reset_code", code); }
-        catch (err) { console.error("[email] could not send reset code:", err instanceof Error ? err.message : err); }
+        catch (err) { logEvent("error", "email.reset_code_failed", { error: errorText(err) }); }
       }
       return sent;
     },
@@ -119,6 +122,25 @@ export function createBuiltinAuth(ctx: Ctx): AuthProvider {
         await revokeUserSessions(t, i.user_id); // a reset signs out everywhere else
         await clear(t, `signin:${tk.email}`);
         return { userId: i.user_id };
+      });
+    },
+
+    async changePassword(userId, sessionId, current, next) {
+      checkPassword(next);
+      if (next === current) fail("weak_password", "Choose a password that is different from the current one.");
+      // Counted before the check, like sign-in, so a stolen session cannot be used to guess the password in parallel.
+      const key = `chpw:${userId}`;
+      const h = await hit(ctx.db, key, 5, 15 * 60, ctx.now());
+      if (!h.allowed) throw new ApiError("rate_limited", "Too many wrong attempts. Try again later.", 429, h.retryAfterSeconds);
+      const [row] = await ctx.db.query<{ password_hash: string }>("select password_hash from auth_credentials where user_id = $1", [userId]);
+      const ok = await verifyPassword(current, row?.password_hash ?? (await dummyHash()));
+      // 400, not 401: the person is logged in, and a 401 would make the app think the session ended.
+      if (!row || !ok) return fail("invalid_credentials", "Your current password is not right.", 400);
+      const hash = await hashPassword(next);
+      await ctx.db.tx(async (t) => {
+        await t.query("update auth_credentials set password_hash = $2, updated_at = $3 where user_id = $1", [userId, hash, ctx.now()]);
+        await revokeOtherSessions(t, userId, sessionId);
+        await clear(t, key);
       });
     },
 

@@ -21,8 +21,9 @@ export function Button({ variant = "default", block, small, compact, className =
 export function Card({ children, alert, hero, onClick, style }: { children: ReactNode; alert?: boolean; hero?: boolean; onClick?: () => void; style?: React.CSSProperties }) {
   const cls = ["card", alert ? "alert" : "", hero ? "hero" : "", onClick ? "clickable" : ""].filter(Boolean).join(" ");
   return (
-    <div className={cls} onClick={onClick} style={style} role={onClick ? "button" : undefined} tabIndex={onClick ? 0 : undefined}
-      onKeyDown={onClick ? (e) => { if (e.key === "Enter" || e.key === " ") onClick(); } : undefined}>
+    // A clickable card is a mouse convenience only. Keyboard and screen-reader users act through the real button inside it
+    // (a button nested in another button is invalid and confuses assistive technology).
+    <div className={cls} onClick={onClick} style={style}>
       {children}
     </div>
   );

@@ -6,12 +6,15 @@ ARG NODE_VERSION=22
 FROM node:${NODE_VERSION}-bookworm-slim AS base
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
+# pnpm is fetched once, into a shared folder, so containers that run as another user never download it again at start-up
+ENV COREPACK_HOME=/opt/corepack
 RUN corepack enable
 WORKDIR /repo
 
 # Manifests only, so this layer is reused until a dependency changes.
 FROM base AS manifests
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY scripts/only-pnpm.mjs scripts/only-pnpm.mjs
 COPY apps/web/package.json apps/web/
 COPY apps/worker/package.json apps/worker/
 COPY apps/ui-hub/package.json apps/ui-hub/
@@ -48,7 +51,7 @@ USER app
 VOLUME ["/data"]
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
-  CMD node -e "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"
+  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/api/health').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"
 CMD ["node", "apps/web/server.js"]
 
 # ---------- worker: expiry sweeper, housekeeping, reconciliation, and the migrate/seed commands ----------
@@ -61,6 +64,7 @@ COPY tsconfig.base.json ./
 COPY packages packages
 COPY apps/worker apps/worker
 RUN useradd --system --uid 10001 --home-dir /repo --shell /usr/sbin/nologin app && chown -R app /repo
+RUN chmod -R a+rX /opt/corepack
 USER app
 # `work` runs the jobs until stopped. One-off commands: docker run ... migrate | seed | reconcile | expire | purge
 ENTRYPOINT ["pnpm", "--filter", "@rr/worker", "exec", "tsx", "src/cli.ts"]

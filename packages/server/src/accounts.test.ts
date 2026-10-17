@@ -178,6 +178,33 @@ for (const engine of engines()) {
       });
     });
 
+    describe("changing the password", () => {
+      it("needs the current password, signs out the other browsers, keeps this one, and the old password stops working", async () => {
+        const a = await signUp();
+        const here = await createSession(ctx, a.userId); const there = await createSession(ctx, a.userId);
+        const hereId = (await resolveSession(ctx, here.token))!.sessionId;
+        expect(await code(auth.changePassword(a.userId, hereId, "not the password", "brand new pass 1"))).toBe("invalid_credentials");
+        expect(await code(auth.changePassword(a.userId, hereId, a.password, "short"))).toBe("weak_password");
+        expect(await code(auth.changePassword(a.userId, hereId, a.password, a.password))).toBe("weak_password");
+        await auth.changePassword(a.userId, hereId, a.password, "brand new pass 1");
+        expect(await resolveSession(ctx, here.token)).toMatchObject({ userId: a.userId });
+        expect(await resolveSession(ctx, there.token)).toBeNull();
+        expect(await code(auth.signIn(a.email, a.password))).toBe("invalid_credentials");
+        await expect(auth.signIn(a.email, "brand new pass 1")).resolves.toMatchObject({ userId: a.userId });
+      });
+      it("gives a stolen session only five guesses at the current password", async () => {
+        const a = await signUp();
+        const s = await createSession(ctx, a.userId);
+        const sid = (await resolveSession(ctx, s.token))!.sessionId;
+        const out = await Promise.all(Array.from({ length: 12 }, (_, i) => code(auth.changePassword(a.userId, sid, `guess number ${i}`, "brand new pass 1"))));
+        expect(out.filter((c) => c === "invalid_credentials")).toHaveLength(5);
+        expect(out.filter((c) => c === "rate_limited")).toHaveLength(7);
+        expect(await code(auth.changePassword(a.userId, sid, a.password, "brand new pass 1"))).toBe("rate_limited"); // even the right one, until the window passes
+        ctx.clock.advance(15 * 60_000);
+        await expect(auth.changePassword(a.userId, sid, a.password, "brand new pass 1")).resolves.toBeUndefined();
+      });
+    });
+
     describe("sessions", () => {
       it("a cookie token resolves to its user until it expires or is revoked", async () => {
         const u = await makeUser(ctx);
