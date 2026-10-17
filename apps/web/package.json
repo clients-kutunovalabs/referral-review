@@ -3,7 +3,29 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "main": "src/index.ts",
-  "types": "src/index.ts",
-  "scripts": { "typecheck": "tsc -p tsconfig.json" }
+  "scripts": {
+    "dev": "next dev -p 3000",
+    "build": "next build",
+    "start": "next start -p 3000",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@rr/client": "workspace:*",
+    "@rr/config": "workspace:*",
+    "@rr/core": "workspace:*",
+    "@rr/money": "workspace:*",
+    "@rr/server": "workspace:*",
+    "@rr/ui": "workspace:*",
+    "next": "15.5.28",
+    "nodemailer": "^10.1.2",
+    "pg": "^8.23.1",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.10",
+    "@types/node": "^22.10.2",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0"
+  }
 }

@@ -2,12 +2,12 @@ import js from "@eslint/js";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["**/dist/**", "**/dist-standalone/**", "**/node_modules/**", "**/.next/**", "packages/ui/reference/**"] },
+  { ignores: ["**/next-env.d.ts", "**/dist/**", "**/dist-standalone/**", "**/node_modules/**", "**/.next/**", "packages/ui/reference/**"] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    files: ["scripts/**/*.mjs", "apps/*/scripts/**/*.mjs", "packages/*/scripts/**/*.mjs"],
-    languageOptions: { globals: { URL: "readonly", console: "readonly", process: "readonly", fetch: "readonly", Buffer: "readonly" } }
+    files: ["scripts/**/*.mjs", "apps/*/scripts/**/*.mjs", "packages/*/scripts/**/*.mjs", "apps/*/*.config.mjs", "e2e/**/*.mjs"],
+    languageOptions: { globals: { URL: "readonly", console: "readonly", process: "readonly", fetch: "readonly", Buffer: "readonly", setTimeout: "readonly" } }
   },
   {
     // Money safety: no floating point parsing or Math rounding in money code.

@@ -50,6 +50,17 @@ for (const engine of engines()) {
       expect(await balance(u.userId)).toBe(0n);
     });
 
+    it("nobody can review their own work, even an admin who also works tasks", async () => {
+      const worker = await makeAdmin(ctx, ["review.decide"]);
+      const [ident] = await ctx.db.query<{ id: string }>("select id from identities where user_id = $1", [worker.userId]);
+      const task = await makeTask(ctx, owner, { reward: 5000n });
+      const { submissionId } = await submitted(ctx, { userId: worker.userId, identityId: ident!.id, email: "x", name: "x" }, task);
+      expect(await code(decide(ctx, worker, submissionId, 100, "I did great"))).toBe("forbidden");
+      expect(await balance(worker.userId)).toBe(0n);
+      await expect(decide(ctx, reviewer, submissionId, 100, "A colleague agrees")).resolves.toBeUndefined();
+      expect(await balance(worker.userId)).toBe(5000n);
+    });
+
     it("a submission can be decided once", async () => {
       const u = await makeUser(ctx);
       const { submissionId } = await submitted(ctx, u, await makeTask(ctx, owner, { reward: 1000n }));

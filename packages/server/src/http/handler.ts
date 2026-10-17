@@ -18,7 +18,7 @@ import { addScripts, createTask, getAdminTask, listAdminTasks, listBoard, setTas
 import { assignTicket, createTicket, getAdminTicket, getUserTicket, listAdminTickets, listUserTickets, replyTicket, resolveTicket, ticketAgents, userSendMessage } from "../tickets";
 import { listUsers, setUserStatus } from "../users";
 import { walletView } from "../wallet";
-import { clearCookie, clientIp, cookieName, errorResponse, json, readCookie, readJson, sessionCookie, SECURITY_HEADERS } from "./util";
+import { clearCookie, clientIp, cookieName, errorResponse, json, readCapped, readCookie, readJson, sessionCookie, SECURITY_HEADERS } from "./util";
 import { schemas } from "./schemas";
 
 type Level = "public" | "optional" | "user" | "admin";
@@ -32,6 +32,7 @@ interface Rc {
 interface Limit { name: string; max: number; windowSeconds: number; per: "ip" | "user" }
 interface Route { method: string; regex: RegExp; keys: string[]; level: Level; limit?: Limit; run: (rc: Rc) => unknown }
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MIN = 60; const HOUR = 3600;
 const lim = (name: string, max: number, windowSeconds: number, per: "ip" | "user" = "user"): Limit => ({ name, max, windowSeconds, per });
 const AUTH_IP = (name: string, max = 30) => lim(name, max, 10 * MIN, "ip");
@@ -96,6 +97,8 @@ export function createApi(ctx: Ctx, deps: { auth?: AuthProvider } = {}): (req: R
       return sessionPayload(rc.ctx, rc.session.userId, rc.session.sessionId, rc.session.expiresAt);
     }),
 
+    mk("GET", "/api/health", "public", undefined, async (rc) => { await rc.ctx.db.query("select 1"); return { ok: true }; }),
+
     // --- worker ---
     mk("GET", "/api/me", "user", undefined, (rc) => getMe(rc.ctx, rc.userId)),
     mk("GET", "/api/tasks", "user", undefined, (rc) => listBoard(rc.ctx)),
@@ -133,9 +136,13 @@ export function createApi(ctx: Ctx, deps: { auth?: AuthProvider } = {}): (req: R
       if (!kind || !UPLOAD_KINDS.includes(kind)) throw new ApiError("bad_request", "Unknown upload type.");
       const admin = kind === "payment_proof" ? await loadAdmin(rc.ctx.db, rc.userId) : null;
       if (!mayUpload(kind, admin)) throw new ApiError("forbidden", "You do not have permission to do that.", 403);
-      if (!(rc.req.headers.get("content-type") ?? "").toLowerCase().startsWith("multipart/form-data")) throw new ApiError("bad_request", "Send the image as a form upload.", 415);
-      if (Number(rc.req.headers.get("content-length") ?? "0") > 5.5 * 1024 * 1024) throw new ApiError("upload_invalid", "Image must be under 5 MB.", 413);
-      const file = (await rc.req.formData()).get("file");
+      const type = rc.req.headers.get("content-type") ?? "";
+      if (!type.toLowerCase().startsWith("multipart/form-data")) throw new ApiError("bad_request", "Send the image as a form upload.", 415);
+      // A little over the 5 MB image limit, for the form framing. Counted on the real bytes, not the declared length.
+      let raw: Uint8Array;
+      try { raw = await readCapped(rc.req, 5.5 * 1024 * 1024); }
+      catch (e) { throw e instanceof ApiError ? new ApiError("upload_invalid", "Image must be under 5 MB.", 413) : e; }
+      const file = (await new Request("http://upload.invalid/", { method: "POST", headers: { "content-type": type }, body: raw as BodyInit }).formData().catch(() => null))?.get("file");
       if (!file || typeof file === "string") throw new ApiError("upload_invalid", "Attach an image.");
       if (file.size > 5 * 1024 * 1024) throw new ApiError("upload_invalid", "Image must be under 5 MB.", 413);
       return saveUpload(rc.ctx, rc.userId, kind, new Uint8Array(await file.arrayBuffer()));
@@ -178,7 +185,7 @@ export function createApi(ctx: Ctx, deps: { auth?: AuthProvider } = {}): (req: R
     mk("GET", "/api/admin/members", "admin", undefined, (rc) => listMembers(rc.ctx, rc.admin)),
     mk("POST", "/api/admin/members", "admin", undefined, async (rc) => addMember(rc.ctx, rc.admin, (await rc.body(schemas.addMember)).email)),
     mk("POST", "/api/admin/members/:id/roles", "admin", undefined, async (rc) => { await setMemberRoles(rc.ctx, rc.admin, rc.params["id"] as string, (await rc.body(schemas.memberRoles)).roleIds); return OK; }),
-    mk("GET", "/api/admin/roles", "admin", undefined, (rc) => listRoles(rc.ctx, rc.admin)),
+    mk("GET", "/api/admin/roles", "admin", undefined, (rc) => listRoles(rc.ctx)),
     mk("POST", "/api/admin/roles", "admin", undefined, async (rc) => createRole(rc.ctx, rc.admin, (await rc.body(schemas.newRole)).name)),
     mk("POST", "/api/admin/roles/:id/permissions", "admin", undefined, async (rc) => { await setRolePermissions(rc.ctx, rc.admin, rc.params["id"] as string, (await rc.body(schemas.rolePermissions)).permissions as never); return OK; }),
     mk("DELETE", "/api/admin/roles/:id", "admin", undefined, async (rc) => { await deleteRole(rc.ctx, rc.admin, rc.params["id"] as string); return OK; }),
@@ -227,7 +234,13 @@ export function createApi(ctx: Ctx, deps: { auth?: AuthProvider } = {}): (req: R
 
       const m = found.regex.exec(url.pathname) as RegExpExecArray;
       const params: Record<string, string> = {};
-      found.keys.forEach((k, i) => { params[k] = decodeURIComponent(m[i + 1] as string); });
+      found.keys.forEach((k, i) => {
+        let v: string;
+        try { v = decodeURIComponent(m[i + 1] as string); } catch { throw new ApiError("not_found", "That does not exist.", 404); }
+        // Every id in a path is a UUID. Anything else cannot exist, so it is a plain 404 and never reaches the database.
+        if (!UUID.test(v)) throw new ApiError("not_found", "That does not exist.", 404);
+        params[k] = v;
+      });
 
       let admin: AdminActor | undefined;
       if (found.level === "admin") {

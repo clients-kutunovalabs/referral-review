@@ -13,6 +13,10 @@
     "@rr/core": "workspace:*"
   },
   "devDependencies": {
-    "vitest": "^2.1.8"
+    "vitest": "^5.0.5"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./local": "./src/local.ts"
   }
 }

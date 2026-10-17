@@ -90,6 +90,26 @@ for (const engine of engines()) {
         expect((await b.post("/api/auth/sign-in", "not json")).status).toBe(400);
         expect((await b.post("/api/auth/sign-in", { email: "a@b.co", password: "x".repeat(200_000) })).status).toBe(413);
       });
+      it("enforces size limits on the bytes received, even with no Content-Length (a chunked body)", async () => {
+        const stream = (bytes: number) => new ReadableStream<Uint8Array>({ start(c) { for (let i = 0; i < bytes / 65536; i++) c.enqueue(new Uint8Array(65536)); c.close(); } });
+        const post = async (path: string, bytes: number, type: string, cookie = "") => (await api(new Request(BASE + path, {
+          method: "POST", headers: { origin: BASE, "content-type": type, "x-forwarded-for": "10.9.9.9", ...(cookie ? { cookie } : {}) }, body: stream(bytes), duplex: "half"
+        } as RequestInit))).status;
+        expect(await post("/api/auth/sign-in", 5 * 1024 * 1024, "application/json")).toBe(413); // JSON is capped at 100 KB
+        const b = browser(api, "10.9.9.8"); await signUp(b);
+        const up = await b.raw("POST", "/api/uploads?kind=proof", { headers: { "content-type": "multipart/form-data; boundary=x" }, body: "x".repeat(6 * 1024 * 1024) });
+        expect(up.status).toBe(413);
+        expect((await b.get("/api/me")).status).toBe(200); // and the server is still fine
+      });
+      it("a malformed id in a URL is a plain 404, never a server error", async () => {
+        const b = browser(api); await signUp(b);
+        for (const p of ["/api/tickets/not-a-uuid", "/api/files/abc", "/api/tickets/%E0%A4%A", "/api/claims/1/retry-text"]) {
+          const r = p.includes("retry-text") ? await b.post(p) : await b.get(p);
+          expect(r.status, p).toBe(404);
+          expect(r.body.error.code).toBe("not_found");
+        }
+        expect((await b.get("/api/tickets/00000000-0000-0000-0000-000000000000")).status).toBe(404); // well formed but absent
+      });
       it("answers with a clean error shape, correct statuses and safe headers", async () => {
         const b = browser(api);
         const r = await b.post("/api/auth/sign-in", { email: "nobody@example.com", password: "wrongwrong" });

@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ServicesProvider, UserApp, isUserAuthScreen, type MyTab, type UserScreen } from "@rr/ui";
-import { services, userDemo } from "../services";
+import { demoServices, userDemo } from "../services";
 import type { PayoutScenario } from "@rr/core";
 import { DeviceFrame, DeviceSwitch, Gallery, GalleryItem, HubPage, JumpPanel, PhoneFrame, type Device, type JumpGroup } from "@rr/ui/hub";
 
@@ -47,6 +47,17 @@ const GROUPS: JumpGroup<string>[] = [
   { label: "Payout scenarios", items: ["walletNone", "walletProcess", "walletPaid", "payoutNone", "payoutProcess", "payoutPaid"].map((id) => ({ id, label: JUMPS[id]!.label })) }
 ];
 
+function Preview({ jumpId, loggedIn }: { jumpId: string; loggedIn: boolean }) {
+  const j = JUMPS[jumpId]!;
+  const demo = useMemo(() => demoServices(j.scenario ? { payoutScenario: j.scenario } : {}), [j.scenario]);
+  return (
+    <ServicesProvider services={demo.services} demo={userDemo}>
+      <UserApp initialScreen={j.screen} {...(j.tab ? { initialTab: j.tab } : {})} {...(j.ticketId ? { initialTicketId: j.ticketId } : {})} {...(j.helpTab ? { initialHelpTab: j.helpTab } : {})}
+        initialTaskId={j.screen === "detail" ? "t3" : "t1"} initialClaimId="c1" loggedIn={loggedIn} {...(j.scenario ? { onDemoPaid: demo.markNextPayoutPaid } : {})} />
+    </ServicesProvider>
+  );
+}
+
 export function UserHub() {
   const [jump, setJump] = useState("board");
   const [all, setAll] = useState(false);
@@ -54,7 +65,6 @@ export function UserHub() {
   const [rev, setRev] = useState(0);
   const j = JUMPS[jump]!;
   return (
-    <ServicesProvider services={services} demo={userDemo}>
     <HubPage>
       <JumpPanel title="User side" hint="Jump to any screen, or tap through the phone like a real user." groups={GROUPS} active={jump} onPick={(id) => { setJump(id); setRev(rev + 1); setAll(false); }}>
         <DeviceSwitch value={device} onChange={(d) => { setDevice(d); setAll(false); }} />
@@ -64,14 +74,13 @@ export function UserHub() {
         <Gallery>
           {Object.entries(JUMPS).map(([id, s]) => (
             <GalleryItem key={id} caption={s.label}>
-              <PhoneFrame><UserApp initialScreen={s.screen} {...(s.tab ? { initialTab: s.tab } : {})} {...(s.scenario ? { payoutScenario: s.scenario } : {})} {...(s.ticketId ? { initialTicketId: s.ticketId } : {})} {...(s.helpTab ? { initialHelpTab: s.helpTab } : {})} loggedIn={!isUserAuthScreen(s.screen)} /></PhoneFrame>
+              <PhoneFrame><Preview jumpId={id} loggedIn={!isUserAuthScreen(s.screen)} /></PhoneFrame>
             </GalleryItem>
           ))}
         </Gallery>
       ) : (
-        <DeviceFrame device={device}><UserApp key={`${jump}-${rev}`} initialScreen={j.screen} {...(j.tab ? { initialTab: j.tab } : {})} {...(j.scenario ? { payoutScenario: j.scenario } : {})} {...(j.ticketId ? { initialTicketId: j.ticketId } : {})} {...(j.helpTab ? { initialHelpTab: j.helpTab } : {})} loggedIn={!isUserAuthScreen(j.screen)} /></DeviceFrame>
+        <DeviceFrame device={device}><Preview key={`${jump}-${rev}`} jumpId={jump} loggedIn={!isUserAuthScreen(j.screen)} /></DeviceFrame>
       )}
     </HubPage>
-    </ServicesProvider>
   );
 }

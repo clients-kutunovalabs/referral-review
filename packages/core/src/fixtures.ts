@@ -122,7 +122,10 @@ const ago0 = (hours: number): string => new Date(Date.now() - hours * 3_600_000)
 function claimOf(id: string, taskId: string, identityId: string, rest: Partial<Claim> & Pick<Claim, "status">): Claim {
   const t = tasks.find((x) => x.id === taskId)!;
   const i = identities.find((x) => x.id === identityId)!;
-  return { id, taskId, identityId, identityEmail: i.email, taskTitle: t.title, siteUrl: t.siteUrl, keywords: t.keywords, reward: t.reward, ...rest };
+  return {
+    id, taskId, identityId, identityEmail: i.email, taskTitle: t.title, siteUrl: t.siteUrl, keywords: t.keywords, reward: t.reward,
+    ...(rest.minutesLeft === undefined ? {} : { expiresAt: new Date(Date.now() + rest.minutesLeft * 60_000).toISOString() }), ...rest
+  };
 }
 
 export const activeClaim: Claim = claimOf("c1", "t1", "i1", {

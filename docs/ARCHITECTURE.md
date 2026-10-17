@@ -1,33 +1,55 @@
 # Architecture
 
-- pnpm monorepo, TypeScript strict. UI: React. Backend (later): Next.js route handlers + Node services, Postgres, Drizzle.
-- `packages/ui` owns all visuals. `apps/ui-hub` renders them with mock data from `packages/core` fixtures. `apps/web` will render the same components with real data.
-- `packages/core` contracts define the domain types the UI consumed; the backend implements exactly these.
-- Workspace-ready: every domain table gets `workspace_id` from day one (single seeded workspace for now; isolation/RLS later).
-- Claim uniqueness: `(identity_id, template_id)`. One login owns several identities (emails) and one wallet; ledger rows carry `identity_id`.
-- Production excludes ui-hub. The production image builds only `apps/web` and `apps/worker`.
+pnpm monorepo, TypeScript strict. React UI, Next.js web app, PostgreSQL, plain SQL migrations.
+
+```
+apps/web        the site: pages + /api, imports @rr/ui and @rr/server
+apps/worker     expiry sweeper, housekeeping, reconciliation, and the migrate/seed commands
+apps/ui-hub     design gallery on a mock API (never deployed)
+packages/ui     tokens, primitives, screens: the ONLY place UI code and CSS live
+packages/core   contracts shared by everyone: data types, the API interfaces, ports, fixtures
+packages/money  integer-paise helpers and outcome maths
+packages/client HTTP implementation of the API the screens call
+packages/server domain services, HTTP handler, built-in sign-in, security (no UI, no framework)
+packages/db     SQL migrations, PostgreSQL and PGlite adapters, test harness
+packages/auth   mock sign-in, email senders (SMTP, console), Authgate placeholder
+packages/storage, packages/ai, packages/config   file storage, script writer, environment checks
+```
+
+## Request flow
+
+```
+browser -> /api/* (Next route) -> createApi(ctx):
+   origin check -> session cookie -> CSRF token -> rate limit -> permission (admin routes) -> schema validation
+   -> a server function (one transaction, row locks) -> PostgreSQL
+```
+
+The server functions know nothing about HTTP or Next; the HTTP handler is a plain `Request -> Response` function, so tests call it directly. The UI knows nothing about the server: it calls `Api` (in `@rr/core`), implemented over HTTP for the site and in memory for the gallery.
 
 ## Ports and adapters
 
-Anything outside the repo sits behind an interface in `packages/core/src/ports.ts`: `AuthPort`, `EmailVerificationPort`, `EmailSenderPort`, `StoragePort`, `AiPort`. The UI never imports a vendor; it reads them from `<ServicesProvider>`.
+Anything outside the repo is behind an interface in `packages/core/src/ports.ts`.
 
-| Port | Mock (ui-hub, tests) | Real adapter (placeholder until credentials arrive) |
+| Port | Real | Mock / placeholder |
 |---|---|---|
-| Auth | `@rr/auth` `createMockAuth` | `createAuthgateAuth({ url })` |
-| Extra-email codes (site-owned) | `createMockEmailVerification` | same logic over the DB + email sender |
-| Outgoing email | `createOutbox` | Authgate's default sender first, a real sender later |
-| File storage | `@rr/storage` `createMockStorage` | `createObjectStorage` (S3-compatible, private bucket) |
-| AI script | `@rr/ai` `createMockAi` | `createAnthropicAi` |
-| Database | not yet (step 4) | Vista, managed PostgreSQL, behind `@rr/db` |
+| Sign-in | built-in provider (`@rr/server`) | `createMockAuth`; `createAuthgateAuth` placeholder |
+| Database | PostgreSQL (`pg`) for Vista; PGlite for local development | the same SQL on both |
+| Email | SMTP (`@rr/auth/email`) | console sender (development only) |
+| File storage | local disk (`@rr/storage/local`) | in-memory; S3 adapter not written |
+| AI scripts | Anthropic (`@rr/ai`) | deterministic mock; "not enabled" when no key |
 
-The mock auth enforces the same one-time-code rules the real service must: 6 digits, 10 minute expiry, 5 wrong attempts, 30 second resend cooldown, 5 codes an hour per email, 5 failed sign-ins lock for 15 minutes, and a password reset for an unknown email looks identical to a real one.
+## Data rules that live in the database
 
-## Database: Vista
+Append-only ledger, reviews, payments and audit log; one credit per submission; one payment per payout; one pending payout per user; one live claim per email and task; a debit cannot exceed the balance; financial foreign keys are RESTRICT. See `packages/db/migrations/0001_init.sql`.
 
-Vista gives each Workspace its own isolated PostgreSQL database and handles access, migrations, readiness and recovery; the app owns its data model. Two consequences, to settle when we have Vista's connection details:
-- **Direct SQL is assumed.** The ledger relies on triggers, row locks and one transaction per payout. If Vista only exposes a REST layer, money actions must become stored functions inside the database.
-- **`workspace_id` is redundant inside one Vista database.** The plan keeps the column so the schema survives a move to a shared database; revisit before step 4.
+## Vista
 
-## Layout: phone, tablet, desktop
+Vista gives each Workspace its own isolated PostgreSQL database and handles access, migrations, readiness and recovery. Assumptions to confirm: **direct SQL access** (the ledger needs transactions, locks and triggers) and how Vista runs `migrations/*.sql`. `workspace_id` stays on every table although a Vista database holds one workspace.
 
-`<AppFrame>` measures its own width and sets `data-layout`: phone under 640px, tablet 640-1023px, desktop 1024px and up. CSS keys off that attribute, never off the browser window, so the same screens work inside ui-hub's device previews and on a real site. Navigation is a bottom bar, an icon rail and a labelled sidebar; lists become tables (`DataTable`) from tablet up; modals replace bottom sheets.
+## Layout
+
+`<AppFrame>` measures its own width and sets `data-layout`: phone under 640px, tablet 640-1023px, desktop 1024px and up. Navigation is a bottom bar, an icon rail and a labelled sidebar; lists become tables from tablet up. CSS keys off that attribute, never the browser window, so the gallery can show all three side by side.
+
+## Production
+
+Only `apps/web` and `apps/worker` are built into images. The gallery is never deployed.

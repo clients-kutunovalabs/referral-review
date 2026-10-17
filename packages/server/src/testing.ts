@@ -28,7 +28,7 @@ export async function createTestCtx(engine: Engine): Promise<TestCtx> {
     db: t.db,
     cfg: {
       workspaceId: DEFAULT_WORKSPACE_ID, upiKey: Buffer.alloc(32, 7), secret: "test-secret-test-secret-test-secret-0000",
-      baseUrl: "https://tasks.test", trustProxyHops: 1, sessionDays: 14, maxIdentitiesPerUser: 10
+      baseUrl: "https://tasks.test", trustProxyHops: 1, sessionDays: 14, maxIdentitiesPerUser: 10, aiEnabled: true
     } as Ctx["cfg"],
     storage: createMockStorage(), ai: createMockAi(), email: outbox,
     now: () => new Date(now),

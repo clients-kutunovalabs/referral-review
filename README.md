@@ -8,47 +8,49 @@ Full plan: [docs/PLAN.md](docs/PLAN.md).
 
 | Step | State |
 |---|---|
-| 1. Repo structure | done |
-| 2. Design system (tokens, primitives) | done |
-| 3. Admin + user flow UI in ui-hub | done, waiting for sign-off |
-| 3b. Universal sign-in screens, ports + mock adapters, tablet and desktop layouts | done |
-| 4+. Backend (DB, auth/RBAC, claims, payouts) | not started |
+| Repo structure, design system, admin + user UI | done |
+| Sign-in screens, ports and adapters, tablet and desktop layouts | done |
+| Backend: database, sign-in, claims, reviews, money, payouts, support | done, tested |
+| Web app, worker, Docker, CI | done; the Docker image itself is not yet built or run |
+| Launch | needs your Vista, mail server, domain and legal text: see [docs/DEPLOY.md](docs/DEPLOY.md) |
 
-## Run the UI hub
+Everything done, every issue found and fixed, and everything deferred: [docs/WORKLOG.md](docs/WORKLOG.md).
 
-```
-corepack enable            # once, gives you pnpm
-pnpm install
-pnpm dev:hub               # http://localhost:5173
-```
-
-- `/` user app (all screens, tap-through or "show all screens"); "Preview as" switches phone, tablet and desktop
-  Demo logins: `priya@gmail.com` (user) and `hrishabh@example.com` (admin), password `password123`; every one-time code is `123456`
-- `/admin` admin app (switch "View as" role to see permission-gated navigation)
-- `/design-system` tokens, typography, every primitive
-
-## Checks
+## Run it
 
 ```
-pnpm check                 # boundary check, eslint, typecheck, tests
-pnpm build:hub
+corepack enable && pnpm install
+pnpm dev:web          # http://localhost:3000, no setup: embedded database, sign-in codes printed in this terminal
 ```
+Set `OWNER_EMAIL` and `OWNER_PASSWORD` first to get an admin login at `/admin`.
+
+```
+pnpm dev:hub          # the design gallery with demo data: phone, tablet and desktop previews
+pnpm check            # lint, typecheck, all tests (set TEST_DATABASE_URL to also test on real Postgres)
+pnpm e2e              # the whole product in real browsers: see e2e/README.md
+pnpm worker           # background jobs (needed in production)
+pnpm db:migrate | db:seed | reconcile
+```
+
+Gallery demo logins: `priya@gmail.com` (user) and `hrishabh@example.com` (admin), password `password123`; every code is `123456`.
 
 ## Layout
 
 ```
-apps/ui-hub     dev/staging gallery (never deployed to production)
-apps/web        real user site + /admin (later; imports @rr/ui only)
-apps/worker     claim-expiry + reconciliation jobs (later)
+apps/web        the site (Next.js) + /api
+apps/worker     expiry sweeper, housekeeping, reconciliation, migrate/seed
+apps/ui-hub     design gallery on demo data (never deployed)
 packages/ui     tokens, primitives, user + admin screens: the ONLY place UI code lives
-packages/money  integer-paise Money helpers + outcome maths (tested)
-packages/core   domain contracts + mock fixtures the UI consumes
-packages/auth, storage, ai   ports' mock adapters + placeholders for Authgate, object storage, AI
-packages/db, config   placeholders for the backend phase (Vista = managed Postgres)
+packages/core   contracts, API interfaces, ports
+packages/server domain services, HTTP handler, sign-in, security
+packages/db     SQL migrations, Postgres + PGlite adapters
+packages/client, money, auth, storage, ai, config
 ```
 
 ## Rules
 
-- One UI source: no `.css` outside `packages/ui` (enforced by `scripts/check-boundaries.mjs`). ui-hub and the real web app import the same components.
+- One UI source: no `.css` outside `packages/ui` (enforced by `scripts/check-boundaries.mjs`).
 - Money is integer paise (`bigint`), never a JS number. See [docs/MONEY.md](docs/MONEY.md).
-- ui-hub is not built or deployed in production. The design system is internal only.
+- The database enforces the money rules, not just the code. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+- The gallery is not built or deployed in production.
+

@@ -78,6 +78,8 @@ export async function decide(ctx: Ctx, actor: AdminActor, submissionId: string, 
     if (!s) return notFound("Submission");
     if (s.status !== "pending") return conflict("not_pending", "Someone already reviewed this submission.");
     const [c] = await t.query<{ user_id: string; identity_id: string; reward_paise: bigint }>("select user_id, identity_id, reward_paise from task_claims where id = $1", [s.claim_id]);
+    // Nobody approves their own work, even an owner who also works tasks. (Payouts have no such rule, by decision.)
+    if (c!.user_id === actor.userId) return forbidden("You cannot review your own work. Ask someone else on the team.");
     const credit = outcomeAmount(c!.reward_paise, pct);
     await t.query("insert into reviews (workspace_id, submission_id, reviewer_id, outcome_pct, note, credited_paise, created_at) values ($1,$2,$3,$4,$5,$6,$7)",
       [ctx.cfg.workspaceId, submissionId, actor.userId, pct, text, credit, now]);

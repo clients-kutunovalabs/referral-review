@@ -8,8 +8,8 @@ import { needs, type AdminActor } from "./rbac";
 
 const VALID = new Set<string>(PERMISSIONS.map((p) => p.key));
 
-export async function listRoles(ctx: Ctx, actor: AdminActor): Promise<Role[]> {
-  needs(actor, "role.manage", "user.manage", "task.manage", "ticket.manage");
+/** Any admin may see the role list (their own profile page names their roles); only role managers can change it. */
+export async function listRoles(ctx: Ctx): Promise<Role[]> {
   const roles = await ctx.db.query<{ id: string; name: string; is_owner: boolean }>("select id, name, is_owner from roles where workspace_id = $1 order by is_owner desc, created_at", [ctx.cfg.workspaceId]);
   const perms = await ctx.db.query<{ role_id: string; permission: PermissionKey }>("select rp.role_id, rp.permission from role_permissions rp join roles r on r.id = rp.role_id where r.workspace_id = $1", [ctx.cfg.workspaceId]);
   return roles.map((r) => ({ id: r.id, name: r.name, permissions: perms.filter((p) => p.role_id === r.id).map((p) => p.permission) }));

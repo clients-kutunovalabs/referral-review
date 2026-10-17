@@ -1,4 +1,4 @@
-import { PGlite } from "@electric-sql/pglite";
+import type { PGlite } from "@electric-sql/pglite";
 import { INT8_OID, bindParams, parseInt8, type Db, type Queryable, type Row } from "./db";
 
 const parsers = { [INT8_OID]: parseInt8 };
@@ -15,7 +15,10 @@ function wrap(client: Pick<PGlite, "query" | "exec">): Queryable {
 
 /** Postgres in WebAssembly. Pass a directory to keep data between runs; omit it for a throwaway in-memory database. */
 export async function createPgliteDb(dataDir?: string): Promise<Db> {
-  const lite = dataDir ? new PGlite(dataDir) : new PGlite();
+  // Loaded only when asked for, and natively rather than through the bundler: PGlite finds its WebAssembly files relative to
+  // its own location, which bundling breaks. A production build that uses real Postgres never loads it at all.
+  const { PGlite: Lite } = await import(/* webpackIgnore: true */ "@electric-sql/pglite");
+  const lite = dataDir ? new Lite(dataDir) : new Lite();
   await lite.waitReady;
   return {
     ...wrap(lite),

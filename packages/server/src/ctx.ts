@@ -13,6 +13,8 @@ export interface ServerConfig {
   trustProxyHops: number;
   sessionDays: number;
   maxIdentitiesPerUser: number;
+  /** Whether an AI provider is configured. Without it, admins cannot publish AI-script tasks. */
+  aiEnabled: boolean;
 }
 
 export interface Ctx {

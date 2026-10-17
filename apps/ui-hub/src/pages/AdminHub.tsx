@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { AdminApp, ServicesProvider, type AdminScreen } from "@rr/ui";
-import { adminDemo, services } from "../services";
+import { adminDemo, demoServices } from "../services";
 import { fixtures } from "@rr/core";
 import { DeviceFrame, DeviceSwitch, Gallery, GalleryItem, HubPage, JumpPanel, PhoneFrame, type Device, type JumpGroup } from "@rr/ui/hub";
 
@@ -30,6 +30,18 @@ const GROUPS: JumpGroup<string>[] = [
   { label: "User detail", items: ["userdetail"].map((id) => ({ id, label: JUMPS[id]!.label })) }
 ];
 
+const IDS = { initialTaskId: "t1", initialReviewId: "r1", initialPayoutId: "a1", initialUserId: "u1", initialTicketId: "tk1042" };
+
+function Preview({ jumpId, viewer }: { jumpId: string; viewer: string }) {
+  const j = JUMPS[jumpId]!;
+  const demo = useMemo(() => demoServices({ viewerRoleId: viewer }), [viewer]);
+  return (
+    <ServicesProvider services={demo.services} demo={adminDemo}>
+      <AdminApp initialScreen={j.screen} {...(j.tab ? { initialAccessTab: j.tab } : {})} {...IDS} loggedIn={j.screen !== "login"} />
+    </ServicesProvider>
+  );
+}
+
 export function AdminHub({ ownerOnly = false }: { ownerOnly?: boolean } = {}) {
   const [jump, setJump] = useState("dashboard");
   const [all, setAll] = useState(false);
@@ -37,7 +49,6 @@ export function AdminHub({ ownerOnly = false }: { ownerOnly?: boolean } = {}) {
   const [rev, setRev] = useState(0);
   const [viewer, setViewer] = useState("role-owner");
   return (
-    <ServicesProvider services={services} demo={adminDemo}>
     <HubPage>
       <JumpPanel title="Admin side" hint={ownerOnly ? "Viewing as the Owner role." : "Switch the viewing role to see permission-gated navigation and 403 screens."} groups={GROUPS} active={jump} onPick={(id) => { setJump(id); setRev(rev + 1); setAll(false); }}>
         {ownerOnly ? null : <label className="field" style={{ marginBottom: 10 }}>View as
@@ -51,13 +62,12 @@ export function AdminHub({ ownerOnly = false }: { ownerOnly?: boolean } = {}) {
       {all ? (
         <Gallery>
           {Object.entries(JUMPS).map(([id, s]) => (
-            <GalleryItem key={id} caption={s.label}><PhoneFrame><AdminApp initialScreen={s.screen} {...(s.tab ? { initialAccessTab: s.tab } : {})} viewerRoleIds={[viewer]} /></PhoneFrame></GalleryItem>
+            <GalleryItem key={id} caption={s.label}><PhoneFrame><Preview jumpId={id} viewer={viewer} /></PhoneFrame></GalleryItem>
           ))}
         </Gallery>
       ) : (
-        <DeviceFrame device={device}><AdminApp key={`${jump}-${rev}-${viewer}`} initialScreen={JUMPS[jump]!.screen} {...(JUMPS[jump]!.tab ? { initialAccessTab: JUMPS[jump]!.tab } : {})} viewerRoleIds={[viewer]} /></DeviceFrame>
+        <DeviceFrame device={device}><Preview key={`${jump}-${rev}-${viewer}`} jumpId={jump} viewer={viewer} /></DeviceFrame>
       )}
     </HubPage>
-    </ServicesProvider>
   );
 }

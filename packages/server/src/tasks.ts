@@ -113,6 +113,7 @@ export function validateNewTask(i: NewTaskInput, now: Date): string[] {
 export async function createTask(ctx: Ctx, actor: AdminActor, input: NewTaskInput): Promise<AdminTaskRow> {
   needs(actor, "task.manage");
   const errors = validateNewTask(input, ctx.now());
+  if (input.textMode === "ai_generated" && !ctx.cfg.aiEnabled) errors.push("AI scripts are not enabled on this site.");
   if (errors.length) fail("bad_request", errors.join(" "));
   const keywords = input.textMode === "none" || input.textMode === "manual_pool" ? [] : [...new Set(input.keywords.map((k) => k.trim()).filter(Boolean))];
   const scripts = input.textMode === "manual_pool" ? input.scripts.map((s) => s.trim()).filter(Boolean) : [];

@@ -10,9 +10,15 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@rr/core": "workspace:*"
+    "@rr/core": "workspace:*",
+    "nodemailer": "^10.1.2"
   },
   "devDependencies": {
-    "vitest": "^2.1.8"
+    "@types/nodemailer": "^8.0.2",
+    "vitest": "^5.0.5"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./email": "./src/email.ts"
   }
 }

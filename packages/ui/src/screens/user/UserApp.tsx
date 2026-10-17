@@ -1,16 +1,15 @@
-import { useMemo, useState } from "react";
-import { activeTill, dateParts, fixtures, formatLimit, walletTotals, type Claim, type Identity, type PayoutRequest, type PayoutScenario, type Task } from "@rr/core";
+import { useEffect, useMemo, useState, type ReactElement } from "react";
+import { activeTill, dateParts, formatLimit, walletTotals, whenLabel, type Claim, type CodeSent, type Identity, type PayoutRequest, type Task, type WalletEntry } from "@rr/core";
 import { formatRupees, parseRupees, rupees, type Paise } from "@rr/money";
 import {
   BottomNav, Button, Card, Chips, CopyButton, Countdown, EmptyState, Field, FileUpload, Input, Notice, Select,
   Sheet, StatusPill, Tabs, Textarea, Toast, TopBar
 } from "../../primitives";
-import { markPaid, maskUpi, requestPayout, usePayouts } from "../../demo/payoutStore";
+import { ErrorBox, Loading, isUnauthenticated, messageOf, useAsync, useRefreshOnFocus } from "../../data";
+import { useServices } from "../../services";
 import { CreateTicketBody, HelpScreen, TicketChatScreen, type HelpTab } from "./HelpScreens";
 import { AuthFlow, type AuthView, type SignUpField } from "../auth/AuthFlow";
-import { CodeForm, messageOf } from "../auth/CodeForm";
-import { useServices } from "../../services";
-import type { CodeSent } from "@rr/core";
+import { CodeForm } from "../auth/CodeForm";
 
 export type UserScreen =
   | "login" | "register" | "verifyEmail" | "createPassword" | "forgot" | "resetVerify" | "resetPassword" | "board" | "detail" | "claimed" | "mytasks" | "submit" | "submitted"
@@ -41,100 +40,109 @@ const AUTH_VIEW: Partial<Record<UserScreen, AuthView>> = {
 export const isUserAuthScreen = (s: UserScreen): boolean => s in AUTH_VIEW;
 const SIGN_UP_FIELDS: SignUpField[] = [{ key: "name", label: "Full name" }, { key: "phone", label: "Phone", type: "tel" }];
 
-/** Demo-only text assignment. The real balanced random bag lives on the server (step 6). */
-function demoText(task: Task, n: number): string | undefined {
-  if (task.textMode === "manual_pool") return fixtures.scriptPool[n % fixtures.scriptPool.length];
-  if (task.textMode === "ai_generated") {
-    return `Hi, I wanted to follow up about ${task.keywords.join(" and ") || task.title}. We can get you set up quickly and our team will support the onboarding. Would you be open to a short call this week?`;
-  }
-  return undefined;
-}
-
 export interface UserAppProps {
   initialScreen?: UserScreen;
   initialTab?: MyTab;
+  /** Known sign-in state (ui-hub). Leave it out on the real site and the app asks the server. */
   loggedIn?: boolean;
-  /** start in an isolated payout scenario (ui-hub). Without it the app shares its payouts with the admin app, so an admin confirming a payment shows up here. */
-  payoutScenario?: PayoutScenario;
+  initialTaskId?: string;
+  initialClaimId?: string;
   initialTicketId?: string;
   initialHelpTab?: HelpTab;
+  /** ui-hub only: lets the Payout page offer "pretend the admin paid it". */
+  onDemoPaid?: () => Promise<void> | void;
 }
 
-export function UserApp({ initialScreen = "board", initialTab = "active", loggedIn: initialLoggedIn = true, payoutScenario, initialTicketId = "tk1042", initialHelpTab = "open" }: UserAppProps) {
-  const [screen, setScreen] = useState<UserScreen>(initialScreen);
+export function UserApp({ initialScreen = "board", initialTab = "active", loggedIn: loggedInProp, initialTaskId, initialClaimId, initialTicketId = "", initialHelpTab = "open", onDemoPaid }: UserAppProps) {
+  const { auth, api } = useServices();
+  const [loggedIn, setLoggedIn] = useState<boolean | null>(loggedInProp ?? null);
+  const [rawScreen, setScreen] = useState<UserScreen>(initialScreen);
   const [tab, setTab] = useState<MyTab>(initialTab);
-  const [loggedIn, setLoggedIn] = useState(initialLoggedIn);
   const [next, setNext] = useState<UserScreen | null>(null);
-  const [taskId, setTaskId] = useState(initialScreen === "detail" ? "t3" : "t1");
-  const [claims, setClaims] = useState<Claim[]>(fixtures.claims);
-  const [identities, setIdentities] = useState<Identity[]>(fixtures.identities);
-  const [identityId, setIdentityId] = useState("i1");
+  const [taskId, setTaskId] = useState(initialTaskId ?? "");
+  const [identityId, setIdentityId] = useState("");
   const [toast, setToast] = useState<string | null>(null);
   const [ticketId, setTicketId] = useState(initialTicketId);
   const [helpTab, setHelpTab] = useState<HelpTab>(initialHelpTab);
-  const shared = usePayouts();
-  const [local, setLocal] = useState<PayoutRequest[] | null>(() => (payoutScenario ? fixtures.payoutScenarios[payoutScenario] : null));
-  const payouts = local ?? shared;
+  const [submitClaimId, setSubmitClaimId] = useState(initialClaimId ?? "");
+  const [rev, setRev] = useState(0);
+  const [ticketsRev, setTicketsRev] = useState(0);
+  const refresh = () => setRev((n) => n + 1);
 
-  const task = fixtures.tasks.find((t) => t.id === taskId) ?? fixtures.tasks[0]!;
-  const identity = identities.find((i) => i.id === identityId) ?? identities[0]!;
-  const { auth } = useServices();
+  // On the real site nothing tells the app whether someone is signed in, so it asks once.
+  useEffect(() => {
+    if (loggedIn !== null) return;
+    auth.getSession().then((s) => setLoggedIn(!!s), () => setLoggedIn(false));
+  }, [auth, loggedIn]);
+
+  const data = useAsync(async () => {
+    const [me, tasks, claims, wallet] = await Promise.all([api.user.me(), api.user.listTasks(), api.user.listClaims(), api.user.wallet()]);
+    return { me, tasks, claims, wallet };
+  }, [rev], { enabled: loggedIn === true, refreshMs: 30_000 });
+  useEffect(() => { if (data.unauthenticated) setLoggedIn(false); }, [data.unauthenticated]);
+  // Reviews, payments and replies are only ever seen in the app (nothing is emailed), so it keeps itself current:
+  // every 30 seconds, when the tab is shown again, and whenever someone moves between the main tabs.
+  useRefreshOnFocus(data.reload, loggedIn === true);
+
+  const screen: UserScreen = loggedIn === false && !isUserAuthScreen(rawScreen) ? "login" : rawScreen;
   const show = (s: UserScreen) => setScreen(s);
-  const logOut = async () => { await auth.signOut(); setLoggedIn(false); setNext(null); show("login"); };
   const notify = (m: string) => setToast(m);
+  const guard = (e: unknown) => { if (isUnauthenticated(e)) { setLoggedIn(false); show("login"); } else notify(messageOf(e)); };
+  const logOut = async () => { await auth.signOut().catch(() => undefined); setLoggedIn(false); setNext(null); show("login"); };
 
-  function claimTask() {
-    if (!loggedIn) { setNext("claimed"); show("login"); return; }
-    const already = claims.some((c) => c.taskId === task.id && c.identityId === identityId && c.status !== "void" && c.status !== "expired");
-    if (already) return;
-    const count = claims.filter((c) => c.taskId === task.id).length;
-    const text = demoText(task, count);
-    setClaims([{ id: `c${claims.length + 1}`, taskId: task.id, identityId, status: "claimed", ...(task.timerMinutes === null ? {} : { minutesLeft: task.timerMinutes }), ...(text ? { assignedText: text } : {}) }, ...claims]);
-    show("claimed");
+  const d = data.data;
+  const identities = d?.me.identities ?? [];
+  const identity = identities.find((i) => i.id === identityId) ?? identities.find((i) => i.isPrimary) ?? identities[0];
+  const tasks = d?.tasks ?? [];
+  const task = tasks.find((t) => t.id === taskId) ?? tasks[0];
+  const claims = d?.claims ?? [];
+  const payouts = d?.wallet.payouts ?? [];
+  const earned = d?.wallet.earned ?? 0n;
+  const { withdrawn, processing: inProcess, available } = walletTotals(earned, payouts);
+
+  async function claimTask() {
+    if (loggedIn !== true) { setNext("detail"); show("login"); return; }
+    if (!task || !identity) return;
+    try { await api.user.claimTask(task.id, identity.id); refresh(); show("claimed"); }
+    catch (e) { guard(e); refresh(); }
   }
 
-  function submitProof(claimId: string) {
-    setClaims(claims.map((c) => (c.id === claimId ? { ...c, status: "under_review", submittedLabel: "just now" } : c)));
-    show("submitted");
-  }
-
-  const [submitClaimId, setSubmitClaimId] = useState("c1");
-  const wallet = fixtures.wallet;
-  // Wallet numbers are always derived, never stored. A request blocks its amount the moment it is made.
-  const { withdrawn, processing: inProcess, available } = walletTotals(wallet.earned, payouts);
-
-  let body: JSX.Element;
-  switch (screen) {
-    case "login": case "register": case "verifyEmail": case "createPassword": case "forgot": case "resetVerify": case "resetPassword": body = (
-      <AuthFlow key={screen} brand="Task board" signUpFields={SIGN_UP_FIELDS} initialView={AUTH_VIEW[screen]!} initialEmail={screen === "login" || screen === "register" || screen === "forgot" ? "" : "you@example.com"}
+  const authScreen = isUserAuthScreen(screen);
+  let body: ReactElement;
+  if (loggedIn === null) {
+    body = <div className="screen"><Loading /></div>;
+  } else if (authScreen) {
+    body = (
+      <AuthFlow key={screen} brand="Task board" signUpFields={SIGN_UP_FIELDS} initialView={AUTH_VIEW[screen] as AuthView} initialEmail={screen === "login" || screen === "register" || screen === "forgot" ? "" : "you@example.com"}
         {...(next ? { notice: "Log in to claim this task. You'll come back to it." } : {})}
-        onAuthenticated={() => { setLoggedIn(true); show(next ? "detail" : "board"); setNext(null); }} />
-    ); break;
-    case "board": body = (
-      <BoardScreen identity={identity} onIdentity={() => show("identities")} onOpen={(id) => { setTaskId(id); show("detail"); }} />
-    ); break;
+        onAuthenticated={() => { setLoggedIn(true); refresh(); show(next ?? "board"); setNext(null); }} />
+    );
+  } else if (data.loading && !d) {
+    body = <div className="screen"><TopBar title="Loading" /><Loading /></div>;
+  } else if (!d || !identity) {
+    body = <div className="screen"><TopBar title="Something went wrong" /><div className="content"><ErrorBox message={data.error ?? "We could not load your account."} onRetry={data.reload} /></div></div>;
+  } else switch (screen) {
+    case "board": body = <BoardScreen tasks={tasks} identity={identity} onIdentity={() => show("identities")} onOpen={(id) => { setTaskId(id); show("detail"); }} />; break;
     case "detail": body = (
       <>
-        <BoardScreen identity={identity} onIdentity={() => show("identities")} onOpen={(id) => { setTaskId(id); show("detail"); }} />
+        <BoardScreen tasks={tasks} identity={identity} onIdentity={() => show("identities")} onOpen={(id) => { setTaskId(id); show("detail"); }} />
         <Sheet title="Task details" onClose={() => show("board")}>
-          <DetailBody task={task} identities={identities} identityId={identityId} setIdentityId={setIdentityId} claims={claims}
-            loggedIn={loggedIn} onClaim={claimTask} />
+          {task ? <DetailBody task={task} identities={identities} identityId={identity.id} setIdentityId={setIdentityId} claims={claims} loggedIn onClaim={() => { void claimTask(); }} /> : <EmptyState>That task is no longer available.</EmptyState>}
         </Sheet>
       </>
     ); break;
-    case "claimed": body = <ClaimedScreen minutes={task.timerMinutes} onGo={() => { setTab("active"); show("mytasks"); }} onMore={() => show("board")} />; break;
+    case "claimed": body = <ClaimedScreen minutes={task?.timerMinutes ?? null} onGo={() => { setTab("active"); show("mytasks"); }} onMore={() => show("board")} />; break;
     case "mytasks": body = (
-      <MyTasksScreen tab={tab} setTab={setTab} claims={claims} identities={identities}
-        onSubmit={(id) => { setSubmitClaimId(id); show("submit"); }} />
+      <MyTasksScreen tab={tab} setTab={setTab} claims={claims} onSubmit={(id) => { setSubmitClaimId(id); show("submit"); }} onExpire={refresh}
+        onRetryText={(id) => api.user.retryClaimText(id).then(refresh, guard)} />
     ); break;
     case "submit": {
-      const sc = claims.find((c) => c.id === submitClaimId);
-      const st = fixtures.tasks.find((t) => t.id === sc?.taskId) ?? task;
+      const sc = claims.find((c) => c.id === submitClaimId) ?? claims.find((c) => c.status === "claimed");
       body = (
         <>
-          <MyTasksScreen tab="active" setTab={setTab} claims={claims} identities={identities} onSubmit={(id) => { setSubmitClaimId(id); show("submit"); }} />
+          <MyTasksScreen tab="active" setTab={setTab} claims={claims} onSubmit={(id) => { setSubmitClaimId(id); show("submit"); }} onExpire={refresh} onRetryText={(id) => api.user.retryClaimText(id).then(refresh, guard)} />
           <Sheet title="Submit proof" onClose={() => show("mytasks")}>
-            <SubmitBody task={st} onSubmit={() => submitProof(submitClaimId)} />
+            {sc ? <SubmitBody title={sc.taskTitle} onSubmit={async (file, note) => { await api.user.submitProof(sc.id, { file, note }); refresh(); show("submitted"); }} /> : <EmptyState>That task is no longer active.</EmptyState>}
           </Sheet>
         </>
       );
@@ -147,22 +155,12 @@ export function UserApp({ initialScreen = "board", initialTab = "active", logged
         <Button block style={{ marginTop: 20 }} onClick={() => { setTab("review"); show("mytasks"); }}>View under review</Button>
       </div></div></div>
     ); break;
-    case "wallet": body = <WalletScreen identities={identities} earned={wallet.earned} withdrawn={withdrawn} inProcess={inProcess} available={available} payouts={payouts} />; break;
+    case "wallet": body = <WalletScreen identities={identities} entries={d.wallet.entries} earned={earned} withdrawn={withdrawn} inProcess={inProcess} available={available} payouts={payouts} />; break;
     case "payout": body = (
       <PayoutScreen available={available} inProcess={inProcess} payouts={payouts}
-        onRequest={(amt, upi) => {
-          if (local) setLocal([{ id: `p${local.length + 10}`, who: "You", amount: amt, status: "pending", upiMasked: maskUpi(upi), upiFull: upi, whenLabel: "just now", at: new Date().toISOString() }, ...local]);
-          else requestPayout(amt, upi);
-          show("payoutSent");
-        }}
+        onRequest={async (amt, upi) => { await api.user.requestPayout(amt, upi); refresh(); show("payoutSent"); }}
         onHelp={() => show("help")}
-        onDemoPaid={() => {
-          const pending = payouts.find((p) => p.status === "pending");
-          if (!pending) return;
-          if (local) setLocal(local.map((p) => (p.id === pending.id ? { ...p, status: "paid", paidBy: "Anil (Payments)", paidAt: new Date().toISOString() } : p)));
-          else markPaid(pending.id, "Anil (Payments)");
-          notify("Demo: admin marked it paid");
-        }} />
+        {...(onDemoPaid ? { onDemoPaid: async () => { await onDemoPaid(); refresh(); notify("Demo: admin marked it paid"); } } : {})} />
     ); break;
     case "payoutSent": {
       const req = payouts.find((p) => p.status === "pending");
@@ -183,43 +181,43 @@ export function UserApp({ initialScreen = "board", initialTab = "active", logged
       );
       break;
     }
-    case "help": body = <HelpScreen tab={helpTab} setTab={setHelpTab} onOpen={(id) => { setTicketId(id); show("ticket"); }} onCreate={() => show("createTicket")} />; break;
+    case "help": body = <HelpScreen tab={helpTab} setTab={setHelpTab} version={ticketsRev} onOpen={(id) => { setTicketId(id); show("ticket"); }} onCreate={() => show("createTicket")} />; break;
     case "createTicket": body = (
       <>
-        <HelpScreen tab={helpTab} setTab={setHelpTab} onOpen={(id) => { setTicketId(id); show("ticket"); }} onCreate={() => show("createTicket")} />
+        <HelpScreen tab={helpTab} setTab={setHelpTab} version={ticketsRev} onOpen={(id) => { setTicketId(id); show("ticket"); }} onCreate={() => show("createTicket")} />
         <Sheet title="Create ticket" onClose={() => show("help")}>
-          <CreateTicketBody onCreated={() => { setHelpTab("open"); notify("Ticket created. Support will reply here."); show("help"); }} />
+          <CreateTicketBody onCreated={() => { setHelpTab("open"); setTicketsRev((n) => n + 1); notify("Ticket created. Support will reply here."); show("help"); }} />
         </Sheet>
       </>
     ); break;
-    case "ticket": body = <TicketChatScreen ticketId={ticketId} onBack={() => show("help")} onNew={() => show("createTicket")} />; break;
+    case "ticket": body = <TicketChatScreen ticketId={ticketId} onBack={() => { setTicketsRev((n) => n + 1); show("help"); }} onNew={() => show("createTicket")} />; break;
     case "identities": body = (
-      <IdentitiesScreen identities={identities} activeId={identityId} onSwitch={(id) => { setIdentityId(id); notify("Switched email"); }}
-        onAdd={(email) => { setIdentities([...identities, { id: `i${identities.length + 1}`, email, isPrimary: false, earned: 0n }]); notify("Email verified and added"); }}
-        onLogout={logOut}
-        onBack={() => show("board")} />
+      <IdentitiesScreen identities={identities} activeId={identity.id} onSwitch={(id) => { setIdentityId(id); notify("Switched email"); }}
+        onAdded={() => { notify("Email verified and added"); refresh(); }} onLogout={() => { void logOut(); }} onBack={() => show("board")} />
     ); break;
+    default: body = <div className="screen"><Loading /></div>;
   }
 
-  const tabId = TAB_OF[screen];
+  const tabId = authScreen || loggedIn !== true ? undefined : TAB_OF[screen];
   return (
     <>
       {body}
       {toast ? <Toast message={toast} onDone={() => setToast(null)} /> : null}
-      {tabId ? <BottomNav brand="Task board" items={NAV} active={tabId} onSelect={(id) => { if (id === "mytasks") setTab("active"); show(id as UserScreen); }}
-        footer={<><span className="who">{identity.email}</span><button className="link-btn" onClick={() => show("identities")}>My emails</button><button className="link-btn" onClick={logOut}>Log out</button></>} /> : null}
+      {tabId && identity ? <BottomNav brand="Task board" items={NAV} active={tabId} onSelect={(id) => { if (id === "mytasks") setTab("active"); data.reload(); show(id as UserScreen); }}
+        footer={<><span className="who">{identity.email}</span><button className="link-btn" onClick={() => show("identities")}>My emails</button><button className="link-btn" onClick={() => { void logOut(); }}>Log out</button></>} /> : null}
     </>
   );
 }
 
 /* ---------- Screens ---------- */
 
-function BoardScreen({ identity, onIdentity, onOpen }: { identity: Identity; onIdentity: () => void; onOpen: (id: string) => void }) {
+function BoardScreen({ tasks, identity, onIdentity, onOpen }: { tasks: Task[]; identity: Identity; onIdentity: () => void; onOpen: (id: string) => void }) {
   return (
     <div className="screen">
-      <TopBar title="Tasks" subtitle={`${fixtures.tasks.filter((t) => t.status !== "closed" && t.status !== "removed").length} tasks you can claim`} right={<button className="identity-chip" onClick={onIdentity} aria-label="Switch email">{identity.email} &#9662;</button>} />
+      <TopBar title="Tasks" subtitle={`${tasks.filter((t) => t.status !== "closed" && t.status !== "removed").length} tasks you can claim`} right={<button className="identity-chip" onClick={onIdentity} aria-label="Switch email">{identity.email} &#9662;</button>} />
       <div className="scrollarea"><div className="content"><div className="card-grid">
-        {fixtures.tasks.map((t) => {
+        {tasks.length === 0 ? <EmptyState>No tasks right now. Check back soon.</EmptyState> : null}
+        {tasks.map((t) => {
           const till = activeTill(t.activeUntil);
           const closed = till.kind === "closed" || t.status === "closed" || t.status === "removed";
           const tone = closed ? "coral" : till.kind === "left" ? "amber" : "teal";
@@ -243,6 +241,7 @@ function DetailBody({ task, identities, identityId, setIdentityId, claims, logge
   task: Task; identities: Identity[]; identityId: string; setIdentityId: (id: string) => void;
   claims: Claim[]; loggedIn: boolean; onClaim: () => void;
 }) {
+  const [busy, setBusy] = useState(false);
   const already = claims.some((c) => c.taskId === task.id && c.identityId === identityId && c.status !== "void" && c.status !== "expired");
   return (
     <>
@@ -273,7 +272,7 @@ function DetailBody({ task, identities, identityId, setIdentityId, claims, logge
           </Select>
         </Field>
       ) : null}
-      <Button variant="primary" block disabled={already} onClick={onClaim}>{already ? "Already claimed from this email" : loggedIn ? "Claim task" : "Log in to claim"}</Button>
+      <Button variant="primary" block disabled={already || busy} onClick={() => { setBusy(true); onClaim(); }}>{already ? "Already claimed from this email" : busy ? "Claiming…" : loggedIn ? "Claim task" : "Log in to claim"}</Button>
     </>
   );
 }
@@ -290,85 +289,90 @@ function ClaimedScreen({ minutes, onGo, onMore }: { minutes: number | null; onGo
   );
 }
 
-function MyTasksScreen({ tab, setTab, claims, identities, onSubmit }: {
-  tab: MyTab; setTab: (t: MyTab) => void; claims: Claim[]; identities: Identity[]; onSubmit: (id: string) => void;
+function MyTasksScreen({ tab, setTab, claims, onSubmit, onExpire, onRetryText }: {
+  tab: MyTab; setTab: (t: MyTab) => void; claims: Claim[]; onSubmit: (id: string) => void; onExpire: () => void; onRetryText: (id: string) => void;
 }) {
-  const title = (c: Claim) => fixtures.tasks.find((t) => t.id === c.taskId)?.title ?? "Task";
-  const email = (c: Claim) => identities.find((i) => i.id === c.identityId)?.email ?? "";
   const list = useMemo(() => claims.filter((c) =>
     tab === "active" ? c.status === "claimed"
       : tab === "review" ? c.status === "under_review"
       : tab === "completed" ? c.status === "approved" || c.status === "partial"
       : c.status === "rejected" || c.status === "expired" || c.status === "void"), [claims, tab]);
+  const count = (t: MyTab) => claims.filter((c) => (t === "active" ? c.status === "claimed" : t === "review" ? c.status === "under_review" : t === "completed" ? c.status === "approved" || c.status === "partial" : ["rejected", "expired", "void"].includes(c.status))).length;
   return (
     <div className="screen"><TopBar title="My tasks" />
       <Tabs<MyTab> value={tab} onChange={setTab} tabs={[
-        { id: "active", label: "Active" }, { id: "review", label: "Under review" }, { id: "completed", label: "Completed" }, { id: "rejected", label: "Rejected" }]} />
+        { id: "active", label: `Active (${count("active")})` }, { id: "review", label: `Under review (${count("review")})` }, { id: "completed", label: `Completed (${count("completed")})` }, { id: "rejected", label: `Rejected (${count("rejected")})` }]} />
       <div className="scrollarea"><div className="content">
         {list.length === 0 ? <EmptyState>Nothing here yet.</EmptyState> : null}
-        <div className="card-grid">{list.map((c) => {
-          const t = fixtures.tasks.find((x) => x.id === c.taskId);
-          return (
-            <Card key={c.id}>
-              {c.status === "claimed" ? (
-                <div className="card-head"><h3>{title(c)}</h3>{c.minutesLeft === undefined ? <StatusPill tone="gray">No time limit</StatusPill> : <Countdown minutes={c.minutesLeft} />}</div>
-              ) : <h3>{title(c)}</h3>}
-              {c.status === "claimed" ? <p className="muted">{email(c)}</p> : null}
-              {c.status === "claimed" && t ? (<>
-                <div className="active-row">
-                  <div className="info-cell white">
-                    <span className="info-label">Task site &#8599;</span>
-                    <span className="info-value"><a href={t.siteUrl} target="_blank" rel="noreferrer noopener" title={t.siteUrl}>{t.siteUrl.replace("https://", "")}</a></span>
-                  </div>
-                  <Button onClick={() => onSubmit(c.id)}>Submit proof</Button>
+        <div className="card-grid">{list.map((c) => (
+          <Card key={c.id}>
+            {c.status === "claimed" ? (
+              <div className="card-head"><h3>{c.taskTitle}</h3>{c.minutesLeft === undefined ? <StatusPill tone="gray">No time limit</StatusPill> : <Countdown {...(c.expiresAt ? { until: c.expiresAt } : { minutes: c.minutesLeft })} onExpire={onExpire} />}</div>
+            ) : <h3>{c.taskTitle}</h3>}
+            {c.status === "claimed" ? <p className="muted">{c.identityEmail}</p> : null}
+            {c.status === "claimed" ? (<>
+              <div className="active-row">
+                <div className="info-cell white">
+                  <span className="info-label">Task site &#8599;</span>
+                  <span className="info-value"><a href={c.siteUrl} target="_blank" rel="noreferrer noopener" title={c.siteUrl}>{c.siteUrl.replace("https://", "")}</a></span>
                 </div>
-                <div className="task-text">
-                  {t.keywords.length ? (<><div className="section-label">Keywords</div><Chips items={t.keywords} /></>) : null}
-                  {c.assignedText ? (<>
-                    <textarea className="script-box" readOnly aria-label="Script to use" rows={Math.min(9, Math.ceil(c.assignedText.length / 38))} value={c.assignedText} />
-                    <div className="row"><span /><CopyButton text={c.assignedText} /></div>
-                  </>) : null}
-                  {!t.keywords.length && !c.assignedText ? <p className="hint" style={{ marginTop: 12 }}>You are free to use your own script.</p> : null}
-                </div>
-              </>) : null}
-              {c.status === "under_review" ? (<>
-                <div className="tagrow"><StatusPill tone="gray">{email(c)}</StatusPill><StatusPill tone="teal">Under review</StatusPill></div>
-                <p className="small" style={{ marginTop: 8 }}>Submitted {c.submittedLabel}</p>
-              </>) : null}
-              {(c.status === "approved" || c.status === "partial") ? (<>
-                <div className="tagrow"><StatusPill tone="gray">{email(c)}</StatusPill><StatusPill tone={c.status === "approved" ? "green" : "amber"}>{c.status === "approved" ? "Approved" : `Partial · ${c.outcome}%`}</StatusPill></div>
-                {c.reviewedLabel ? <p className="small" style={{ marginTop: 8 }}>Reviewed {c.reviewedLabel}</p> : null}
-                <Notice tone={c.status === "approved" ? "green" : "amber"}>
-                  <div>{c.status === "approved"
-                    ? `Completed successfully. Task amount ${formatRupees(t?.reward ?? 0n)} added to your wallet.`
-                    : `Completed successfully. ${formatRupees(c.credited ?? 0n)} of ${formatRupees(t?.reward ?? 0n)} added to your wallet.`}</div>
-                  {c.status === "partial" && c.reviewerNote ? <div className="notice-note">Reviewer note: {c.reviewerNote}</div> : null}
-                </Notice>
-              </>) : null}
-              {(c.status === "rejected" || c.status === "expired" || c.status === "void") ? (<>
-                <div className="tagrow"><StatusPill tone="gray">{email(c)}</StatusPill><StatusPill tone="coral">{c.status === "rejected" ? "Rejected · 0%" : c.status === "expired" ? "Expired" : "Voided"}</StatusPill></div>
-                {c.reviewedLabel ? <p className="small" style={{ marginTop: 8 }}>{c.status === "rejected" ? "Reviewed" : "Ended"} {c.reviewedLabel}</p> : null}
-                <Notice tone="coral">
-                  {c.status === "rejected" ? `${c.reviewerNote ? c.reviewerNote + " " : ""}No payout for this task.` : c.status === "expired" ? "Timer ran out. No payout for this task." : "Task was removed. No payout for this task."}
-                </Notice>
-              </>) : null}
-            </Card>
-          );
-        })}</div>
+                <Button onClick={() => onSubmit(c.id)}>Submit proof</Button>
+              </div>
+              <div className="task-text">
+                {c.keywords.length ? (<><div className="section-label">Keywords</div><Chips items={c.keywords} /></>) : null}
+                {c.assignedText ? (<>
+                  <textarea className="script-box" readOnly aria-label="Script to use" rows={Math.min(9, Math.ceil(c.assignedText.length / 38))} value={c.assignedText} />
+                  <div className="row"><span /><CopyButton text={c.assignedText} /></div>
+                </>) : null}
+                {c.textStatus === "pending" ? <p className="hint" style={{ marginTop: 12 }} role="status">Your script is being written. Open this page again in a moment.</p> : null}
+                {c.textStatus === "failed" ? (
+                  <div className="row"><span className="hint">We could not write your script.</span><Button compact onClick={() => onRetryText(c.id)}>Try again</Button></div>
+                ) : null}
+                {!c.keywords.length && !c.assignedText && !c.textStatus ? <p className="hint" style={{ marginTop: 12 }}>You are free to use your own script.</p> : null}
+              </div>
+            </>) : null}
+            {c.status === "under_review" ? (<>
+              <div className="tagrow"><StatusPill tone="gray">{c.identityEmail}</StatusPill><StatusPill tone="teal">Under review</StatusPill></div>
+              <p className="small" style={{ marginTop: 8 }}>Submitted {whenLabel(c.submittedAt)}</p>
+            </>) : null}
+            {(c.status === "approved" || c.status === "partial") ? (<>
+              <div className="tagrow"><StatusPill tone="gray">{c.identityEmail}</StatusPill><StatusPill tone={c.status === "approved" ? "green" : "amber"}>{c.status === "approved" ? "Approved" : `Partial · ${c.outcome}%`}</StatusPill></div>
+              {c.reviewedAt ? <p className="small" style={{ marginTop: 8 }}>Reviewed {whenLabel(c.reviewedAt)}</p> : null}
+              <Notice tone={c.status === "approved" ? "green" : "amber"}>
+                <div>{c.status === "approved"
+                  ? `Completed successfully. Task amount ${formatRupees(c.reward)} added to your wallet.`
+                  : `Completed successfully. ${formatRupees(c.credited ?? 0n)} of ${formatRupees(c.reward)} added to your wallet.`}</div>
+                {c.status === "partial" && c.reviewerNote ? <div className="notice-note">Reviewer note: {c.reviewerNote}</div> : null}
+              </Notice>
+            </>) : null}
+            {(c.status === "rejected" || c.status === "expired" || c.status === "void") ? (<>
+              <div className="tagrow"><StatusPill tone="gray">{c.identityEmail}</StatusPill><StatusPill tone="coral">{c.status === "rejected" ? "Rejected · 0%" : c.status === "expired" ? "Expired" : "Voided"}</StatusPill></div>
+              {c.reviewedAt ? <p className="small" style={{ marginTop: 8 }}>{c.status === "rejected" ? "Reviewed" : "Ended"} {whenLabel(c.reviewedAt)}</p> : null}
+              <Notice tone="coral">
+                {c.status === "rejected" ? `${c.reviewerNote ? c.reviewerNote + " " : ""}No payout for this task.` : c.status === "expired" ? "Timer ran out. No payout for this task." : "Task was removed. No payout for this task."}
+              </Notice>
+            </>) : null}
+          </Card>
+        ))}</div>
       </div></div>
     </div>
   );
 }
 
-function SubmitBody({ task, onSubmit }: { task: Task; onSubmit: () => void }) {
-  const [file, setFile] = useState<File | null>(null); const [note, setNote] = useState(""); const [err, setErr] = useState("");
+function SubmitBody({ title, onSubmit }: { title: string; onSubmit: (file: File, note: string) => Promise<void> }) {
+  const [file, setFile] = useState<File | null>(null); const [note, setNote] = useState(""); const [err, setErr] = useState(""); const [busy, setBusy] = useState(false);
+  async function submit() {
+    if (!file) return setErr("Attach a screenshot first.");
+    setBusy(true); setErr("");
+    try { await onSubmit(file, note); } catch (e) { setErr(messageOf(e)); setBusy(false); }
+  }
   return (
     <>
-      <p className="muted" style={{ fontSize: 13, marginTop: 0 }}>Upload a screenshot proving you completed "{task.title}". JPG, PNG or WebP, up to 5 MB.</p>
+      <p className="muted" style={{ fontSize: 13, marginTop: 0 }}>Upload a screenshot proving you completed "{title}". JPG, PNG or WebP, up to 5 MB.</p>
       <FileUpload label="Tap to upload screenshot" onFile={(f) => { setFile(f); setErr(""); }} />
       <Field label="Note (optional)"><Textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Anything the reviewer should know" /></Field>
       {err ? <div className="field-error" role="alert" style={{ marginBottom: 8 }}>{err}</div> : null}
-      <Button variant="primary" block onClick={() => (file ? onSubmit() : setErr("Attach a screenshot first."))}>Submit for review</Button>
+      <Button variant="primary" block disabled={busy} onClick={() => { void submit(); }}>{busy ? "Submitting…" : "Submit for review"}</Button>
     </>
   );
 }
@@ -405,27 +409,27 @@ function payoutDetails(p: PayoutRequest): [string, string][] {
   ];
 }
 
-function WalletScreen({ identities, earned, withdrawn, inProcess, available, payouts }: {
-  identities: Identity[]; earned: Paise; withdrawn: Paise; inProcess: Paise; available: Paise; payouts: PayoutRequest[];
+function WalletScreen({ identities, entries, earned, withdrawn, inProcess, available, payouts }: {
+  identities: Identity[]; entries: WalletEntry[]; earned: Paise; withdrawn: Paise; inProcess: Paise; available: Paise; payouts: PayoutRequest[];
 }) {
   const [open, setOpen] = useState(false);
   const [openTx, setOpenTx] = useState<string | null>(null);
-  const w = fixtures.wallet;
   const email = (id: string) => identities.find((i) => i.id === id)?.email ?? "";
   type Tx = { id: string; at: string; title: string; sub: string; amount: string; income: boolean; details: [string, string][] };
   // Only approved and paid withdrawals appear here. A request still processing shows on the Payout page.
   const txns: Tx[] = [
-    ...w.entries.map((e): Tx => ({
+    ...entries.map((e): Tx => ({
       id: e.id, at: e.at, title: e.title, sub: email(e.identityId), amount: `+${formatRupees(e.credited)}`, income: true,
       details: [
         ["Result", e.outcome === 100 ? "Approved 100%" : `Partial approval ${e.outcome}%`],
         ["Task amount", formatRupees(e.reward)],
         ["Added to wallet", e.outcome === 100 ? formatRupees(e.credited) : `${formatRupees(e.credited)} of ${formatRupees(e.reward)}`],
-        ["Email used", email(e.identityId)]
+        ["Email used", email(e.identityId)],
+        ...(e.reviewerNote ? [["Reviewer note", e.reviewerNote] as [string, string]] : [])
       ]
     })),
     ...payouts.filter((p) => p.status === "paid").map((p): Tx => ({
-      id: p.id, at: p.paidAt ?? p.at ?? "", title: "Withdrawal", sub: p.upiMasked, amount: `\u2212${formatRupees(p.amount)}`, income: false, details: payoutDetails(p)
+      id: p.id, at: p.paidAt ?? p.at, title: "Withdrawal", sub: p.upiMasked, amount: `−${formatRupees(p.amount)}`, income: false, details: payoutDetails(p)
     }))
   ].sort((a, b) => (a.at < b.at ? 1 : -1));
   return (
@@ -450,12 +454,12 @@ function WalletScreen({ identities, earned, withdrawn, inProcess, available, pay
 }
 
 function PayoutScreen({ available, inProcess, payouts, onRequest, onDemoPaid, onHelp }: {
-  available: Paise; inProcess: Paise; payouts: PayoutRequest[]; onRequest: (amt: Paise, upi: string) => void; onDemoPaid: () => void; onHelp: () => void;
+  available: Paise; inProcess: Paise; payouts: PayoutRequest[]; onRequest: (amt: Paise, upi: string) => Promise<void>; onDemoPaid?: () => Promise<void>; onHelp: () => void;
 }) {
-  const [amount, setAmount] = useState(""); const [upi, setUpi] = useState(""); const [errs, setErrs] = useState<{ amount?: string; upi?: string }>({});
-  const [openTx, setOpenTx] = useState<string | null>(null);
+  const [amount, setAmount] = useState(""); const [upi, setUpi] = useState(""); const [errs, setErrs] = useState<{ amount?: string; upi?: string; form?: string }>({});
+  const [openTx, setOpenTx] = useState<string | null>(null); const [busy, setBusy] = useState(false);
   const pending = inProcess > 0n;
-  function submit() {
+  async function submit() {
     const e: typeof errs = {};
     const amt = parseRupees(amount);
     if (amt === null) e.amount = "Enter an amount in rupees, like 100 or 150.50.";
@@ -463,9 +467,9 @@ function PayoutScreen({ available, inProcess, payouts, onRequest, onDemoPaid, on
     else if (amt > available) e.amount = `You can withdraw up to ${formatRupees(available)}.`;
     if (!/^[\w.-]{2,}@[a-zA-Z]{2,}$/.test(upi)) e.upi = upi ? "That doesn't look like a UPI ID (name@bank)." : "Enter a UPI ID before requesting payout.";
     setErrs(e);
-    if (!e.amount && !e.upi && amt !== null) {
-      onRequest(amt, upi);
-    }
+    if (e.amount || e.upi || amt === null) return;
+    setBusy(true);
+    try { await onRequest(amt, upi); } catch (err) { setErrs({ form: messageOf(err) }); setBusy(false); }
   }
   return (
     <div className="screen"><TopBar title="Payout" subtitle="Withdraw your balance to your UPI ID" right={<button className="identity-chip" onClick={onHelp}>Help</button>} /><div className="scrollarea"><div className="content"><div className="two-col"><div>
@@ -477,24 +481,25 @@ function PayoutScreen({ available, inProcess, payouts, onRequest, onDemoPaid, on
       {pending ? <div className="banner">You already have a payout request processing. You can request again once it's paid.</div> : null}
       <Field label="Amount (₹)" error={errs.amount} hint={`Minimum ${formatRupees(MIN_PAYOUT)}`}><Input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="10" disabled={pending} /></Field>
       <Field label="UPI ID" error={errs.upi} hint="You'll enter this each time. It isn't saved as a payment method."><Input id="upi-input" value={upi} onChange={(e) => setUpi(e.target.value)} placeholder="yourname@upi" disabled={pending} autoComplete="off" /></Field>
-      <Button variant="primary" block disabled={pending} onClick={submit}>Request payout</Button>
+      {errs.form ? <div className="field-error" role="alert" style={{ marginBottom: 8 }}>{errs.form}</div> : null}
+      <Button variant="primary" block disabled={pending || busy} onClick={() => { void submit(); }}>{busy ? "Requesting…" : "Request payout"}</Button>
       </div><div>
       <h2 className="section-title">Payout requests</h2>
       {payouts.length === 0 ? <EmptyState>No payout requests yet.</EmptyState> : null}
-      {[...payouts].sort((a, b) => ((a.at ?? "") < (b.at ?? "") ? 1 : -1)).map((p) => (
-        <TxRow key={p.id} id={`po-${p.id}`} at={p.at ?? ""} title="Payout request" sub={p.upiMasked} amount={formatRupees(p.amount)}
+      {[...payouts].sort((a, b) => (a.at < b.at ? 1 : -1)).map((p) => (
+        <TxRow key={p.id} id={`po-${p.id}`} at={p.at} title="Payout request" sub={p.upiMasked} amount={formatRupees(p.amount)}
           badge={<StatusPill tone={p.status === "paid" ? "green" : "amber"}>{p.status === "paid" ? "Paid" : "Processing"}</StatusPill>}
           details={payoutDetails(p)} open={openTx === p.id} onToggle={() => setOpenTx(openTx === p.id ? null : p.id)} />
       ))}
-      {pending ? <p className="hint">Demo: <button className="expander" style={{ padding: 0, minHeight: 0 }} onClick={onDemoPaid}>admin marks the request as paid</button></p> : null}
+      {pending && onDemoPaid ? <p className="hint">Demo: <button className="expander" style={{ padding: 0, minHeight: 0 }} onClick={() => { void onDemoPaid(); }}>admin marks the request as paid</button></p> : null}
     </div></div></div></div></div>
   );
 }
 
-function IdentitiesScreen({ identities, activeId, onSwitch, onAdd, onLogout, onBack }: {
-  identities: Identity[]; activeId: string; onSwitch: (id: string) => void; onAdd: (email: string) => void; onLogout: () => void; onBack: () => void;
+function IdentitiesScreen({ identities, activeId, onSwitch, onAdded, onLogout, onBack }: {
+  identities: Identity[]; activeId: string; onSwitch: (id: string) => void; onAdded: () => void; onLogout: () => void; onBack: () => void;
 }) {
-  const { emailVerification } = useServices();
+  const { emailVerification, api } = useServices();
   const [email, setEmail] = useState(""); const [err, setErr] = useState("");
   const [verifying, setVerifying] = useState<{ email: string; sent: CodeSent } | null>(null);
   async function sendCode() {
@@ -520,7 +525,7 @@ function IdentitiesScreen({ identities, activeId, onSwitch, onAdd, onLogout, onB
         <Card>
           <CodeForm email={verifying.email} sent={verifying.sent} cancelLabel="Use a different email" onCancel={() => setVerifying(null)}
             intro={<p className="note-text" style={{ marginTop: 0 }}>We sent a 6-digit code to <strong>{verifying.email}</strong> to confirm it.</p>}
-            onVerify={async (code) => { await emailVerification.verify(verifying.email, code); onAdd(verifying.email); setVerifying(null); setEmail(""); }}
+            onVerify={async (code) => { await api.user.addIdentity(verifying.email, code); onAdded(); setVerifying(null); setEmail(""); }}
             onResend={async () => { const sent = await emailVerification.send(verifying.email); setVerifying({ email: verifying.email, sent }); return sent; }} />
         </Card>
       ) : (<>

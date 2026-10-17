@@ -53,14 +53,35 @@ export function clientIp(req: Request, hops: number): string {
   return parts[parts.length - hops] ?? parts[0] ?? "unknown";
 }
 
+/**
+ * Reads the body but stops the moment it passes `max` bytes. Content-Length is only a hint a client can omit or lie about
+ * (a chunked body has none), so the limit is enforced on the bytes actually received.
+ */
+export async function readCapped(req: Request, max: number): Promise<Uint8Array> {
+  const declared = Number(req.headers.get("content-length") ?? "0");
+  if (declared > max) throw new ApiError("bad_request", "That request is too large.", 413);
+  if (!req.body) return new Uint8Array(0);
+  const reader = req.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > max) { await reader.cancel().catch(() => undefined); throw new ApiError("bad_request", "That request is too large.", 413); }
+    chunks.push(value);
+  }
+  const out = new Uint8Array(size);
+  let at = 0;
+  for (const c of chunks) { out.set(c, at); at += c.byteLength; }
+  return out;
+}
+
 /** Reads a JSON body of at most `max` bytes. */
 export async function readJson(req: Request, max = 100_000): Promise<unknown> {
   const type = req.headers.get("content-type") ?? "";
   if (!type.toLowerCase().startsWith("application/json")) throw new ApiError("bad_request", "Send JSON.", 415);
-  const declared = Number(req.headers.get("content-length") ?? "0");
-  if (declared > max) throw new ApiError("bad_request", "That request is too large.", 413);
-  const text = await req.text();
-  if (text.length > max) throw new ApiError("bad_request", "That request is too large.", 413);
+  const text = new TextDecoder().decode(await readCapped(req, max));
   if (!text) return {};
   try { return JSON.parse(text); } catch { throw new ApiError("bad_request", "That request is not valid JSON.", 400); }
 }

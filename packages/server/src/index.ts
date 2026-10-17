@@ -24,3 +24,4 @@ export * from "./housekeeping";
 export * from "./http/handler";
 export { toJson, SECURITY_HEADERS } from "./http/util";
 export * from "./constants";
+export * from "./seed";

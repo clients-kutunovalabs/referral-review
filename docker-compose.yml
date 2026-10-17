@@ -1,4 +1,5 @@
-# Local Postgres for backend work (step 4+). The UI (ui-hub) needs no database.
+# Local production-like stack:  cp .env.example .env  (fill it in)  then  docker compose up --build
+# Postgres here stands in for Vista; point DATABASE_URL at Vista in a real deployment and drop the db service.
 services:
   db:
     image: postgres:16
@@ -8,5 +9,29 @@ services:
       POSTGRES_DB: rr
     ports: ["5432:5432"]
     volumes: ["pgdata:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rr -d rr"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  web:
+    build: { context: ., target: web }
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://rr:rr@db:5432/rr
+      UPLOAD_DIR: /data/uploads
+    ports: ["3000:3000"]
+    volumes: ["uploads:/data"]
+    depends_on: { db: { condition: service_healthy } }
+
+  worker:
+    build: { context: ., target: worker }
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://rr:rr@db:5432/rr
+    depends_on: { db: { condition: service_healthy } }
+
 volumes:
   pgdata:
+  uploads:

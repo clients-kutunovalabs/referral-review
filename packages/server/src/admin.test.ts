@@ -44,13 +44,13 @@ for (const engine of engines()) {
         expect(await code(createRole(ctx, owner, "support LEAD"))).toBe("conflict");
         expect(await code(createRole(ctx, owner, "  "))).toBe("bad_request");
         await setRolePermissions(ctx, owner, r.id, ["ticket.manage", "ticket.manage", "task.assign"]);
-        expect((await listRoles(ctx, owner)).find((x) => x.id === r.id)!.permissions.sort()).toEqual(["task.assign", "ticket.manage"]);
+        expect((await listRoles(ctx)).find((x) => x.id === r.id)!.permissions.sort()).toEqual(["task.assign", "ticket.manage"]);
         expect(await code(setRolePermissions(ctx, owner, r.id, ["made.up" as never]))).toBe("bad_request");
         expect(await code(setRolePermissions(ctx, owner, OWNER_ROLE_ID, []))).toBe("forbidden");
         expect(await code(deleteRole(ctx, owner, OWNER_ROLE_ID))).toBe("forbidden");
         await deleteRole(ctx, owner, r.id);
-        expect((await listRoles(ctx, owner)).some((x) => x.id === r.id)).toBe(false);
-        expect((await listRoles(ctx, owner)).find((x) => x.id === OWNER_ROLE_ID)!.permissions).toHaveLength(PERMISSIONS.length);
+        expect((await listRoles(ctx)).some((x) => x.id === r.id)).toBe(false);
+        expect((await listRoles(ctx)).find((x) => x.id === OWNER_ROLE_ID)!.permissions).toHaveLength(PERMISSIONS.length);
       });
       it("only role managers can change roles", async () => {
         const viewer = await makeAdmin(ctx, ["user.manage"]);

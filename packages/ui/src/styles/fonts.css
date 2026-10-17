@@ -1,0 +1,4 @@
+/* Self-hosted fonts for the real site (ui-hub loads the same faces from Google Fonts). Files live in apps/web/public/fonts. */
+@font-face { font-family: 'Rosarivo'; font-style: normal; font-weight: 400; font-display: swap; src: url('/fonts/rosarivo-400.woff2') format('woff2'); }
+@font-face { font-family: 'Urbanist'; font-style: normal; font-weight: 400; font-display: swap; src: url('/fonts/urbanist-400.woff2') format('woff2'); }
+@font-face { font-family: 'Urbanist'; font-style: normal; font-weight: 500; font-display: swap; src: url('/fonts/urbanist-500.woff2') format('woff2'); }

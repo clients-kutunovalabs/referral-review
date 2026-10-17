@@ -1,5 +1,5 @@
 # @rr/db
 
-Drizzle schema, migrations, triggers (immutable ledger), seed. workspace_id on every domain table.
+SQL migrations (`migrations/*.sql`, plain SQL, never edited after release), the PostgreSQL and PGlite adapters behind one `Db` interface, a migration runner, and a test harness (`@rr/db/testing`) that runs every suite on both engines.
 
-Status: placeholder. Built in the backend phase (after UI sign-off).
+After adding a migration: `pnpm --filter @rr/db embed` (CI fails if the generated file is stale).

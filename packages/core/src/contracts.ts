@@ -42,12 +42,13 @@ export interface Claim {
   identityId: string;
   identityEmail: string;
   status: ClaimStatus;
-  /** the task as it was when claimed: later edits or removal never change what a worker sees on an existing claim */
+  /** the reward is fixed when the task is claimed, so later edits never change what was promised */
   taskTitle: string;
   siteUrl: string;
   keywords: string[];
   reward: Paise;
   minutesLeft?: number; // active claims only; undefined = no time limit
+  expiresAt?: string; // ISO: when the timer runs out, so countdowns stay right after a reload
   submittedAt?: string; // ISO
   reviewedAt?: string; // ISO: when it was reviewed / ended
   assignedText?: string; // script given at claim time

@@ -10,7 +10,4 @@ export function createMockAi(): AiPort {
   };
 }
 
-/** Placeholder for the real generator (Anthropic). It must send `ScriptRequest` and nothing else. */
-export function createAnthropicAi(config: { apiKey: string }): AiPort {
-  return { async generateScript() { throw new Error(config.apiKey ? "The AI adapter is not implemented yet." : "ANTHROPIC_API_KEY is not set."); } };
-}
+export { aiNotConfigured, buildPrompt, createAnthropicAi, type AnthropicOptions } from "./anthropic";

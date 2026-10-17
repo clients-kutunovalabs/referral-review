@@ -24,7 +24,7 @@ function toClaim(r: ClaimRow, now: Date): Claim {
   return {
     id: r.id, taskId: r.template_id, identityId: r.identity_id, identityEmail: r.identity_email, status: r.status,
     taskTitle: r.title, siteUrl: r.site_url, keywords: r.keywords, reward: r.reward_paise,
-    ...(r.status === "claimed" && r.expires_at ? { minutesLeft: Math.max(Math.ceil((r.expires_at.getTime() - now.getTime()) / 60_000), 0) } : {}),
+    ...(r.status === "claimed" && r.expires_at ? { minutesLeft: Math.max(Math.ceil((r.expires_at.getTime() - now.getTime()) / 60_000), 0), expiresAt: r.expires_at.toISOString() } : {}),
     ...(r.submitted_at ? { submittedAt: r.submitted_at.toISOString() } : {}),
     ...(ended && r.status !== "claimed" && r.status !== "under_review" ? { reviewedAt: ended.toISOString() } : {}),
     ...(r.assigned_text ? { assignedText: r.assigned_text } : {}),

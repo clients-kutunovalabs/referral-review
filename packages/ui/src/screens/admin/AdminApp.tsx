@@ -1,17 +1,17 @@
-import { useState } from "react";
+import { useEffect, useState, type ReactElement } from "react";
 import {
-  activeTill, fixtures, formatLimit, hoursToMinutes, PERMISSIONS, TEXT_MODE_HELP, TEXT_MODE_LABEL, TEXT_MODE_ORDER, type AdminMember, type PermissionKey, type Role, type Task, type TextMode
+  activeTill, agoLabel, formatLimit, hoursToMinutes, PERMISSIONS, TEXT_MODE_HELP, TEXT_MODE_LABEL, TEXT_MODE_ORDER, whenLabel,
+  type AdminMember, type AdminTaskDetail, type AdminTaskRow, type AdminUserRow, type NewTaskInput, type PayoutRequest, type PermissionKey, type ReviewQueueItem, type Role, type TextMode
 } from "@rr/core";
-import { OUTCOME_PERCENTS, formatRupees, outcomeAmount, rupees, type OutcomePercent, type Paise } from "@rr/money";
+import { OUTCOME_PERCENTS, formatRupees, outcomeAmount, parseRupees, type OutcomePercent } from "@rr/money";
 import {
   BottomNav, DataTable, Icon, Segmented, Sheet, useLayout, type Column, type IconName, Button, Card, Chips, ConfirmSheet, CopyButton, EmptyState, Field, FileUpload, Input, ListRow, Select,
   StatusPill, Tabs, Textarea, Toast, TopBar
 } from "../../primitives";
-import { AdminTicketChat, AdminTicketList, type SupportTab } from "./SupportScreens";
-import { needsReply, useTickets } from "../../demo/ticketStore";
-import { markPaid, usePayouts } from "../../demo/payoutStore";
-import { AuthFlow } from "../auth/AuthFlow";
+import { ErrorBox, Loading, isUnauthenticated, messageOf, useAsync, useRefreshOnFocus } from "../../data";
 import { useServices } from "../../services";
+import { AuthFlow } from "../auth/AuthFlow";
+import { AdminTicketChat, AdminTicketList, type SupportTab } from "./SupportScreens";
 
 export type AdminScreen =
   | "login" | "dashboard" | "tasks" | "newtask" | "taskdetail"
@@ -41,29 +41,27 @@ const TAB_OF: Partial<Record<AdminScreen, string>> = {
   reviewqueue: "review", reviewitem: "review", payouts: "payouts", payoutitem: "payouts",
   userdetail: "access", tickets: "support", ticket: "support", access: "access"
 };
+const SCREEN_OF_KIND = { reviewqueue: "reviewqueue", tickets: "tickets", payouts: "payouts", tasks: "tasks" } as const;
 
-const extraTasks: { id: string; title: string; status: "closed" | "removed"; reward: Paise; claimed: number | null; total: number | null; timer: number | null; mode: string }[] = [
-  { id: "x1", title: "Rate us on the App Store", status: "closed", reward: rupees(25), claimed: 100, total: 100, timer: 20, mode: TEXT_MODE_LABEL.none },
-  { id: "x2", title: "Follow our Instagram", status: "removed", reward: rupees(20), claimed: null, total: null, timer: 10, mode: TEXT_MODE_LABEL.none }
-];
-const claimedText = (claimed: number | null, total: number | null) => (total === null ? "unlimited slots" : `${claimed ?? 0} of ${total} claimed`);
+const isClosed = (t: AdminTaskRow): boolean => t.status === "closed" || t.status === "removed";
+const claimedText = (claimed: number, total: number | null) => (total === null ? "unlimited slots" : `${claimed} of ${total} claimed`);
 
-interface TaskRow { key: string; title: string; reward: Paise; claimed: number | null; total: number | null; timer: number | null; mode: string; pill: React.ReactNode; onOpen?: () => void }
-
-/** Same card idea as the user board: title, reward line, then a compact row with the status pill and the action button. */
-function isClosed(t: Task): boolean {
-  return t.status === "closed" || t.status === "removed" || activeTill(t.activeUntil).kind === "closed";
+function taskPill(t: AdminTaskRow) {
+  const till = activeTill(t.activeUntil);
+  if (t.status === "removed") return <StatusPill tone="coral">Removed</StatusPill>;
+  if (t.status === "closed") return <StatusPill tone="gray">Closed</StatusPill>;
+  if (t.status === "paused") return <StatusPill tone="gray">Paused</StatusPill>;
+  return <StatusPill tone={till.kind === "left" ? "amber" : "teal"}>{till.kind === "none" ? "Active · no end date" : `Active till: ${till.label}`}</StatusPill>;
 }
 
-function AdminTaskCard({ title, reward, claimed, timer, mode, pill, onOpen }: {
-  title: string; reward: Paise; claimed: string; timer: number | null; mode: string; pill: React.ReactNode; onOpen?: () => void;
-}) {
+/** Same card idea as the user board: title, reward line, then a compact row with the status pill and the action button. */
+function AdminTaskCard({ t, onOpen }: { t: AdminTaskRow; onOpen?: () => void }) {
   return (
     <Card {...(onOpen ? { onClick: onOpen } : {})}>
-      <h3>{title}</h3>
-      <p>{formatRupees(reward)} reward &middot; {claimed} &middot; {formatLimit(timer)}{timer === null ? "" : " limit"}</p>
+      <h3>{t.title}</h3>
+      <p>{formatRupees(t.reward)} reward &middot; {claimedText(t.claimed, t.slotsTotal)} &middot; {formatLimit(t.timerMinutes)}{t.timerMinutes === null ? "" : " limit"}</p>
       <div className="card-split" style={{ marginTop: "var(--space-3)" }}>
-        <div className="card-split-main"><div className="chips stack" style={{ margin: 0 }}>{pill}<StatusPill tone="gray">Script: {mode}</StatusPill></div></div>
+        <div className="card-split-main"><div className="chips stack" style={{ margin: 0 }}>{taskPill(t)}<StatusPill tone="gray">Script: {TEXT_MODE_LABEL[t.textMode]}</StatusPill></div></div>
         {onOpen ? <Button compact>Manage</Button> : null}
       </div>
     </Card>
@@ -72,57 +70,72 @@ function AdminTaskCard({ title, reward, claimed, timer, mode, pill, onOpen }: {
 
 export interface AdminAppProps {
   initialScreen?: AdminScreen;
-  /** Start signed in (default). ui-hub's "Log in" screen starts signed out. */
+  /** Known sign-in state (ui-hub). Leave it out on the real site and the app asks the server. */
   loggedIn?: boolean;
-  /** Roles held by the viewing admin. Drives which nav items and screens are allowed. */
-  viewerRoleIds?: string[];
-  adminName?: string;
+  initialTaskId?: string;
+  initialReviewId?: string;
+  initialPayoutId?: string;
+  initialUserId?: string;
   initialTicketId?: string;
-  initialAccessTab?: "users" | "team" | "roles";
+  initialAccessTab?: AccessTab;
 }
 
-export function AdminApp({ initialScreen = "dashboard", loggedIn: startLoggedIn = true, viewerRoleIds = ["role-owner"], adminName: defaultName = "Hrishabh", initialTicketId = "tk1042", initialAccessTab = "users" }: AdminAppProps) {
-  const { auth } = useServices();
-  const [loggedIn, setLoggedIn] = useState(startLoggedIn && initialScreen !== "login");
-  const [adminName, setAdminName] = useState(defaultName);
+export function AdminApp({ initialScreen = "dashboard", loggedIn: loggedInProp, initialTaskId = "", initialReviewId = "", initialPayoutId = "", initialUserId = "", initialTicketId = "", initialAccessTab = "users" }: AdminAppProps) {
+  const { auth, api } = useServices();
+  const [loggedIn, setLoggedIn] = useState<boolean | null>(loggedInProp === undefined ? null : loggedInProp && initialScreen !== "login");
   const [screen, setScreen] = useState<AdminScreen>(initialScreen === "login" ? "dashboard" : initialScreen);
-  const [roles, setRoles] = useState<Role[]>(fixtures.roles);
-  const [members, setMembers] = useState<AdminMember[]>(fixtures.members);
   const [accessTab, setAccessTab] = useState<AccessTab>(initialAccessTab);
   const [toast, setToast] = useState<string | null>(null);
-  const [queue, setQueue] = useState(fixtures.reviewQueue);
-  const [reviewId, setReviewId] = useState("r1");
-  // Priya's requests come from the same store as the user app: paying one here updates her wallet there.
-  const stored = usePayouts();
-  const [others, setOthers] = useState(fixtures.adminPayouts);
-  const rank = { pending: 0, paid: 1 } as const;
-  const payouts = [...stored.map((p) => ({ ...p, who: "Priya S." })), ...others].sort((a, b) => rank[a.status] - rank[b.status]);
-  const [payoutId, setPayoutId] = useState("a1");
-  const [userId, setUserId] = useState("u1");
-  const [userStatus, setUserStatus] = useState<Record<string, string>>({});
-  const [pending, setPending] = useState<{ title: string; text: string; label: string; tone: "primary" | "danger"; run: () => void } | null>(null);
+  const [rev, setRev] = useState(0);
+  const [taskId, setTaskId] = useState(initialTaskId);
+  const [reviewId, setReviewId] = useState(initialReviewId);
+  const [payoutId, setPayoutId] = useState(initialPayoutId);
+  const [userId, setUserId] = useState(initialUserId);
   const [ticketId, setTicketId] = useState(initialTicketId);
-  const layout = useLayout();
-  const wide = layout !== "phone";
-  const [reviewSort, setReviewSort] = useState<"oldest" | "newest">("oldest");
-  const [adminTaskId, setAdminTaskId] = useState("t1");
   const [taskFilter, setTaskFilter] = useState<"active" | "closed">("active");
   const [supportTab, setSupportTab] = useState<SupportTab>("open");
-  const allTickets = useTickets();
+  const [reviewSort, setReviewSort] = useState<"oldest" | "newest">("oldest");
+  const layout = useLayout();
+  const wide = layout !== "phone";
+  const refresh = () => setRev((n) => n + 1);
 
-  const perms = new Set(roles.filter((r) => viewerRoleIds.includes(r.id)).flatMap((r) => r.permissions));
+  useEffect(() => {
+    if (loggedIn !== null) return;
+    auth.getSession().then((s) => setLoggedIn(!!s), () => setLoggedIn(false));
+  }, [auth, loggedIn]);
+
+  const me = useAsync(() => api.admin.me(), [rev], { enabled: loggedIn === true });
+  // Nav badges come from the dashboard counts, refreshed in the background.
+  const counts = useAsync(() => api.admin.dashboard(), [rev], { enabled: loggedIn === true && !!me.data, refreshMs: 30_000 });
+  useEffect(() => { if (me.unauthenticated) setLoggedIn(false); }, [me.unauthenticated]);
+  useRefreshOnFocus(counts.reload, loggedIn === true);
+
+  const adminName = me.data?.name ?? "";
+  const perms = new Set<PermissionKey>(me.data?.permissions ?? []);
   const can = (s: AdminScreen) => { const n = NEEDS[s]; return !n || n.some((p) => perms.has(p)); };
-  const navItems = NAV_DEF.filter((n) => (n.id === "access" ? perms.has("user.manage") || perms.has("role.manage") : can(n.id))).map((n) => ({
-    id: n.tab, label: n.label, longLabel: n.longLabel, icon: n.icon, ...(n.wideOnly ? { wideOnly: true } : {}), ...(n.id === "reviewqueue" && queue.length ? { badge: queue.length } : {}),
-    ...(n.id === "tickets" && allTickets.some(needsReply) ? { badge: allTickets.filter(needsReply).length } : {})
-  }));
   const show = (s: AdminScreen) => setScreen(s);
-  const logOut = async () => { await auth.signOut(); setLoggedIn(false); };
   const notify = (m: string) => setToast(m);
+  const guard = (e: unknown) => { if (isUnauthenticated(e)) setLoggedIn(false); else notify(messageOf(e)); };
+  const logOut = async () => { await auth.signOut().catch(() => undefined); setLoggedIn(false); };
+  const [pending, setPending] = useState<{ title: string; text: string; label: string; tone: "primary" | "danger"; run: () => void } | null>(null);
 
-  let body: JSX.Element;
-  if (!loggedIn) {
-    body = <AuthFlow brand="Admin panel" allowSignUp={false} onAuthenticated={(session) => { setAdminName(session.user.profile["name"] ?? defaultName); setLoggedIn(true); show("dashboard"); }} />;
+  const navItems = NAV_DEF.filter((n) => can(n.id)).map((n) => ({
+    id: n.tab, label: n.label, longLabel: n.longLabel, icon: n.icon, ...(n.wideOnly ? { wideOnly: true } : {}),
+    ...(n.id === "reviewqueue" && counts.data?.pendingReview ? { badge: counts.data.pendingReview } : {}),
+    ...(n.id === "tickets" && counts.data?.ticketsNeedReply ? { badge: counts.data.ticketsNeedReply } : {})
+  }));
+
+  let body: ReactElement;
+  if (loggedIn === null) body = <div className="screen"><Loading /></div>;
+  else if (!loggedIn) body = <AuthFlow brand="Admin panel" allowSignUp={false} onAuthenticated={() => { setLoggedIn(true); refresh(); show("dashboard"); }} />;
+  else if (me.loading && !me.data) body = <div className="screen"><TopBar title="Loading" /><Loading /></div>;
+  else if (!me.data) {
+    body = (
+      <div className="screen"><TopBar title="Admin panel" /><div className="scrollarea"><div className="content narrow">
+        <Card alert><p style={{ color: "var(--coral)" }}>{me.error ?? "This account is not an admin."}</p></Card>
+        <Button block onClick={() => { void logOut(); }}>Log out</Button>
+      </div></div></div>
+    );
   } else if (!can(screen)) {
     body = (
       <div className="screen"><TopBar title="No access" /><div className="scrollarea"><div className="content">
@@ -131,246 +144,110 @@ export function AdminApp({ initialScreen = "dashboard", loggedIn: startLoggedIn 
       </div></div></div>
     );
   } else switch (screen) {
-    case "login": body = <></>; break; // never shown: signing in is handled by the loggedIn check above
-    case "dashboard": {
-      const payoutsDue = payouts.filter((p) => p.status !== "paid").length;
-      const openTickets = allTickets.filter((t) => t.status === "open");
-      const waiting = openTickets.filter(needsReply).length;
-      const activeTasks = fixtures.tasks.filter((t) => t.status === "active" || t.status === "closing_soon").length;
-      const cards: { go: AdminScreen; label: string; value: number; sub?: string }[] = [
-        { go: "reviewqueue", label: "Pending review", value: queue.length },
-        { go: "tasks", label: "Active tasks", value: activeTasks },
-        { go: "payouts", label: "Payouts due", value: payoutsDue },
-        { go: "tickets", label: "Open tickets", value: openTickets.length, ...(waiting ? { sub: `${waiting} need a reply` } : {}) }
-      ];
-      body = (
-        <div className="screen">
-          <TopBar title={wide ? "Dashboard" : "Admin panel"} subtitle={`Welcome back, ${adminName}`} right={wide ? undefined : (
-            <button className="profile-btn" aria-label="Roles and permissions" onClick={() => show("access")}>
-              <Icon name="user" /><span>{adminName}</span><span className="chev" aria-hidden="true">&#9656;</span>
-            </button>
-          )} />
-          <div className="scrollarea"><div className="content">
-            <p className="section-label" style={{ marginTop: 0 }}>Needs your attention</p>
-            <div className="metric-grid">
-              {cards.filter((c) => can(c.go)).map((c) => (
-                <button key={c.go} className="metric" onClick={() => show(c.go)}>
-                  <div className="num">{c.value}</div><div className="lbl">{c.label}</div>{c.sub ? <div className="sub">{c.sub}</div> : null}
-                </button>
-              ))}
-            </div>
-            <p className="section-label">Recent activity</p>
-            {(() => { const list = ([
-              ["reviewqueue", 'Priya S. submitted proof for "Introduce our CRM to a local clinic"', "12 min ago"],
-              ["tickets", 'Priya S. opened a ticket: "Screenshot upload fails on my phone"', "yesterday"],
-              ["payouts", `Rahul K. requested a payout of ${formatRupees(17000n)}`, "1 hour ago"],
-              ["tasks", '"Rate us on the App Store" reached its slot limit', "3 hours ago"]
-            ] as const).filter(([go]) => can(go)).map(([go, text, when]) => (
-              <ListRow key={text} onClick={() => show(go)} title={text} sub={when} />
-            )); return wide ? <Card>{list}</Card> : list; })()}
-          </div></div>
-        </div>
-      );
-      break;
-    }
-    case "tasks": {
-      const rows: TaskRow[] = [
-        ...fixtures.tasks.filter((t) => (isClosed(t) ? "closed" : "active") === taskFilter).map((t): TaskRow => {
-          const till = activeTill(t.activeUntil);
-          const closed = isClosed(t);
-          const tone = closed ? "coral" : till.kind === "left" ? "amber" : "teal";
-          return {
-            key: t.id, title: t.title, reward: t.reward, timer: t.timerMinutes, mode: TEXT_MODE_LABEL[t.textMode],
-            total: t.slotsTotal, claimed: t.slotsTotal === null ? null : t.slotsTotal - (t.slotsRemaining ?? 0),
-            pill: <StatusPill tone={tone}>{closed ? "Closed" : till.kind === "none" ? "Active · no end date" : `Active till: ${till.label}`}</StatusPill>,
-            onOpen: () => { setAdminTaskId(t.id); show("taskdetail"); }
-          };
-        }),
-        ...(taskFilter === "closed" ? extraTasks.map((t): TaskRow => ({
-          key: t.id, title: t.title, reward: t.reward, timer: t.timer, mode: t.mode, total: t.total, claimed: t.claimed,
-          pill: <StatusPill tone={t.status === "removed" ? "coral" : "gray"}>{t.status === "removed" ? "Removed" : "Closed"}</StatusPill>
-        })) : [])
-      ];
-      const activeCount = fixtures.tasks.filter((t) => !isClosed(t)).length;
-      const columns: Column<TaskRow>[] = [
-        { key: "title", header: "Title", render: (r) => r.title },
-        { key: "reward", header: "Reward", width: "90px", render: (r) => formatRupees(r.reward) },
-        { key: "slots", header: "Slots", width: "100px", render: (r) => (r.total === null ? "unlimited" : `${r.claimed ?? 0} / ${r.total}`) },
-        { key: "timer", header: "Timer", width: "110px", render: (r) => formatLimit(r.timer) },
-        { key: "script", header: "Script", width: "90px", hideOnTablet: true, render: (r) => r.mode },
-        { key: "status", header: "Status", width: "180px", render: (r) => r.pill }
-      ];
-      body = (
-        <div className="screen"><TopBar title={wide ? "Task templates" : "Tasks"} subtitle={`${fixtures.tasks.length + extraTasks.length} templates · ${activeCount} active`}
-          {...(perms.has("task.manage") ? { actions: <Button variant="primary" onClick={() => show("newtask")}>New task</Button> } : {})} />
-        <div className="scrollarea"><div className="content">
-          <div className="tabs-bleed"><Tabs<"active" | "closed"> value={taskFilter} onChange={setTaskFilter} tabs={[{ id: "active", label: `Active (${activeCount})` }, { id: "closed", label: `Closed (${fixtures.tasks.filter(isClosed).length + extraTasks.length})` }]} /></div>
-          {rows.length === 0 ? <EmptyState>{taskFilter === "active" ? "No active tasks." : "Nothing closed yet."}</EmptyState> : wide ? (
-            <DataTable caption="Task templates" columns={columns} rows={rows} rowKey={(r) => r.key} {...(rows.some((r) => r.onOpen) ? { onRowClick: (r: TaskRow) => r.onOpen?.() } : {})} />
-          ) : rows.map((r) => (
-            <AdminTaskCard key={r.key} title={r.title} reward={r.reward} timer={r.timer} mode={r.mode} pill={r.pill} claimed={claimedText(r.claimed, r.total)} {...(r.onOpen ? { onOpen: r.onOpen } : {})} />
-          ))}
-        </div></div>
-        {perms.has("task.manage") && !wide ? <div className="screen-footer"><Button variant="primary" block onClick={() => show("newtask")}>New task</Button></div> : null}
-        </div>
-      );
-      break;
-    }
-    case "newtask": body = <NewTaskScreen onBack={() => show("tasks")} onPublish={() => { notify("Task published"); show("tasks"); }} />; break;
-    case "taskdetail": body = <TaskDetailScreen task={fixtures.tasks.find((t) => t.id === adminTaskId) ?? fixtures.tasks[0]!} canManage={perms.has("task.manage")} canTexts={perms.has("task_text.manage")} onBack={() => show("tasks")} onRemove={() => { notify("Task removed"); show("tasks"); }} notify={notify} />; break;
-    case "reviewqueue": body = (
-      <div className="screen"><TopBar title="Review queue" subtitle={`${queue.length} submission${queue.length === 1 ? "" : "s"} waiting for a decision`} /><div className="scrollarea"><div className="content">
-        <div className="list-toolbar">
-          <span className="list-count"><strong>{queue.length}</strong> to review</span>
-          <Tabs<"oldest" | "newest"> inline value={reviewSort} onChange={setReviewSort} tabs={[{ id: "oldest", label: "Oldest" }, { id: "newest", label: "Newest" }]} />
-        </div>
-        {queue.length === 0 ? <EmptyState>Queue is clear.</EmptyState> : null}
-        {(() => {
-          const sorted = [...queue].sort((x, y) => (reviewSort === "oldest" ? y.waitingMinutes - x.waitingMinutes : x.waitingMinutes - y.waitingMinutes));
-          const open = (q: (typeof queue)[number]) => { setReviewId(q.id); show("reviewitem"); };
-          if (!wide) return sorted.map((q) => <ListRow key={q.id} onClick={() => open(q)} title={q.worker} right={<span className="sub">{q.waitingLabel}</span>} sub={`${q.taskTitle} · ${q.identityEmail}`} />);
-          return sorted.length ? <DataTable caption="Review queue" rows={sorted} rowKey={(q) => q.id} onRowClick={open} columns={[
-            { key: "worker", header: "Worker", render: (q) => q.worker },
-            { key: "task", header: "Task", render: (q) => q.taskTitle },
-            { key: "email", header: "Email used", render: (q) => q.identityEmail },
-            { key: "reward", header: "Reward", width: "110px", render: (q) => formatRupees(q.reward) },
-            { key: "wait", header: "Waiting", width: "130px", render: (q) => q.waitingLabel }
-          ]} /> : null;
-        })()}
-      </div></div></div>
+    case "dashboard": body = <DashboardScreen adminName={adminName} wide={wide} can={can} rev={rev} go={show} onProfile={() => show("access")} />; break;
+    case "tasks": body = <TasksScreen wide={wide} canCreate={perms.has("task.manage")} filter={taskFilter} setFilter={setTaskFilter} rev={rev} onNew={() => show("newtask")} onOpen={(id) => { setTaskId(id); show("taskdetail"); }} />; break;
+    case "newtask": body = <NewTaskScreen onBack={() => show("tasks")} onPublish={async (input) => { await api.admin.createTask(input); notify("Task published"); refresh(); show("tasks"); }} />; break;
+    case "taskdetail": body = <TaskDetailScreen taskId={taskId} canManage={perms.has("task.manage")} canTexts={perms.has("task_text.manage")} rev={rev} onBack={() => show("tasks")} notify={notify} guard={guard} onChanged={refresh} onGone={() => { refresh(); show("tasks"); }} />; break;
+    case "reviewqueue": body = <ReviewQueueScreen wide={wide} sort={reviewSort} setSort={setReviewSort} rev={rev} onOpen={(id) => { setReviewId(id); show("reviewitem"); }} />; break;
+    case "reviewitem": body = <ReviewItemScreen id={reviewId} rev={rev} onBack={() => show("reviewqueue")} onDone={(pct) => { notify(`Reviewed: ${pct}% credited`); refresh(); show("reviewqueue"); }} />; break;
+    case "payouts": body = <PayoutsScreen wide={wide} rev={rev} onOpen={(id) => { setPayoutId(id); show("payoutitem"); }} />; break;
+    case "payoutitem": body = <PayoutItemScreen id={payoutId} adminName={adminName} rev={rev} onBack={() => show("payouts")} onPaid={() => { notify(`Recorded: paid by ${adminName}`); refresh(); show("payouts"); }} />; break;
+    case "tickets": body = <AdminTicketList tab={supportTab} setTab={setSupportTab} version={rev} onOpen={(id) => { setTicketId(id); show("ticket"); }} />; break;
+    case "ticket": body = <AdminTicketChat ticketId={ticketId} canAssign={perms.has("ticket.manage")} onBack={() => { refresh(); show("tickets"); }} onChanged={refresh} />; break;
+    case "access": body = (
+      <AccessScreen me={me.data} wide={wide} perms={perms} tab={accessTab} setTab={setAccessTab} rev={rev} notify={notify} guard={guard} onChanged={refresh}
+        onBack={() => show("dashboard")} onLogout={() => { void logOut(); }} onOpenUser={(id) => { setUserId(id); show("userdetail"); }} />
     ); break;
-    case "reviewitem": {
-      const item = queue.find((q) => q.id === reviewId);
-      body = item ? <ReviewItemScreen key={item.id} item={item} onBack={() => show("reviewqueue")}
-        onDone={(pct) => { setQueue(queue.filter((q) => q.id !== item.id)); notify(`Reviewed: ${pct}% credited`); show("reviewqueue"); }} />
-        : <EmptyState>Already reviewed.</EmptyState>;
-      break;
-    }
-    case "payouts": {
-      const action = payouts.filter((p) => p.status !== "paid");
-      const history = payouts.filter((p) => p.status === "paid");
-      const row = (p: (typeof payouts)[number]) => (
-        <ListRow key={p.id} onClick={() => { setPayoutId(p.id); show("payoutitem"); }} title={`${p.who} · ${formatRupees(p.amount)}`}
-          right={<StatusPill tone={p.status === "paid" ? "green" : "amber"}>{p.status === "paid" ? "Paid" : "Pending"}</StatusPill>}
-          sub={`${p.upiMasked} · ${p.whenLabel}${p.paidBy ? ` · paid by ${p.paidBy}` : ""}`} />
-      );
-      type PayoutRow = (typeof payouts)[number];
-      const openPayout = (p: PayoutRow) => { setPayoutId(p.id); show("payoutitem"); };
-      const payoutColumns: Column<PayoutRow>[] = [
-        { key: "who", header: "Worker", render: (p) => p.who },
-        { key: "amount", header: "Amount", width: "120px", render: (p) => formatRupees(p.amount) },
-        { key: "upi", header: "UPI ID", render: (p) => <span className="mono">{p.upiMasked}</span> },
-        { key: "when", header: "Requested", width: "140px", render: (p) => p.whenLabel },
-        { key: "by", header: "Paid by", width: "150px", render: (p) => p.paidBy ?? "" },
-        { key: "status", header: "Status", width: "120px", render: (p) => <StatusPill tone={p.status === "paid" ? "green" : "amber"}>{p.status === "paid" ? "Paid" : "Pending"}</StatusPill> }
-      ];
-      body = (
-        <div className="screen"><TopBar title="Payouts" subtitle={`${action.length} to pay · ${history.length} paid`} /><div className="scrollarea"><div className="content">
-          {wide ? (<>
-            <section className="table-section"><h2>Needs action ({action.length})</h2>
-              {action.length ? <DataTable caption="Payouts needing action" columns={payoutColumns} rows={action} rowKey={(p) => p.id} onRowClick={openPayout} /> : <EmptyState>Nothing to pay right now.</EmptyState>}
-            </section>
-            <section className="table-section"><h2>History ({history.length})</h2>
-              {history.length ? <DataTable caption="Payout history" columns={payoutColumns} rows={history} rowKey={(p) => p.id} onRowClick={openPayout} /> : <EmptyState>No payments yet.</EmptyState>}
-            </section>
-          </>) : (<>
-            <p className="section-label" style={{ marginTop: 0 }}>Needs action ({action.length})</p>
-            {action.length ? action.map(row) : <EmptyState>Nothing to pay right now.</EmptyState>}
-            <p className="section-label">History ({history.length})</p>
-            {history.map(row)}
-          </>)}
-        </div></div></div>
-      );
-      break;
-    }
-    case "payoutitem": {
-      const p = payouts.find((x) => x.id === payoutId) ?? payouts.find((x) => x.status === "pending") ?? payouts[0]!;
-      body = <PayoutItemScreen key={p.id} payout={p} adminName={adminName} onBack={() => show("payouts")}
-        onPaid={() => { if (stored.some((x) => x.id === p.id)) markPaid(p.id, adminName); else setOthers(others.map((x) => (x.id === p.id ? { ...x, status: "paid", paidBy: adminName } : x))); notify(`Recorded: paid by ${adminName}`); show("payouts"); }} />;
-      break;
-    }
-    case "tickets": body = <AdminTicketList tab={supportTab} setTab={setSupportTab} onOpen={(id) => { setTicketId(id); show("ticket"); }} />; break;
-    case "ticket": body = (
-      <AdminTicketChat ticketId={ticketId} adminName={adminName} canAssign={perms.has("ticket.manage")} onBack={() => show("tickets")}
-        agents={members.filter((m) => roles.some((r) => m.roleIds.includes(r.id) && r.permissions.includes("ticket.manage"))).map((m) => m.name.replace(" (owner)", ""))} />
-    ); break;
-    case "access": {
-      const mine = roles.filter((r) => viewerRoleIds.includes(r.id));
-      const myPerms = PERMISSIONS.filter((p) => perms.has(p.key));
-      const tabs: { id: AccessTab; label: string }[] = [
-        ...(perms.has("user.manage") ? [{ id: "users" as const, label: "Users" }] : []),
-        ...(perms.has("role.manage") ? [{ id: "team" as const, label: "Team" }, { id: "roles" as const, label: "Roles" }] : [])
-      ];
-      const tab = tabs.some((t) => t.id === accessTab) ? accessTab : tabs[0]?.id;
-      body = (
-        <div className="screen"><TopBar title={wide ? "Users and roles" : "Roles and permissions"} subtitle="People who use the app, your team and what each role can do" {...(wide ? {} : { onBack: () => show("dashboard") })} />
-          <div className="scrollarea"><div className="content">
-            <Card hero>
-              <div className="card-split">
-                <div className="card-split-main"><h3>{adminName}</h3></div>
-                <div className="chips role-tags">{mine.map((r) => <StatusPill key={r.id} tone="teal">{r.name}</StatusPill>)}</div>
-              </div>
-              <p className="section-label" style={{ margin: "14px 0 0" }}>Permissions</p>
-              <div className="chips perm-chips">{myPerms.map((p) => <span key={p.key} className="chip">{p.label}</span>)}</div>
-            </Card>
-            {wide ? null : <Button block style={{ marginBottom: 8 }} onClick={logOut}>Log out</Button>}
-            {tabs.length ? <div className="tabs-bleed" style={{ marginBottom: 0 }}><Tabs<AccessTab> value={tab as AccessTab} onChange={setAccessTab} tabs={tabs} /></div> : <p className="hint">Your roles do not include managing users or roles.</p>}
-            <div style={{ paddingTop: 12 }}>
-              {tab === "users" ? (<>
-                <p className="note-text" style={{ marginBottom: 10 }}>People who use the app. 142 total.</p>
-                {wide ? <DataTable caption="Users" rows={fixtures.adminUsers} rowKey={(u) => u.id} onRowClick={(u) => { setUserId(u.id); show("userdetail"); }} columns={[
-                  { key: "name", header: "Name", render: (u) => u.name },
-                  { key: "email", header: "Email", render: (u) => u.emailMasked },
-                  { key: "emails", header: "Emails", width: "90px", render: (u) => u.identityCount },
-                  { key: "life", header: "Lifetime earned", width: "150px", render: (u) => formatRupees(u.lifetime) },
-                  { key: "status", header: "Status", width: "130px", render: (u) => { const st = userStatus[u.id] ?? u.status; return <StatusPill tone={st === "active" ? "teal" : st === "suspended" ? "amber" : st === "deleted" ? "gray" : "coral"}>{st[0]!.toUpperCase() + st.slice(1)}</StatusPill>; } }
-                ]} /> : null}
-                {wide ? null : fixtures.adminUsers.map((u) => {
-                  const st = userStatus[u.id] ?? u.status;
-                  return <ListRow key={u.id} onClick={() => { setUserId(u.id); show("userdetail"); }} title={u.name}
-                    right={<StatusPill tone={st === "active" ? "teal" : st === "suspended" ? "amber" : st === "deleted" ? "gray" : "coral"}>{st[0]!.toUpperCase() + st.slice(1)}</StatusPill>}
-                    sub={`${u.emailMasked} · ${formatRupees(u.lifetime)} lifetime · ${u.identityCount} email${u.identityCount > 1 ? "s" : ""}`} />;
-                })}
-              </>) : null}
-              {tab === "team" ? <TeamPanel members={members} roles={roles} setMembers={setMembers} notify={notify} /> : null}
-              {tab === "roles" ? <RolesPanel roles={roles} setRoles={setRoles} members={members} setMembers={setMembers} notify={notify} /> : null}
-            </div>
-          </div></div>
-        </div>
-      );
-      break;
-    }
-    case "userdetail": {
-      const u = fixtures.adminUsers.find((x) => x.id === userId) ?? fixtures.adminUsers[0]!;
-      const st = userStatus[u.id] ?? u.status;
-      const set = (s: string, m: string) => { setUserStatus({ ...userStatus, [u.id]: s }); notify(m); };
-      body = (
-        <div className="screen"><TopBar title={u.name} onBack={() => { setAccessTab("users"); show("access"); }} /><div className="scrollarea"><div className="content narrow">
-          <Card><h3>{u.name}</h3><p>{u.emailMasked} &middot; {u.identityCount} email{u.identityCount > 1 ? "s" : ""} &middot; {formatRupees(u.lifetime)} lifetime</p>
-            <div className="row"><StatusPill tone={st === "active" ? "teal" : st === "suspended" ? "amber" : st === "deleted" ? "gray" : "coral"}>{st}</StatusPill></div></Card>
-          <p className="hint" style={{ marginBottom: 12 }}>Suspending or deleting never removes records. Claims, ledger, payouts and payment proofs are kept for audit.</p>
-          {st === "active" ? <Button block style={{ marginBottom: 8 }} onClick={() => setPending({ title: `Suspend ${u.name}?`, text: "They cannot log in, claim or request payouts. Every record is kept. You can reinstate them later.", label: "Yes, suspend", tone: "danger", run: () => set("suspended", "User suspended") })}>Suspend user</Button> : null}
-          {st === "suspended" ? <Button block style={{ marginBottom: 8 }} onClick={() => set("active", "User reinstated")}>Reinstate user</Button> : null}
-          {st !== "deleted" ? <Button variant="danger" block onClick={() => setPending({ title: `Delete ${u.name}?`, text: "The account is closed and personal details can be anonymised on request. Claims, ledger, payouts and payment proofs are kept for audit.", label: "Yes, delete", tone: "danger", run: () => set("deleted", "User deleted (records kept)") })}>Delete user (soft)</Button> : <p className="muted">Deleted. Personal details anonymised on request; financial records retained.</p>}
-        </div></div></div>
-      );
-      break;
-    }
+    case "userdetail": body = <UserDetailScreen userId={userId} rev={rev} onBack={() => { setAccessTab("users"); show("access"); }} setPending={setPending} notify={notify} guard={guard} onChanged={refresh} />; break;
+    default: body = <div className="screen"><Loading /></div>;
   }
 
   const tab = TAB_OF[screen] ?? "dashboard";
+  const showNav = loggedIn === true && !!me.data;
   return (
     <>
       {body}
       {pending ? <ConfirmSheet title={pending.title} tone={pending.tone} confirmLabel={pending.label} onCancel={() => setPending(null)} onConfirm={() => { const run = pending.run; setPending(null); run(); }}>{pending.text}</ConfirmSheet> : null}
       {toast ? <Toast message={toast} onDone={() => setToast(null)} /> : null}
-      {loggedIn ? <BottomNav brand="Admin panel" items={navItems} active={wide ? tab : tab === "access" ? "dashboard" : tab} onSelect={(t) => show(NAV_DEF.find((n) => n.tab === t)!.id)}
-        footer={<><span className="who">{adminName}</span><button className="link-btn" onClick={logOut}>Log out</button></>} /> : null}
+      {showNav ? <BottomNav brand="Admin panel" items={navItems} active={wide ? tab : tab === "access" ? "dashboard" : tab} onSelect={(t) => show(NAV_DEF.find((n) => n.tab === t)!.id)}
+        footer={<><span className="who">{adminName}</span><button className="link-btn" onClick={() => { void logOut(); }}>Log out</button></>} /> : null}
     </>
   );
 }
 
 /* ---------- Screens ---------- */
+
+type Can = (s: AdminScreen) => boolean;
+
+function DashboardScreen({ adminName, wide, can, rev, go, onProfile }: { adminName: string; wide: boolean; can: Can; rev: number; go: (s: AdminScreen) => void; onProfile: () => void }) {
+  const { api } = useServices();
+  const { data: d, error, loading, reload } = useAsync(() => api.admin.dashboard(), [rev], { refreshMs: 30_000 });
+  const cards: { go: AdminScreen; label: string; value: number; sub?: string }[] = d ? [
+    { go: "reviewqueue", label: "Pending review", value: d.pendingReview },
+    { go: "tasks", label: "Active tasks", value: d.activeTasks },
+    { go: "payouts", label: "Payouts due", value: d.payoutsDue },
+    { go: "tickets", label: "Open tickets", value: d.openTickets, ...(d.ticketsNeedReply ? { sub: `${d.ticketsNeedReply} need a reply` } : {}) }
+  ] : [];
+  const recent = (d?.recent ?? []).filter((r) => can(SCREEN_OF_KIND[r.kind]));
+  const list = recent.map((r) => <ListRow key={`${r.kind}${r.at}${r.text}`} onClick={() => go(SCREEN_OF_KIND[r.kind])} title={r.text} sub={agoLabel(r.at)} />);
+  return (
+    <div className="screen">
+      <TopBar title={wide ? "Dashboard" : "Admin panel"} subtitle={`Welcome back, ${adminName}`} right={wide ? undefined : (
+        <button className="profile-btn" aria-label="Roles and permissions" onClick={onProfile}>
+          <Icon name="user" /><span>{adminName}</span><span className="chev" aria-hidden="true">&#9656;</span>
+        </button>
+      )} />
+      <div className="scrollarea"><div className="content">
+        {loading && !d ? <Loading /> : null}
+        {error ? <ErrorBox message={error} onRetry={reload} /> : null}
+        {d ? (<>
+          <p className="section-label" style={{ marginTop: 0 }}>Needs your attention</p>
+          <div className="metric-grid">
+            {cards.filter((c) => can(c.go)).map((c) => (
+              <button key={c.go} className="metric" onClick={() => go(c.go)}>
+                <div className="num">{c.value}</div><div className="lbl">{c.label}</div>{c.sub ? <div className="sub">{c.sub}</div> : null}
+              </button>
+            ))}
+          </div>
+          <p className="section-label">Recent activity</p>
+          {list.length === 0 ? <EmptyState>Nothing new yet.</EmptyState> : wide ? <Card>{list}</Card> : list}
+        </>) : null}
+      </div></div>
+    </div>
+  );
+}
+
+function TasksScreen({ wide, canCreate, filter, setFilter, rev, onNew, onOpen }: {
+  wide: boolean; canCreate: boolean; filter: "active" | "closed"; setFilter: (f: "active" | "closed") => void; rev: number; onNew: () => void; onOpen: (id: string) => void;
+}) {
+  const { api } = useServices();
+  const { data, error, loading, reload } = useAsync(() => api.admin.listTasks(), [rev]);
+  const all = data ?? [];
+  const activeCount = all.filter((t) => !isClosed(t)).length;
+  const rows = all.filter((t) => (isClosed(t) ? "closed" : "active") === filter);
+  const columns: Column<AdminTaskRow>[] = [
+    { key: "title", header: "Title", render: (r) => r.title },
+    { key: "reward", header: "Reward", width: "90px", render: (r) => formatRupees(r.reward) },
+    { key: "slots", header: "Slots", width: "100px", render: (r) => (r.slotsTotal === null ? "unlimited" : `${r.claimed} / ${r.slotsTotal}`) },
+    { key: "timer", header: "Timer", width: "110px", render: (r) => formatLimit(r.timerMinutes) },
+    { key: "script", header: "Script", width: "90px", hideOnTablet: true, render: (r) => TEXT_MODE_LABEL[r.textMode] },
+    { key: "status", header: "Status", width: "180px", render: (r) => taskPill(r) }
+  ];
+  const open = (r: AdminTaskRow) => { if (r.status !== "removed") onOpen(r.id); };
+  return (
+    <div className="screen"><TopBar title={wide ? "Task templates" : "Tasks"} subtitle={`${all.length} templates · ${activeCount} active`} {...(canCreate ? { actions: <Button variant="primary" onClick={onNew}>New task</Button> } : {})} />
+      <div className="scrollarea"><div className="content">
+        <div className="tabs-bleed"><Tabs<"active" | "closed"> value={filter} onChange={setFilter} tabs={[{ id: "active", label: `Active (${activeCount})` }, { id: "closed", label: `Closed (${all.length - activeCount})` }]} /></div>
+        {loading ? <Loading /> : null}
+        {error ? <ErrorBox message={error} onRetry={reload} /> : null}
+        {!loading && !error && rows.length === 0 ? <EmptyState>{filter === "active" ? "No active tasks." : "Nothing closed yet."}</EmptyState> : null}
+        {wide && rows.length ? <DataTable caption="Task templates" columns={columns} rows={rows} rowKey={(r) => r.id} onRowClick={open} /> : null}
+        {wide ? null : rows.map((r) => <AdminTaskCard key={r.id} t={r} {...(r.status !== "removed" ? { onOpen: () => onOpen(r.id) } : {})} />)}
+      </div></div>
+      {canCreate && !wide ? <div className="screen-footer"><Button variant="primary" block onClick={onNew}>New task</Button></div> : null}
+    </div>
+  );
+}
 
 /** One block per script, plus button to add another. Blank blocks are ignored. */
 function ScriptBlocks({ blocks, onChange }: { blocks: string[]; onChange: (b: string[]) => void }) {
@@ -390,25 +267,27 @@ function ScriptBlocks({ blocks, onChange }: { blocks: string[]; onChange: (b: st
   );
 }
 
-function NewTaskScreen({ onBack, onPublish }: { onBack: () => void; onPublish: () => void }) {
+function NewTaskScreen({ onBack, onPublish }: { onBack: () => void; onPublish: (input: NewTaskInput) => Promise<void> }) {
   const [f, setF] = useState({ title: "", instructions: "", siteUrl: "", reward: "", slots: "", timer: "", till: "" });
   const [mode, setMode] = useState<TextMode>("none");
   const [keywords, setKeywords] = useState<string[]>([]); const [kw, setKw] = useState("");
   const [pool, setPool] = useState<string[]>([""]);
   const [ai, setAi] = useState({ tone: "", language: "", min: "", max: "", style: "" });
-  const [errors, setErrors] = useState<string[]>([]);
+  const [errors, setErrors] = useState<string[]>([]); const [busy, setBusy] = useState(false);
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => setF({ ...f, [k]: e.target.value });
   const scripts = pool.map((x) => x.trim()).filter(Boolean);
   const addKw = () => { const v = kw.trim(); if (v && !keywords.includes(v)) setKeywords([...keywords, v]); setKw(""); };
 
-  function publish() {
+  async function publish() {
     const e: string[] = [];
+    const reward = parseRupees(f.reward);
+    const timer = hoursToMinutes(f.timer);
     if (!f.title.trim()) e.push("Title is required.");
     if (!f.instructions.trim()) e.push("Instructions are required.");
     if (!/^https:\/\/\S+\.\S+/.test(f.siteUrl)) e.push("Site link must be a valid https URL.");
-    if (!/^\d+(\.\d{1,2})?$/.test(f.reward)) e.push("Reward must be an amount in rupees.");
+    if (reward === null || reward <= 0n) e.push("Reward must be an amount in rupees.");
     if (f.slots && !/^\d+$/.test(f.slots)) e.push("Total slots must be a whole number or blank.");
-    if (hoursToMinutes(f.timer) === "invalid") e.push("Time limit must be hours (e.g. 2 or 1.5) or blank for unlimited.");
+    if (timer === "invalid") e.push("Time limit must be hours (e.g. 2 or 1.5) or blank for unlimited.");
     if (f.till && Date.parse(f.till) <= Date.now()) e.push("Active till must be in the future.");
     if (mode === "keywords" && keywords.length === 0) e.push("Add at least one keyword.");
     if (mode === "manual_pool" && scripts.length === 0) e.push("Add at least one script.");
@@ -421,7 +300,16 @@ function NewTaskScreen({ onBack, onPublish }: { onBack: () => void; onPublish: (
       if (!/^\d+$/.test(ai.min) || !/^\d+$/.test(ai.max) || Number(ai.min) < 10 || Number(ai.max) < Number(ai.min)) e.push("AI: set word limits (min 10, max at least min).");
     }
     setErrors(e);
-    if (!e.length) onPublish();
+    if (e.length || reward === null || timer === "invalid") return;
+    setBusy(true);
+    try {
+      await onPublish({
+        title: f.title.trim(), description: f.instructions.trim(), siteUrl: f.siteUrl.trim(), reward, slotsTotal: f.slots ? Number(f.slots) : null, timerMinutes: timer,
+        activeUntil: f.till ? new Date(f.till).toISOString() : null, textMode: mode, keywords: mode === "none" || mode === "manual_pool" ? [] : keywords, scripts: mode === "manual_pool" ? scripts : [],
+        ...(mode === "ai_generated" ? { aiConfig: { tone: ai.tone as "friendly", language: ai.language.trim(), minWords: Number(ai.min), maxWords: Number(ai.max), style: ai.style as "email" } } : {}),
+        maxClaimsPerAccount: null
+      });
+    } catch (err) { setErrors([messageOf(err)]); setBusy(false); }
   }
   const slotsNum = /^\d+$/.test(f.slots) ? Number(f.slots) : null;
 
@@ -462,7 +350,7 @@ function NewTaskScreen({ onBack, onPublish }: { onBack: () => void; onPublish: (
         <div className="field">
           <span>Scripts (one block per script)</span>
           <ScriptBlocks blocks={pool} onChange={setPool} />
-                    <div className="hint">{scripts.length} script{scripts.length === 1 ? "" : "s"}{slotsNum && scripts.length ? ` · with ${slotsNum} workers, each script is used about ${Math.ceil(slotsNum / scripts.length)} times` : ""}</div>
+          <div className="hint">{scripts.length} script{scripts.length === 1 ? "" : "s"}{slotsNum && scripts.length ? ` · with ${slotsNum} workers, each script is used about ${Math.ceil(slotsNum / scripts.length)} times` : ""}</div>
         </div>
       ) : null}
 
@@ -481,51 +369,57 @@ function NewTaskScreen({ onBack, onPublish }: { onBack: () => void; onPublish: (
       ) : null}
 
       {errors.length ? <div className="card alert" role="alert">{errors.map((x) => <div key={x} className="field-error" style={{ marginTop: 0 }}>{x}</div>)}</div> : null}
-      <Button variant="primary" block onClick={publish}>Publish task</Button>
+      <Button variant="primary" block disabled={busy} onClick={() => { void publish(); }}>{busy ? "Publishing…" : "Publish task"}</Button>
     </div></div></div>
   );
 }
 
-function TaskDetailScreen({ task, canManage, canTexts, onBack, onRemove, notify }: {
-  task: Task; canManage: boolean; canTexts: boolean; onBack: () => void; onRemove: () => void; notify: (m: string) => void;
+function TaskDetailScreen({ taskId, canManage, canTexts, rev, onBack, notify, guard, onChanged, onGone }: {
+  taskId: string; canManage: boolean; canTexts: boolean; rev: number; onBack: () => void; notify: (m: string) => void; guard: (e: unknown) => void; onChanged: () => void; onGone: () => void;
 }) {
+  const { api } = useServices();
+  const first = useAsync(() => (taskId ? Promise.resolve(taskId) : api.admin.listTasks().then((t) => t[0]?.id ?? "")), [taskId]);
+  const id = taskId || first.data || "";
+  const q = useAsync<AdminTaskDetail | null>(() => (id ? api.admin.getTask(id) : Promise.resolve(null)), [id, rev], { enabled: !first.loading });
   const [confirm, setConfirm] = useState<"pause" | "remove" | null>(null);
-  const [pool, setPool] = useState(fixtures.scriptPool); const [adding, setAdding] = useState(false); const [draft, setDraft] = useState<string[]>([""]);
+  const [adding, setAdding] = useState(false); const [draft, setDraft] = useState<string[]>([""]);
+  const task = q.data;
   const drafted = draft.map((x) => x.trim()).filter(Boolean);
-  function addScripts() {
-    if (!drafted.length) return;
-    setPool([...pool, ...drafted]); notify(`${drafted.length} script${drafted.length === 1 ? "" : "s"} added`); setDraft([""]); setAdding(false);
-  }
+  if (q.loading || first.loading) return <div className="screen"><TopBar title="Task detail" onBack={onBack} /><Loading /></div>;
+  if (!task) return <div className="screen"><TopBar title="Task detail" onBack={onBack} /><div className="content"><ErrorBox message={q.error ?? "No task selected."} onRetry={q.reload} /></div></div>;
+  const status = (s: "active" | "paused" | "removed", done: string) => api.admin.setTaskStatus(task.id, s).then(() => { notify(done); onChanged(); if (s === "removed") onGone(); }, guard);
   return (
     <>
     <div className="screen"><TopBar title="Task detail" onBack={onBack} /><div className="scrollarea"><div className="content narrow">
       <Card>
         <h3>{task.title}</h3><p>{task.description}</p>
-        <div className="row"><StatusPill tone="teal">{formatRupees(task.reward)} reward</StatusPill><StatusPill tone="gray">{task.slotsTotal === null ? "unlimited slots" : `${task.slotsTotal - (task.slotsRemaining ?? 0)} of ${task.slotsTotal} claimed`}</StatusPill><StatusPill tone="amber">{formatLimit(task.timerMinutes)}{task.timerMinutes === null ? "" : " limit"}</StatusPill></div>
+        <div className="row"><StatusPill tone="teal">{formatRupees(task.reward)} reward</StatusPill><StatusPill tone="gray">{task.slotsTotal === null ? "unlimited slots" : `${task.claimed} of ${task.slotsTotal} claimed`}</StatusPill><StatusPill tone="amber">{formatLimit(task.timerMinutes)}{task.timerMinutes === null ? "" : " limit"}</StatusPill>{task.status === "paused" ? <StatusPill tone="gray">Paused</StatusPill> : null}</div>
         <div className="linkrow">Site: <a href={task.siteUrl} target="_blank" rel="noreferrer noopener">{task.siteUrl.replace("https://", "")} &#8599;</a></div>
         <Chips items={task.keywords} />
         <p className="hint" style={{ marginTop: 8 }}>Task script: {TEXT_MODE_LABEL[task.textMode]}</p>
       </Card>
       {task.textMode === "manual_pool" ? (
         <Card>
-          <h3>Scripts ({pool.length})</h3>
-          <p className="muted">Shared evenly and randomly. With {pool.length} scripts and {task.slotsTotal ?? 100} workers, each script goes to about {Math.ceil((task.slotsTotal ?? 100) / pool.length)}.</p>
-          {pool.map((p, i) => <div key={i} className="script">{p}</div>)}
+          <h3>Scripts ({task.scripts.length})</h3>
+          <p className="muted">Shared evenly and randomly. With {task.scripts.length} scripts and {task.slotsTotal ?? 100} workers, each script goes to about {Math.ceil((task.slotsTotal ?? 100) / Math.max(task.scripts.length, 1))}.</p>
+          {task.scripts.map((p, i) => <div key={i} className="script">{p}</div>)}
           {canTexts ? <Button block style={{ marginTop: 10 }} onClick={() => setAdding(true)}>Add scripts</Button> : null}
         </Card>
       ) : null}
-      {canManage ? (<>
-        <Button block style={{ marginBottom: 8 }} onClick={() => setConfirm("pause")}>Pause task</Button>
+      {canManage && task.status !== "removed" ? (<>
+        {task.status === "paused"
+          ? <Button block style={{ marginBottom: 8 }} onClick={() => { void status("active", "Task resumed"); }}>Resume task</Button>
+          : <Button block style={{ marginBottom: 8 }} onClick={() => setConfirm("pause")}>Pause task</Button>}
         <Button variant="danger" block onClick={() => setConfirm("remove")}>Remove task</Button>
       </>) : null}
     </div></div></div>
     {confirm === "pause" ? (
-      <ConfirmSheet title="Pause this task?" confirmLabel="Yes, pause" onCancel={() => setConfirm(null)} onConfirm={() => { setConfirm(null); notify("Task paused"); }}>
+      <ConfirmSheet title="Pause this task?" confirmLabel="Yes, pause" onCancel={() => setConfirm(null)} onConfirm={() => { setConfirm(null); void status("paused", "Task paused"); }}>
         New claims are blocked while it is paused. Workers who already claimed it can still submit. You can resume it later.
       </ConfirmSheet>
     ) : null}
     {confirm === "remove" ? (
-      <ConfirmSheet title="Remove this task?" tone="danger" confirmLabel="Yes, remove" onCancel={() => setConfirm(null)} onConfirm={() => { setConfirm(null); onRemove(); }}>
+      <ConfirmSheet title="Remove this task?" tone="danger" confirmLabel="Yes, remove" onCancel={() => setConfirm(null)} onConfirm={() => { setConfirm(null); void status("removed", "Task removed"); }}>
         New claims will be blocked immediately. Anyone with this task in Active (not yet submitted) will have their claim voided. Submissions already awaiting review will still be processed normally.
       </ConfirmSheet>
     ) : null}
@@ -534,19 +428,60 @@ function TaskDetailScreen({ task, canManage, canTexts, onBack, onRemove, notify 
         <ScriptBlocks blocks={draft} onChange={setDraft} />
         <div style={{ height: 12 }} />
         <p className="muted" style={{ margin: "0 0 12px" }}>{drafted.length} script{drafted.length === 1 ? "" : "s"} to add</p>
-        <Button variant="primary" block disabled={!drafted.length} onClick={addScripts}>Add scripts</Button>
+        <Button variant="primary" block disabled={!drafted.length} onClick={() => { api.admin.addScripts(task.id, drafted).then(() => { notify(`${drafted.length} script${drafted.length === 1 ? "" : "s"} added`); setDraft([""]); setAdding(false); onChanged(); }, guard); }}>Add scripts</Button>
       </Sheet>
     ) : null}
     </>
   );
 }
 
-function ReviewItemScreen({ item, onBack, onDone }: { item: (typeof fixtures.reviewQueue)[number]; onBack: () => void; onDone: (pct: OutcomePercent) => void }) {
+function ReviewQueueScreen({ wide, sort, setSort, rev, onOpen }: { wide: boolean; sort: "oldest" | "newest"; setSort: (s: "oldest" | "newest") => void; rev: number; onOpen: (id: string) => void }) {
+  const { api } = useServices();
+  const { data, error, loading, reload } = useAsync(() => api.admin.reviewQueue(), [rev], { refreshMs: 30_000 });
+  const queue = data ?? [];
+  const sorted = [...queue].sort((x, y) => (sort === "oldest" ? y.waitingMinutes - x.waitingMinutes : x.waitingMinutes - y.waitingMinutes));
+  return (
+    <div className="screen"><TopBar title="Review queue" subtitle={`${queue.length} submission${queue.length === 1 ? "" : "s"} waiting for a decision`} /><div className="scrollarea"><div className="content">
+      <div className="list-toolbar">
+        <span className="list-count"><strong>{queue.length}</strong> to review</span>
+        <Tabs<"oldest" | "newest"> inline value={sort} onChange={setSort} tabs={[{ id: "oldest", label: "Oldest" }, { id: "newest", label: "Newest" }]} />
+      </div>
+      {loading ? <Loading /> : null}
+      {error ? <ErrorBox message={error} onRetry={reload} /> : null}
+      {!loading && !error && queue.length === 0 ? <EmptyState>Queue is clear.</EmptyState> : null}
+      {wide && sorted.length ? <DataTable caption="Review queue" rows={sorted} rowKey={(q) => q.id} onRowClick={(q) => onOpen(q.id)} columns={[
+        { key: "worker", header: "Worker", render: (q) => q.worker },
+        { key: "task", header: "Task", render: (q) => q.taskTitle },
+        { key: "email", header: "Email used", render: (q) => q.identityEmail },
+        { key: "reward", header: "Reward", width: "110px", render: (q) => formatRupees(q.reward) },
+        { key: "wait", header: "Waiting", width: "130px", render: (q) => agoLabel(q.submittedAt) }
+      ]} /> : null}
+      {wide ? null : sorted.map((q) => <ListRow key={q.id} onClick={() => onOpen(q.id)} title={q.worker} right={<span className="sub">{agoLabel(q.submittedAt)}</span>} sub={`${q.taskTitle} · ${q.identityEmail}`} />)}
+    </div></div></div>
+  );
+}
+
+function ReviewItemScreen({ id, rev, onBack, onDone }: { id: string; rev: number; onBack: () => void; onDone: (pct: OutcomePercent) => void }) {
+  const { api } = useServices();
+  const { data, error, loading, reload } = useAsync(() => api.admin.reviewQueue(), [rev]);
+  const item: ReviewQueueItem | undefined = (data ?? []).find((q) => q.id === id) ?? (id ? undefined : data?.[0]);
+  if (loading) return <div className="screen"><TopBar title="Review submission" onBack={onBack} /><Loading /></div>;
+  if (!item) return <div className="screen"><TopBar title="Review submission" onBack={onBack} /><div className="content">{error ? <ErrorBox message={error} onRetry={reload} /> : <EmptyState>Already reviewed.</EmptyState>}</div></div>;
+  return <ReviewForm key={item.id} item={item} onBack={onBack} onDone={onDone} />;
+}
+
+function ReviewForm({ item, onBack, onDone }: { item: ReviewQueueItem; onBack: () => void; onDone: (pct: OutcomePercent) => void }) {
+  const { api } = useServices();
   const [pct, setPct] = useState<OutcomePercent>(100); const [note, setNote] = useState(""); const [err, setErr] = useState(""); const [busy, setBusy] = useState(false);
   const misses = item.keywords.filter((k) => !item.keywordsMatched.includes(k));
+  async function submit() {
+    if (!note.trim()) return setErr("A note is required for every outcome.");
+    setBusy(true); setErr("");
+    try { await api.admin.decide(item.id, pct, note.trim()); onDone(pct); } catch (e) { setErr(messageOf(e)); setBusy(false); }
+  }
   return (
     <div className="screen"><TopBar title="Review submission" onBack={onBack} /><div className="scrollarea"><div className="content"><div className="split">
-      <div className="placeholder-img">Screenshot proof placeholder</div>
+      {item.proofUrl ? <a href={item.proofUrl} target="_blank" rel="noreferrer noopener" className="proof-link"><img className="proof-img" src={item.proofUrl} alt="Screenshot proof from the worker" /></a> : <div className="placeholder-img">Screenshot proof placeholder</div>}
       {item.workerNote ? <Card><h3>Note from user</h3><p>{item.workerNote}</p></Card> : null}
       <Card>
         <p style={{ fontWeight: 500, margin: "0 0 2px", color: "var(--text-primary)" }}>{item.worker} <span className="muted">· {item.identityEmail}</span></p>
@@ -554,7 +489,7 @@ function ReviewItemScreen({ item, onBack, onDone }: { item: (typeof fixtures.rev
       </Card>
       <div className="card-pair">
         <div className="info-cell green"><span className="info-label">Reward</span><span className="info-value big">{formatRupees(item.reward)}</span></div>
-        <div className="info-cell amber"><span className="info-label">Time remaining</span><span className="info-value time">{item.timeLimitMinutes === null ? "No time limit" : formatLimit(Math.max(item.timeLimitMinutes - item.timeTakenMinutes, 0))}</span></div>
+        <div className="info-cell amber"><span className="info-label">Time taken</span><span className="info-value time">{formatLimit(item.timeTakenMinutes)}{item.timeLimitMinutes === null ? " (no limit)" : ` of ${formatLimit(item.timeLimitMinutes)}`}</span></div>
       </div>
       {item.keywords.length ? (
         <Card><h3>Keyword check</h3>
@@ -568,111 +503,251 @@ function ReviewItemScreen({ item, onBack, onDone }: { item: (typeof fixtures.rev
       </div>
       <p className="muted" style={{ marginTop: -6, marginBottom: 12 }}>Worker will be credited {formatRupees(outcomeAmount(item.reward, pct))} of {formatRupees(item.reward)}.</p>
       <Field label="Note to user (required)" error={err}><Textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Explain the outcome, even when approving in full" /></Field>
-      <Button variant="primary" block disabled={busy} onClick={() => { if (!note.trim()) return setErr("A note is required for every outcome."); setBusy(true); onDone(pct); }}>Submit review</Button>
+      <Button variant="primary" block disabled={busy} onClick={() => { void submit(); }}>{busy ? "Saving…" : "Submit review"}</Button>
     </div></div></div></div>
   );
 }
 
-function PayoutItemScreen({ payout, adminName, onBack, onPaid }: { payout: (typeof fixtures.adminPayouts)[number]; adminName: string; onBack: () => void; onPaid: () => void }) {
-  const [proof, setProof] = useState<File | null>(null); const [busy, setBusy] = useState(false);
+function PayoutsScreen({ wide, rev, onOpen }: { wide: boolean; rev: number; onOpen: (id: string) => void }) {
+  const { api } = useServices();
+  const { data, error, loading, reload } = useAsync(() => api.admin.listPayouts(), [rev], { refreshMs: 30_000 });
+  const payouts = data ?? [];
+  const action = payouts.filter((p) => p.status !== "paid");
+  const history = payouts.filter((p) => p.status === "paid");
+  const row = (p: PayoutRequest) => (
+    <ListRow key={p.id} onClick={() => onOpen(p.id)} title={`${p.who} · ${formatRupees(p.amount)}`}
+      right={<StatusPill tone={p.status === "paid" ? "green" : "amber"}>{p.status === "paid" ? "Paid" : "Pending"}</StatusPill>}
+      sub={`${p.upiMasked} · ${agoLabel(p.at)}${p.paidBy ? ` · paid by ${p.paidBy}` : ""}`} />
+  );
+  const cols: Column<PayoutRequest>[] = [
+    { key: "who", header: "Worker", render: (p) => p.who },
+    { key: "amount", header: "Amount", width: "120px", render: (p) => formatRupees(p.amount) },
+    { key: "upi", header: "UPI ID", render: (p) => <span className="mono">{p.upiMasked}</span> },
+    { key: "when", header: "Requested", width: "140px", render: (p) => agoLabel(p.at) },
+    { key: "by", header: "Paid by", width: "150px", render: (p) => p.paidBy ?? "" },
+    { key: "status", header: "Status", width: "120px", render: (p) => <StatusPill tone={p.status === "paid" ? "green" : "amber"}>{p.status === "paid" ? "Paid" : "Pending"}</StatusPill> }
+  ];
+  return (
+    <div className="screen"><TopBar title="Payouts" subtitle={`${action.length} to pay · ${history.length} paid`} /><div className="scrollarea"><div className="content">
+      {loading ? <Loading /> : null}
+      {error ? <ErrorBox message={error} onRetry={reload} /> : null}
+      {!loading && !error ? (wide ? (<>
+        <section className="table-section"><h2>Needs action ({action.length})</h2>
+          {action.length ? <DataTable caption="Payouts needing action" columns={cols} rows={action} rowKey={(p) => p.id} onRowClick={(p) => onOpen(p.id)} /> : <EmptyState>Nothing to pay right now.</EmptyState>}
+        </section>
+        <section className="table-section"><h2>History ({history.length})</h2>
+          {history.length ? <DataTable caption="Payout history" columns={cols} rows={history} rowKey={(p) => p.id} onRowClick={(p) => onOpen(p.id)} /> : <EmptyState>No payments yet.</EmptyState>}
+        </section>
+      </>) : (<>
+        <p className="section-label" style={{ marginTop: 0 }}>Needs action ({action.length})</p>
+        {action.length ? action.map(row) : <EmptyState>Nothing to pay right now.</EmptyState>}
+        <p className="section-label">History ({history.length})</p>
+        {history.map(row)}
+      </>)) : null}
+    </div></div></div>
+  );
+}
+
+function PayoutItemScreen({ id, adminName, rev, onBack, onPaid }: { id: string; adminName: string; rev: number; onBack: () => void; onPaid: () => void }) {
+  const { api } = useServices();
+  const first = useAsync(() => (id ? Promise.resolve(id) : api.admin.listPayouts().then((l) => (l.find((p) => p.status === "pending") ?? l[0])?.id ?? "")), [id]);
+  const pid = id || first.data || "";
+  const q = useAsync(() => (pid ? api.admin.getPayout(pid) : Promise.resolve(null)), [pid, rev], { enabled: !first.loading });
+  const [proof, setProof] = useState<File | null>(null); const [busy, setBusy] = useState(false); const [err, setErr] = useState("");
+  const payout = q.data;
+  if (q.loading || first.loading) return <div className="screen"><TopBar title="Payout request" onBack={onBack} /><Loading /></div>;
+  if (!payout) return <div className="screen"><TopBar title="Payout request" onBack={onBack} /><div className="content"><ErrorBox message={q.error ?? "Nothing to pay."} onRetry={q.reload} /></div></div>;
   const paid = payout.status === "paid";
+  async function pay() {
+    if (!proof) return;
+    setBusy(true); setErr("");
+    try { await api.admin.markPaid((payout as PayoutRequest).id, proof); onPaid(); } catch (e) { setErr(messageOf(e)); setBusy(false); }
+  }
   return (
     <div className="screen"><TopBar title="Payout request" onBack={onBack} /><div className="scrollarea"><div className="content narrow">
       <Card>
         <p style={{ fontSize: 13, margin: "0 0 6px", color: "var(--text-primary)" }}>{payout.who} &middot; {formatRupees(payout.amount)}</p>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}><span className="mono">{payout.upiFull}</span><CopyButton text={payout.upiFull} /></div>
-        <p className="muted" style={{ marginTop: 8 }}>Requested {payout.whenLabel}</p>
-        <p className="hint">The full UPI ID is shown on this screen only.</p>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}><span className="mono">{payout.upiFull}</span><CopyButton text={payout.upiFull ?? ""} /></div>
+        <p className="muted" style={{ marginTop: 8 }}>Requested {whenLabel(payout.at)}</p>
+        <p className="hint">The full UPI ID is shown on this screen only, and each view is logged.</p>
       </Card>
-      {paid ? <p className="muted">Paid by {payout.paidBy}. The payment proof is stored with this record.</p> : (<>
+      {paid ? (<>
+        <p className="muted">Paid by {payout.paidBy}{payout.paidAt ? ` on ${whenLabel(payout.paidAt)}` : ""}. The payment proof is stored with this record.</p>
+        {payout.proofUrl ? <a href={payout.proofUrl} target="_blank" rel="noreferrer noopener" className="proof-link"><img className="proof-img" src={payout.proofUrl} alt="Payment screenshot" /></a> : null}
+      </>) : (<>
         <p className="muted">After you transfer the money, attach the payment screenshot. It is required and is saved with your name.</p>
         <FileUpload label="Tap to upload payment screenshot" onFile={setProof} />
+        {err ? <div className="field-error" role="alert">{err}</div> : null}
       </>)}
     </div></div>
-    {paid ? null : <div className="screen-footer"><Button variant="primary" block disabled={!proof || busy} onClick={() => { setBusy(true); onPaid(); }}>Mark as paid by {adminName}</Button></div>}
+    {paid ? null : <div className="screen-footer"><Button variant="primary" block disabled={!proof || busy} onClick={() => { void pay(); }}>{busy ? "Saving…" : `Mark as paid by ${adminName}`}</Button></div>}
     </div>
   );
 }
 
-function TeamPanel({ members, roles, setMembers, notify }: { members: AdminMember[]; roles: Role[]; setMembers: (m: AdminMember[]) => void; notify: (m: string) => void }) {
-  const [editing, setEditing] = useState<string | null>(null);
+const statusTone = (s: string) => (s === "active" ? "teal" : s === "suspended" ? "amber" : s === "deleted" ? "gray" : "coral");
+
+function AccessScreen({ me, wide, perms, tab: want, setTab, rev, notify, guard, onChanged, onBack, onLogout, onOpenUser }: {
+  me: { name: string; roleIds: string[] }; wide: boolean; perms: Set<PermissionKey>; tab: AccessTab; setTab: (t: AccessTab) => void; rev: number;
+  notify: (m: string) => void; guard: (e: unknown) => void; onChanged: () => void; onBack: () => void; onLogout: () => void; onOpenUser: (id: string) => void;
+}) {
+  const { api } = useServices();
+  const roles = useAsync(() => api.admin.listRoles(), [rev]);
+  const myRoles = (roles.data ?? []).filter((r) => me.roleIds.includes(r.id));
+  const myPerms = PERMISSIONS.filter((p) => perms.has(p.key));
+  const tabs: { id: AccessTab; label: string }[] = [
+    ...(perms.has("user.manage") ? [{ id: "users" as const, label: "Users" }] : []),
+    ...(perms.has("role.manage") ? [{ id: "team" as const, label: "Team" }, { id: "roles" as const, label: "Roles" }] : [])
+  ];
+  const tab = tabs.some((t) => t.id === want) ? want : tabs[0]?.id;
+  return (
+    <div className="screen"><TopBar title={wide ? "Users and roles" : "Roles and permissions"} subtitle="People who use the app, your team and what each role can do" {...(wide ? {} : { onBack })} />
+      <div className="scrollarea"><div className="content">
+        <Card hero>
+          <div className="card-split">
+            <div className="card-split-main"><h3>{me.name}</h3></div>
+            <div className="chips role-tags">{myRoles.map((r) => <StatusPill key={r.id} tone="teal">{r.name}</StatusPill>)}</div>
+          </div>
+          <p className="section-label" style={{ margin: "14px 0 0" }}>Permissions</p>
+          <div className="chips perm-chips">{myPerms.map((p) => <span key={p.key} className="chip">{p.label}</span>)}</div>
+        </Card>
+        {wide ? null : <Button block style={{ marginBottom: 8 }} onClick={onLogout}>Log out</Button>}
+        {tabs.length ? <div className="tabs-bleed" style={{ marginBottom: 0 }}><Tabs<AccessTab> value={tab as AccessTab} onChange={setTab} tabs={tabs} /></div> : <p className="hint">Your roles do not include managing users or roles.</p>}
+        <div style={{ paddingTop: 12 }}>
+          {tab === "users" ? <UsersPanel wide={wide} rev={rev} onOpen={onOpenUser} /> : null}
+          {tab === "team" ? <TeamPanel rev={rev} roles={roles.data ?? []} notify={notify} guard={guard} onChanged={onChanged} /> : null}
+          {tab === "roles" ? <RolesPanel rev={rev} roles={roles.data ?? []} notify={notify} guard={guard} onChanged={onChanged} /> : null}
+        </div>
+      </div></div>
+    </div>
+  );
+}
+
+function UsersPanel({ wide, rev, onOpen }: { wide: boolean; rev: number; onOpen: (id: string) => void }) {
+  const { api } = useServices();
+  const { data, error, loading, reload } = useAsync(() => api.admin.listUsers(), [rev]);
+  const users = data ?? [];
+  return (<>
+    <p className="note-text" style={{ marginBottom: 10 }}>People who use the app. {users.length} total.</p>
+    {loading ? <Loading /> : null}
+    {error ? <ErrorBox message={error} onRetry={reload} /> : null}
+    {wide && users.length ? <DataTable caption="Users" rows={users} rowKey={(u) => u.id} onRowClick={(u) => onOpen(u.id)} columns={[
+      { key: "name", header: "Name", render: (u) => u.name },
+      { key: "email", header: "Email", render: (u) => u.emailMasked },
+      { key: "emails", header: "Emails", width: "90px", render: (u) => u.identityCount },
+      { key: "life", header: "Lifetime earned", width: "150px", render: (u) => formatRupees(u.lifetime) },
+      { key: "status", header: "Status", width: "130px", render: (u) => <StatusPill tone={statusTone(u.status)}>{u.status[0]!.toUpperCase() + u.status.slice(1)}</StatusPill> }
+    ]} /> : null}
+    {wide ? null : users.map((u) => (
+      <ListRow key={u.id} onClick={() => onOpen(u.id)} title={u.name} right={<StatusPill tone={statusTone(u.status)}>{u.status[0]!.toUpperCase() + u.status.slice(1)}</StatusPill>}
+        sub={`${u.emailMasked} · ${formatRupees(u.lifetime)} lifetime · ${u.identityCount} email${u.identityCount > 1 ? "s" : ""}`} />
+    ))}
+  </>);
+}
+
+function UserDetailScreen({ userId, rev, onBack, setPending, notify, guard, onChanged }: {
+  userId: string; rev: number; onBack: () => void; notify: (m: string) => void; guard: (e: unknown) => void; onChanged: () => void;
+  setPending: (p: { title: string; text: string; label: string; tone: "primary" | "danger"; run: () => void } | null) => void;
+}) {
+  const { api } = useServices();
+  const { data, error, loading, reload } = useAsync(() => api.admin.listUsers(), [rev]);
+  const u: AdminUserRow | undefined = (data ?? []).find((x) => x.id === userId) ?? (userId ? undefined : data?.[0]);
+  if (loading) return <div className="screen"><TopBar title="User" onBack={onBack} /><Loading /></div>;
+  if (!u) return <div className="screen"><TopBar title="User" onBack={onBack} /><div className="content"><ErrorBox message={error ?? "User not found."} onRetry={reload} /></div></div>;
+  const set = (status: "active" | "suspended" | "deleted", m: string) => api.admin.setUserStatus(u.id, status).then(() => { notify(m); onChanged(); }, guard);
+  return (
+    <div className="screen"><TopBar title={u.name} onBack={onBack} /><div className="scrollarea"><div className="content narrow">
+      <Card><h3>{u.name}</h3><p>{u.emailMasked} &middot; {u.identityCount} email{u.identityCount > 1 ? "s" : ""} &middot; {formatRupees(u.lifetime)} lifetime</p>
+        <div className="row"><StatusPill tone={statusTone(u.status)}>{u.status}</StatusPill></div></Card>
+      <p className="hint" style={{ marginBottom: 12 }}>Suspending or deleting never removes records. Claims, ledger, payouts and payment proofs are kept for audit.</p>
+      {u.status === "active" ? <Button block style={{ marginBottom: 8 }} onClick={() => setPending({ title: `Suspend ${u.name}?`, text: "They cannot log in, claim or request payouts. Every record is kept. You can reinstate them later.", label: "Yes, suspend", tone: "danger", run: () => { void set("suspended", "User suspended"); } })}>Suspend user</Button> : null}
+      {u.status === "suspended" ? <Button block style={{ marginBottom: 8 }} onClick={() => { void set("active", "User reinstated"); }}>Reinstate user</Button> : null}
+      {u.status !== "deleted" ? <Button variant="danger" block onClick={() => setPending({ title: `Delete ${u.name}?`, text: "The account is closed and can never log in again. Claims, ledger, payouts and payment proofs are kept for audit. This cannot be undone.", label: "Yes, delete", tone: "danger", run: () => { void set("deleted", "User deleted (records kept)"); } })}>Delete user (soft)</Button> : <p className="muted">Deleted. Financial records are retained.</p>}
+    </div></div></div>
+  );
+}
+
+function TeamPanel({ rev, roles, notify, guard, onChanged }: { rev: number; roles: Role[]; notify: (m: string) => void; guard: (e: unknown) => void; onChanged: () => void }) {
+  const { api } = useServices();
+  const { data, error, loading, reload } = useAsync(() => api.admin.listMembers(), [rev]);
+  const members: AdminMember[] = data ?? [];
+  const [editing, setEditing] = useState<string | null>(null); const [email, setEmail] = useState(""); const [err, setErr] = useState("");
+  async function add() {
+    setErr("");
+    try { await api.admin.addMember(email); setEmail(""); notify("Team member added. Give them a role."); onChanged(); reload(); } catch (e) { setErr(messageOf(e)); }
+  }
   return (<>
     <p className="note-text" style={{ marginBottom: 10 }}>Members can hold several roles. Owner has everything.</p>
+    {loading ? <Loading /> : null}
+    {error ? <ErrorBox message={error} onRetry={reload} /> : null}
     <div className="card-grid">{members.map((m) => (
       <Card key={m.id}>
         <div className="card-split">
           <div className="card-split-main">
             <h3>{m.name}</h3>
-            <div className="chips">{m.roleIds.map((id) => <StatusPill key={id} tone={id === "role-owner" ? "teal" : "gray"}>{roles.find((r) => r.id === id)?.name}</StatusPill>)}</div>
+            <div className="chips">{m.roleIds.length === 0 ? <StatusPill tone="gray">No role yet</StatusPill> : m.roleIds.map((id) => <StatusPill key={id} tone={roles.find((r) => r.id === id)?.name === "Owner" ? "teal" : "gray"}>{roles.find((r) => r.id === id)?.name ?? "Role"}</StatusPill>)}</div>
           </div>
           {!m.isOwner ? <Button compact onClick={() => setEditing(editing === m.id ? null : m.id)}>{editing === m.id ? "Done" : "Edit roles"}</Button> : null}
         </div>
-        {editing === m.id ? roles.filter((r) => r.id !== "role-owner").map((r) => (
+        {editing === m.id ? roles.filter((r) => r.name !== "Owner").map((r) => (
           <label key={r.id} className="check">
             <input type="checkbox" checked={m.roleIds.includes(r.id)}
-              onChange={(e) => { setMembers(members.map((x) => x.id === m.id ? { ...x, roleIds: e.target.checked ? [...x.roleIds, r.id] : x.roleIds.filter((id) => id !== r.id) } : x)); notify("Roles updated"); }} />
+              onChange={(e) => { api.admin.setMemberRoles(m.id, e.target.checked ? [...m.roleIds, r.id] : m.roleIds.filter((id) => id !== r.id)).then(() => { notify("Roles updated"); reload(); onChanged(); }, guard); }} />
             {r.name}
           </label>
         )) : null}
       </Card>
     ))}</div>
+    <Field label="Add a team member" error={err} hint="Their main login email. They need to sign up first."><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@example.com" /></Field>
+    <Button block onClick={() => { void add(); }}>Add to team</Button>
   </>);
 }
 
-let nextRoleId = 100;
-
-function RolesPanel({ roles, setRoles, members, setMembers, notify }: {
-  roles: Role[]; setRoles: (r: Role[]) => void; members: AdminMember[]; setMembers: (m: AdminMember[]) => void; notify: (m: string) => void;
-}) {
+function RolesPanel({ rev, roles, notify, guard, onChanged }: { rev: number; roles: Role[]; notify: (m: string) => void; guard: (e: unknown) => void; onChanged: () => void }) {
+  const { api } = useServices();
+  const members = useAsync(() => api.admin.listMembers(), [rev]);
   const [editing, setEditing] = useState<string | null>(null); const [name, setName] = useState(""); const [err, setErr] = useState("");
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
-  function create() {
-    const n = name.trim();
-    if (!n) return setErr("Give the role a name.");
-    if (roles.some((r) => r.name.toLowerCase() === n.toLowerCase())) return setErr("A role with that name already exists.");
-    setErr(""); setRoles([...roles, { id: `role-${nextRoleId++}`, name: n, permissions: [] }]); setName(""); notify("Role created. Open Edit to choose its permissions.");
+  async function create() {
+    setErr("");
+    try { await api.admin.createRole(name); setName(""); notify("Role created. Open Edit to choose its permissions."); onChanged(); } catch (e) { setErr(messageOf(e)); }
   }
-  function remove(id: string) {
-    setRoles(roles.filter((r) => r.id !== id));
-    setMembers(members.map((m) => ({ ...m, roleIds: m.roleIds.filter((x) => x !== id) })));
-    setConfirmDelete(null); setEditing(null); notify("Role deleted");
-  }
+  const holders = (id: string) => (members.data ?? []).filter((m) => m.roleIds.includes(id)).length;
   return (<>
     <p className="note-text" style={{ marginBottom: 10 }}>A role is a bundle of permissions. Add or remove roles, and tick the permissions each role gets. Owner can't be edited or deleted.</p>
-    <div className="card-grid">{roles.map((r) => {
-      const holders = members.filter((m) => m.roleIds.includes(r.id)).length;
-      return (
-        <Card key={r.id}>
-          <div className="card-split">
-            <div className="card-split-main">
-              <h3>{r.name}</h3>
-              <p>{r.permissions.length} permission{r.permissions.length === 1 ? "" : "s"} &middot; {holders} member{holders === 1 ? "" : "s"}</p>
-            </div>
-            {r.id !== "role-owner" ? <Button compact onClick={() => { setEditing(editing === r.id ? null : r.id); setConfirmDelete(null); }}>{editing === r.id ? "Done" : "Edit"}</Button> : null}
+    <div className="card-grid">{roles.map((r) => (
+      <Card key={r.id}>
+        <div className="card-split">
+          <div className="card-split-main">
+            <h3>{r.name}</h3>
+            <p>{r.permissions.length} permission{r.permissions.length === 1 ? "" : "s"} &middot; {holders(r.id)} member{holders(r.id) === 1 ? "" : "s"}</p>
           </div>
-          {editing === r.id ? (<>
-            {PERMISSIONS.map((p) => (
-              <label key={p.key} className="check">
-                <input type="checkbox" checked={r.permissions.includes(p.key)}
-                  onChange={(e) => { setRoles(roles.map((x) => x.id === r.id ? { ...x, permissions: e.target.checked ? [...x.permissions, p.key] : x.permissions.filter((k) => k !== p.key) } : x)); notify("Role updated"); }} />
-                {p.label}
-              </label>
-            ))}
-            <Button variant="danger" block style={{ marginTop: 10 }} onClick={() => setConfirmDelete(r.id)}>Delete role</Button>
-          </>) : null}
-        </Card>
-      );
-    })}</div>
+          {r.name !== "Owner" ? <Button compact onClick={() => { setEditing(editing === r.id ? null : r.id); setConfirmDelete(null); }}>{editing === r.id ? "Done" : "Edit"}</Button> : null}
+        </div>
+        {editing === r.id ? (<>
+          {PERMISSIONS.map((p) => (
+            <label key={p.key} className="check">
+              <input type="checkbox" checked={r.permissions.includes(p.key)}
+                onChange={(e) => { api.admin.setRolePermissions(r.id, e.target.checked ? [...r.permissions, p.key] : r.permissions.filter((k) => k !== p.key)).then(() => { notify("Role updated"); onChanged(); }, guard); }} />
+              {p.label}
+            </label>
+          ))}
+          <Button variant="danger" block style={{ marginTop: 10 }} onClick={() => setConfirmDelete(r.id)}>Delete role</Button>
+        </>) : null}
+      </Card>
+    ))}</div>
     {confirmDelete ? (() => {
       const r = roles.find((x) => x.id === confirmDelete); if (!r) return null;
-      const holders = members.filter((m) => m.roleIds.includes(r.id)).length;
+      const n = holders(r.id);
       return (
-        <ConfirmSheet title={`Delete role "${r.name}"?`} tone="danger" confirmLabel="Yes, delete" onCancel={() => setConfirmDelete(null)} onConfirm={() => remove(r.id)}>
-          {holders ? `${holders} member${holders === 1 ? "" : "s"} hold${holders === 1 ? "s" : ""} this role and will lose it.` : "No member holds this role."}
+        <ConfirmSheet title={`Delete role "${r.name}"?`} tone="danger" confirmLabel="Yes, delete" onCancel={() => setConfirmDelete(null)}
+          onConfirm={() => { setConfirmDelete(null); setEditing(null); api.admin.deleteRole(r.id).then(() => { notify("Role deleted"); onChanged(); }, guard); }}>
+          {n ? `${n} member${n === 1 ? "" : "s"} hold${n === 1 ? "s" : ""} this role and will lose it.` : "No member holds this role."}
         </ConfirmSheet>
       );
     })() : null}
     <Field label="New role name" error={err}><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Support lead" /></Field>
-    <Button block onClick={create}>Create role</Button>
+    <Button block onClick={() => { void create(); }}>Create role</Button>
   </>);
 }
+

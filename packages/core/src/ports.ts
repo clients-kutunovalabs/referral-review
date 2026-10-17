@@ -1,3 +1,5 @@
+import type { Api } from "./api";
+
 /**
  * Ports: the seams where an outside system plugs in. The UI and the domain code only know these interfaces.
  * Each has a mock adapter (in-memory, used by ui-hub and tests) and a placeholder for the real one
@@ -15,6 +17,8 @@ export type AuthErrorCode =
   | "rate_limited"
   | "weak_password"
   | "invalid_credentials"
+  | "suspended"
+  | "internal"
   | "not_configured";
 
 export class AuthError extends Error {
@@ -99,10 +103,9 @@ export interface ScriptRequest {
 }
 export interface AiPort { generateScript(input: ScriptRequest): Promise<string> }
 
-/** Everything the apps need from the outside world. */
+/** What the browser side of the apps is given: sign-in, the extra-email code sender and the data API. The real site passes HTTP clients; ui-hub passes mocks. */
 export interface Services {
   auth: AuthPort;
   emailVerification: EmailVerificationPort;
-  storage: StoragePort;
-  ai: AiPort;
+  api: Api;
 }

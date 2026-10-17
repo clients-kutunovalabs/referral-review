@@ -217,14 +217,18 @@ export function Toast({ message, onDone }: { message: string; onDone: () => void
   return <div className="toast" role="status">{message}</div>;
 }
 
-export function Countdown({ minutes }: { minutes: number }) {
-  const [secs, setSecs] = useState(minutes * 60);
+/** Counts down to `until` (an ISO time, so it stays right after a reload) or from `minutes`. Calls `onExpire` once at zero. */
+export function Countdown({ minutes, until, onExpire }: { minutes?: number; until?: string; onExpire?: () => void }) {
+  const left = () => (until ? Math.max(Math.round((Date.parse(until) - Date.now()) / 1000), 0) : Math.max((minutes ?? 0) * 60, 0));
+  const [secs, setSecs] = useState(left);
+  const fired = useRef(false);
   useEffect(() => {
-    const t = setInterval(() => setSecs((s) => (s > 0 ? s - 1 : 0)), 1000);
+    const t = setInterval(() => setSecs((s) => (until ? left() : s > 0 ? s - 1 : 0)), 1000);
     return () => clearInterval(t);
-  }, []);
+  }, [until]);
+  useEffect(() => { if (secs === 0 && !fired.current) { fired.current = true; onExpire?.(); } }, [secs, onExpire]);
   const h = Math.floor(secs / 3600);
-  const mm = String(Math.floor((secs % 3600) / 60)).padStart(h > 0 ? 2 : 2, "0");
+  const mm = String(Math.floor((secs % 3600) / 60)).padStart(2, "0");
   const ss = String(secs % 60).padStart(2, "0");
   return <StatusPill tone={secs < 300 ? "coral" : "amber"}>{h > 0 ? `${h}:` : ""}{mm}:{ss} left</StatusPill>;
 }
