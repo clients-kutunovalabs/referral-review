@@ -11,7 +11,8 @@ Full plan: [docs/PLAN.md](docs/PLAN.md).
 | Repo structure, design system, admin + user UI | done |
 | Sign-in screens, ports and adapters, tablet and desktop layouts | done |
 | Backend: database, sign-in, claims, reviews, money, payouts, support | done, tested |
-| Web app, worker, Docker, CI | done; the Docker image itself is not yet built or run |
+| Web app, worker, Docker, CI | done; CI builds both images and runs the browser journey, attack checks and a backup restore against them |
+| Change password, monitoring, backups, security and accessibility checks | done |
 | Launch | needs your Vista, mail server, domain and legal text: see [docs/DEPLOY.md](docs/DEPLOY.md) |
 
 Everything done, every issue found and fixed, and everything deferred: [docs/WORKLOG.md](docs/WORKLOG.md).
