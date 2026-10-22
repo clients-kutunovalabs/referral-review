@@ -34,14 +34,13 @@
     "eslint": "^9.17.0",
     "playwright-core": "^1.49.1",
     "typescript": "^5.7.2",
-    "typescript-eslint": "^8.18.0"
+    "typescript-eslint": "^8.72.0"
   },
   "type": "module",
   "pnpm": {
     "overrides": {
       "postcss": ">=8.5.23",
-      "source-map-js": ">=1.2.2",
-      "vite@<6.4.3": ">=6.4.3"
+      "source-map-js": ">=1.2.2"
     }
   }
 }

@@ -7,7 +7,7 @@ services:
       POSTGRES_USER: rr
       POSTGRES_PASSWORD: rr
       POSTGRES_DB: rr
-    ports: ["5432:5432"]
+    ports: ["127.0.0.1:5432:5432"]   # this machine only; never publish the database to the network
     volumes: ["pgdata:/var/lib/postgresql/data"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U rr -d rr"]
@@ -22,7 +22,7 @@ services:
     environment:
       DATABASE_URL: postgres://rr:rr@db:5432/rr
       UPLOAD_DIR: /data/uploads
-    ports: ["3000:3000"]
+    ports: ["127.0.0.1:3000:3000"]   # put the reverse proxy (HTTPS) in front; it reaches the app here
     volumes: ["uploads:/data"]
     depends_on: { db: { condition: service_healthy } }
 

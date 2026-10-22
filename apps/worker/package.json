@@ -7,15 +7,20 @@
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run --no-fsModuleCache",
     "cli": "tsx src/cli.ts",
-    "start": "tsx src/cli.ts work"
+    "start": "node dist/cli.js work",
+    "build": "esbuild src/cli.ts --bundle --platform=node --target=node22 --format=esm --outfile=dist/cli.js --external:pg --external:@electric-sql/pglite --external:nodemailer --banner:js=\"import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\""
   },
   "dependencies": {
+    "@electric-sql/pglite": "^0.5.11",
     "@rr/db": "workspace:*",
     "@rr/server": "workspace:*",
-    "tsx": "^4.19.2"
+    "nodemailer": "^10.2.0",
+    "pg": "^8.23.1"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
+    "esbuild": "^0.28.2",
+    "tsx": "^4.19.2",
     "vitest": "^5.0.5"
   }
 }

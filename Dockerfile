@@ -55,17 +55,27 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
 CMD ["node", "apps/web/server.js"]
 
 # ---------- worker: expiry sweeper, housekeeping, reconciliation, and the migrate/seed commands ----------
-FROM manifests AS worker-deps
-RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store pnpm install --frozen-lockfile --prod --filter "@rr/worker..."
-
-FROM worker-deps AS worker
-ENV NODE_ENV=production
+# Compiled to one plain JavaScript file at build time; the image runs it with node (no TypeScript tooling at runtime).
+FROM manifests AS worker-build
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store pnpm install --frozen-lockfile --filter "@rr/worker..."
 COPY tsconfig.base.json ./
 COPY packages packages
 COPY apps/worker apps/worker
-RUN useradd --system --uid 10001 --home-dir /repo --shell /usr/sbin/nologin app && chown -R app /repo
-RUN chmod -R a+rX /opt/corepack
+RUN pnpm --filter @rr/worker build
+
+FROM manifests AS worker-deps
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store pnpm install --frozen-lockfile --prod --filter "@rr/worker"
+
+FROM node:${NODE_VERSION}-bookworm-slim AS worker
+ENV NODE_ENV=production
+RUN useradd --system --uid 10001 --home-dir /app --shell /usr/sbin/nologin app
+WORKDIR /app
+# pg, pglite and nodemailer stay outside the bundle (pglite ships WebAssembly files); everything else is inside cli.js
+COPY --from=worker-deps --chown=app /repo/node_modules ./node_modules
+COPY --from=worker-deps --chown=app /repo/apps/worker/node_modules ./apps/worker/node_modules
+COPY --from=worker-build --chown=app /repo/apps/worker/dist ./apps/worker/dist
+COPY --from=worker-build --chown=app /repo/apps/worker/package.json ./apps/worker/package.json
 USER app
-# `work` runs the jobs until stopped. One-off commands: docker run ... migrate | seed | reconcile | expire | purge
-ENTRYPOINT ["pnpm", "--filter", "@rr/worker", "exec", "tsx", "src/cli.ts"]
+# `work` runs the jobs until stopped. One-off commands: docker run ... migrate | seed | reconcile | expire | purge | purge-files
+ENTRYPOINT ["node", "apps/worker/dist/cli.js"]
 CMD ["work"]

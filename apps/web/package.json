@@ -17,13 +17,13 @@
     "@rr/server": "workspace:*",
     "@rr/ui": "workspace:*",
     "next": "15.5.28",
-    "nodemailer": "^10.1.2",
+    "nodemailer": "^10.2.0",
     "pg": "^8.23.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },
   "devDependencies": {
-    "@electric-sql/pglite": "^0.5.10",
+    "@electric-sql/pglite": "^0.5.11",
     "@types/node": "^22.10.2",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0"

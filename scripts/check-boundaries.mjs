@@ -3,7 +3,7 @@ import { readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 
 const root = new URL("..", import.meta.url).pathname;
-const skip = new Set(["node_modules", "dist", ".next", ".git", "reference"]);
+const skip = new Set(["node_modules", "dist", "dist-standalone", ".next", ".git", "reference"]);
 const bad = [];
 
 function walk(dir) {

@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@rr/core": "workspace:*",
-    "nodemailer": "^10.1.2"
+    "nodemailer": "^10.2.0"
   },
   "devDependencies": {
     "@types/nodemailer": "^8.0.2",
