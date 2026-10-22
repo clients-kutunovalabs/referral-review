@@ -8,9 +8,11 @@ Frontend code cannot be made uncopyable. Protection is server-side: authorisatio
 |---|---|
 | Passwords | scrypt, per-password salt, parameters stored with the hash. Unknown and known emails cost the same time to check. |
 | One-time codes | 6 digits, 10 minutes, only a hash stored, 5 wrong guesses lock the code (counted even though the request errors), 30 s resend, 5 codes an hour per email. Single-use step tickets. |
-| Sign-in | Generic error for wrong password or unknown email; 5 failures lock the email for 15 minutes; a password reset signs out every device. Only the main email can log in. |
+| Sign-in | Generic error for wrong password or unknown email; 5 failures from one address lock that email for that address for 15 minutes, and 30 an hour from all addresses lock it everywhere, so a stranger cannot keep someone locked out; a password reset signs out every device. Only the main email can log in. |
+| Who is registered | Sign-up and "add an email" answer the same for a taken email as for a new one, and send no code; the screens tell the person to log in or reset. |
+| Admin roles | Owner has everything. A role manager can only give out permissions they hold, cannot change their own roles, and cannot give out "Manage roles" (owner only). A user manager cannot suspend or delete admins (owner only). Nobody but the owner pays their own payout. |
 | Sessions | Random token, only its hash stored, HttpOnly, SameSite=Lax, Secure with the `__Host-` prefix, one week (168 hours) of inactivity that restarts at every visit (renewed at most every 5 minutes, cookie re-issued with it), 20 per person, ended at once when a person is suspended or deleted. |
-| Development quick login | `/dev` and `/dev/login` sign a tester in without a password. They exist only when `DEV_LOGIN=1` (set by `npm run dev` alone), never in production (configuration refuses to start; the route checks again), and only for a browser on `localhost` (anything else gets a 404). Tested. |
+| Development quick login | `/dev` and `/dev/login` sign a tester in without a password. They work only under `next dev` (NODE_ENV=development) with `DEV_LOGIN=1`, both set by `npm run dev` alone. A built site always runs as production, so the routes can never open there whatever the environment says, and configuration refuses DEV_LOGIN anywhere but development. `APP_ENV=development` only allows http and test email for local runs of a built site; it no longer relaxes secrets, the database or DEV_LOGIN. The `localhost` check stays as an extra layer. Tested. |
 | Password change | Needs the current password, counted before it is checked (5 tries per 15 minutes, so a stolen session cannot guess it), signs every other browser out and keeps this one. |
 | CSRF | Cross-site writes refused (Origin must be the site); every logged-in write also needs a token bound to that session. API accepts JSON only. |
 | Authorisation | Admin roles are read from the database on every admin request. Workers can only read their own tickets, claims, wallet and files. |
@@ -28,7 +30,7 @@ Frontend code cannot be made uncopyable. Protection is server-side: authorisatio
 
 ## Not in place (see [WORKLOG](WORKLOG.md))
 
-No site-wide request limit on reads (put one at the proxy; writes are limited), no breached-password check (8 characters minimum), an outside penetration test (the automated attack checks in `e2e/security.mjs` pass), UPI key rotation, screenshot retention and clean-up, account anonymisation tool, S3 storage with a separate upload domain, an audit-log viewer.
+No site-wide request limit on reads (put one at the proxy; writes are limited), no breached-password check (8 characters minimum), an outside penetration test (the automated attack checks in `e2e/security.mjs` pass), UPI key rotation, account anonymisation tool, S3 storage with a separate upload domain, an audit-log viewer.
 
 ## Assumptions the deployment must keep
 

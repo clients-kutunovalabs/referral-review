@@ -126,19 +126,18 @@ Test-harness mistakes made along the way, in the open: two shell commands that k
 | **One web server only** | Screenshots live on local disk. Several servers need the S3 adapter. |
 | **Offline use** (service worker) | The site installs to the home screen but needs a connection for every screen. |
 | **Sign-in redirect for bookmarks** | Bookmarks and Reload keep the screen (`/#/mytasks`, `/admin#/taskdetail?taskId=...`). If the session has ended, sign-in comes first and lands on the home screen, not the bookmarked one. The address uses the `#` part, so the server never sees it. |
-| **Pagination** | Lists are capped (500 rows, 200 closed). Fine for a sales-team beta, not for thousands. |
-| **Cleaning up unused uploads; retention policy for screenshots** | Orphaned files accumulate on disk. |
+| **Pagination for the rest** | Users, payout history and resolved tickets load 50 at a time ("Load more"). Still capped: tasks (500), review queue (500 waiting), a worker's own tasks and wallet (500). Fine for a sales-team beta. |
+| **Retention policy for screenshots that are used** | Unused uploads are deleted monthly; screenshots attached to work, payments or tickets are kept for good. |
 | **Change main email screen** | The main (login) email cannot be changed from the app. Change password is done. |
 | **Audit-log viewer, settings screen** (minimum payout is a database setting) | Read with SQL for now. |
 | **Notification badge / unread markers** | Replies appear by refresh only. |
 | **Account anonymisation tool** | Soft delete only; erasing personal details is a manual task. |
-| **Sign-up reveals whether an email has an account** | Common trade-off; reset does not reveal it. |
 
 | **Per-workspace roles, branding, row-level security** | For when this becomes a multi-tenant product. |
 | **Penetration test by outside people** | Not done. Automated attack checks (`e2e/security.mjs`) and a basic load test were run; an outside test is still worth doing before a large public launch. Automated accessibility checks pass, but they find only part of the problems: try the screens with a screen reader and a keyboard. |
 | **Metrics dashboards** | Logs and alerts only (no graphs). |
 | **UPI key rotation** | One key; rotating needs a re-encryption script. |
-| **One dev-only advisory** (`braces`, inside the design gallery's build tool, no fix published) | Never reaches production. |
+| **Major upgrades** (Next 16, ESLint 10, TypeScript 7, Vite 8) | Each can break the build; do them one at a time, separately. |
 
 ## 5. Before you tell people the site is live
 
@@ -148,3 +147,30 @@ Test-harness mistakes made along the way, in the open: two shell commands that k
 4. `pnpm reconcile` says `reconcile.ok`.
 5. `ops/backup.sh` is scheduled, the copy leaves the machine, and `ops/verify-restore.sh` said `verify.ok`.
 6. The uptime monitor watches `/api/health?strict=1` and `ALERT_WEBHOOK_URL` is set.
+
+## Audit fixes (October 2026)
+
+| # | Found | Fix |
+|---|---|---|
+| 1 | A role manager could give themselves every permission. | Owner has everything; others can only give out what they hold, never "Manage roles", and cannot change their own roles. |
+| 2 | An email could claim a task again after its claim expired. | One claim per email per task, ever (migration 0003, unique index over all claims). |
+| 3 | The default AI model name did not exist. | AI stays unconnected: on only when both `ANTHROPIC_API_KEY` and `AI_MODEL` are set. |
+| 4 | Per-address limits depended on a guessed `TRUST_PROXY_HOPS`. | Required in production; a site-wide cap on sign-up codes as a backstop. |
+| 5 | Five wrong passwords from anywhere locked a worker out. | Counted per email and address (5 / 15 min), with a 30 / hour ceiling per email. |
+| 6 | `APP_ENV=development` switched off every production check, and the dev login trusted the Host header. | Dev login works only under `next dev`; a built site keeps the secret, database and DEV_LOGIN checks whatever APP_ENV says. |
+| 7 | Sign-up and "add an email" told whether an email was registered. | Same answer, no code; the screens point to log in / reset. |
+| 8 | Unused uploads stayed on disk forever. | Deleted monthly once 30 days old (`purge-files`). |
+| 9 | The 10-email cap could be passed with codes sent in parallel. | Re-checked under a lock when the email is added. |
+| 10 | "Manage users" could suspend other admins. | Owner only for the admin team. |
+| 11 | A payer could pay their own payout. | Owner only. |
+| 12 | Dev-tool advisories (vite, braces via a bundling plugin). | Vite 6.4.5; the plugin replaced by our own inlining script. `pnpm audit` is clean. |
+| 13 | Two permissions did nothing ("Assign tasks", "View design system"). | Removed. |
+| 15 | One UPI ID per worker. | Postponed until UPI IDs are saved per account (see POLICY.md). |
+| 16 | A suspended or deleted worker's payout could be paid. | Refused; reject it instead. |
+| 17 | A deleted account's emails could never be used again. | Released 30 days after deletion; records stay. |
+| 18 | Long lists silently cut off. | "Load more" for users, payout history and resolved tickets. |
+| 20 | docker-compose published Postgres to the network. | Bound to 127.0.0.1. |
+| 21 | The worker ran TypeScript tooling at runtime; CI actions were pinned to tags. | Worker compiled to one JS file and run with node; actions pinned to commits. |
+| 22 | Unused `signedUrl` in the storage port. | Removed (storage gained `delete` for the clean-up). |
+| -- | The Help and Support lists showed a just-resolved ticket under Open for up to 30 s (also made the browser test flaky). | Lists re-read on every tab switch. |
+

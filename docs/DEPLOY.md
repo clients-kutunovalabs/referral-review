@@ -12,7 +12,7 @@ This is the checklist from "code works" to "people can use it". Nothing here nee
 | A server that runs Docker (or Node 22) with a **persistent disk** | Screenshots are stored on disk. | `UPLOAD_DIR` (mount a volume) |
 | Two generated secrets | Sign CSRF tokens; encrypt UPI IDs. **Back up the UPI key.** Losing it makes stored UPI IDs unreadable. | `SESSION_SECRET`, `UPI_ENCRYPTION_KEY` |
 | (Optional) A webhook for alerts | Posts "money records disagree", "a background job failed" and "unexpected server error" to Slack, Discord or any JSON webhook. Messages carry no personal data. | `ALERT_WEBHOOK_URL` |
-| (Optional) Anthropic API key | AI-written scripts. Without it, admins cannot publish AI-script tasks. | `ANTHROPIC_API_KEY` |
+| (Later) AI provider | AI-written scripts. Not connected yet: AI is on only when both are set; until then admins cannot publish AI-script tasks. | `ANTHROPIC_API_KEY`, `AI_MODEL` |
 | First owner login | Created on first start if it does not exist. | `OWNER_EMAIL`, `OWNER_PASSWORD` |
 
 Generate the secrets:
@@ -50,7 +50,7 @@ pnpm worker                                           # separate process: expire
 ## 3. Put it behind a reverse proxy
 
 - Terminate HTTPS at the proxy (Caddy, nginx, a cloud load balancer) and forward to port 3000.
-- Set `TRUST_PROXY_HOPS` to the number of proxies in front of the app (normally `1`). Too low and every visitor shares one rate-limit bucket; too high and a visitor can fake their address. Make sure the proxy **overwrites** `X-Forwarded-For` rather than passing the client's value through.
+- Set `TRUST_PROXY_HOPS` to the number of proxies in front of the app (normally `1`; `0` if none). It is required in production: the site refuses to start without it. Too low and every visitor shares one rate-limit bucket; too high and a visitor can fake their address. Make sure the proxy **overwrites** `X-Forwarded-For` rather than passing the client's value through.
 - Allow request bodies of at least 6 MB (screenshots).
 - Serve the site on **one address only** (`APP_URL`). The site refuses writes whose origin differs, so make the proxy redirect `www.` or any alias to it.
 - Add a general request rate limit here (for example 20 requests a second per address); the app limits writes, not reads.

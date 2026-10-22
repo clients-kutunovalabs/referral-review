@@ -30,8 +30,13 @@ If it prints `reconcile.PROBLEMS`, **stop marking payouts as paid** until you kn
 ## A payout request has a bad UPI ID, or the bank refuses it
 Open it in Payouts, choose "Reject the request" and write the reason. The worker sees it, the amount is free again and they can ask again. Do not mark it paid. Rejected is final, so the worker makes a new request.
 
-## "This UPI ID can't be used" (a worker writes in)
-The ID is either waiting on another worker's request, or was paid to another worker before. If the worker lost their old account and the ID is theirs: confirm who they are through the ticket, then Payouts, "Release their UPI ID". If another request is still waiting on it, reject that one first. Each release is logged with your name.
+## Checking a UPI ID before paying
+Paste the ID into your UPI app: it shows the account holder's name before you send. If it is invalid or the name does not fit the worker, reject the request with a reason ("UPI ID is invalid, check it and request again"). The worker sees it and the amount is free again.
+
+## Duplicate claims (migration 0003 stopped)
+Migration 0003 makes "one claim per email per task" permanent. If a database already has an email that claimed the same task twice (possible before 0003, after an expiry), the migration stops and changes nothing. Find them with
+`select identity_id, template_id, count(*) from task_claims group by 1, 2 having count(*) > 1;`
+and do not delete or edit those claims yourself (records are never deleted, and claims with a submission are tied to reviews and the ledger). Send the list to the developer: the fix is a one-off migration that moves the older, ended claim of each pair into a history table, keeping it on record, after which 0003 applies. A site that launches on 0003 can never get into this state.
 
 ## A payout was paid twice or in the wrong amount
 Money already left your bank, so this is a bookkeeping fix: do not delete anything. Record it as a ticket reply to the worker, and adjust by the worker's next payout (a manual note in support). The ledger shows exactly what the site believed.
@@ -41,7 +46,10 @@ Money already left your bank, so this is a bookkeeping fix: do not delete anythi
 - Lost owner email: run `pnpm db:seed` with a new `OWNER_EMAIL` only creates an owner if none exists. Otherwise fix it in the database: insert an `admin_members` row with `is_owner = true` for the user, and add them to the Owner role.
 
 ## Suspending someone
-Admin, Users and roles, the person, Suspend. They are signed out at once and cannot log in, claim or ask for payouts. Their credits and requests stay visible; a payout they already requested can still be paid.
+Admin, Users and roles, the person, Suspend. They are signed out at once and cannot log in, claim or ask for payouts. Their credits and requests stay visible. A payout they already requested cannot be paid while they are suspended: reject it (the amount is released) or reinstate them first. Only the owner can suspend or delete a member of the admin team.
+
+## Uploads and deleted accounts (automatic)
+The worker removes uploads older than 30 days that no submission, payment or ticket uses, once a month (`docker run ... tasks-worker purge-files` runs it now). Emails of accounts deleted at least 30 days ago are released every hour, so the address can sign up again; the old account's records stay.
 
 ## Rotating secrets
 - `SESSION_SECRET`: changing it signs out nobody (sessions are looked up by hash) but invalidates open CSRF tokens and any pending one-time codes. Do it at a quiet time.

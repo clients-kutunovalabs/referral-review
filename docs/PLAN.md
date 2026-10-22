@@ -11,7 +11,7 @@ Built in the cloud session and pushed to the branch; the user pulls it in VS Cod
 - Stack: TypeScript end-to-end, Next.js + Node, pnpm monorepo, Postgres.
 - Keep the current HTML structure: every screen, class and flow ported 1:1 into React components. Originals copied unchanged to `packages/ui/reference/`.
 - Workflow unchanged: worker claims task -> timer -> uploads a screenshot + optional note (no link) -> admin reviews manually (100/75/50/25/0%, mandatory note) -> credit to wallet. Task price is fixed per task template.
-- Multi-email: one login, several identities (emails), one wallet. Claim uniqueness = `(identity_id, template_id)`: one email can claim a task once, and the same account may claim the same task from each of its emails. Farming control: optional `max_claims_per_account` per template (NULL = unlimited), plus admin flag when one account claims the same template from many identities.
+- Multi-email: one login, several identities (emails), one wallet. Claim uniqueness = `(identity_id, template_id)`: one email can claim a task once, and the same account may claim the same task from each of its emails. Up to 10 emails per account (`MAX_IDENTITIES_PER_USER`). An email gets one claim per task, ever: an expired or voided claim does not free it. Optional `max_claims_per_account` per template (NULL = unlimited). No separate farming flag: the 10-email cap and one-claim-per-email are the control.
 - Email policy: the system sends NO emails except one one-time verification code (OTP), sent once when an email is registered or added as an identity. No notifications, receipts or marketing emails. OTP: 6 digits, stored hashed, expires in 10 minutes, max 5 wrong attempts, resend cooldown 30s, rate limited per email and per IP.
 - Wallet: one total; every ledger row carries `identity_id`; the wallet screen expands to per-email earnings.
 - Payout: worker enters the amount and UPI ID each time (nothing else saved). Available = credits - debits - amount held by pending requests. Amount >= configurable minimum and <= available. One pending request at a time. `payment_method` enum (`upi` only now) for later methods.
@@ -48,13 +48,13 @@ Per task `text_mode`: `none | keywords | manual_pool | ai_generated` (keywords c
 - `packages/ui` is the only place UI code lives: primitives + user and admin screen components.
 - `apps/ui-hub` (dev/staging only): `/` user screens (phone frame), `/admin` admin screens, `/design-system` tokens, typography, colours, every primitive in every state. Mock-data fixtures, real components.
 - `apps/web` (user site + `/admin`) imports the same `@rr/ui`. No other app defines its own styles/components; CI lint bans it; Playwright visual-regression on ui-hub.
-- Production: ui-hub is not built or deployed; design system is internal only (default: removed from production, or behind admin auth with `design.view`).
+- Production: ui-hub is not built or deployed; design system is internal only (removed from production).
 
 ## Palette (decided)
 Green-tinted neutrals + ONE brand colour (deep emerald `--brand`: actions, active, success, money) + ONE accent (saffron `--accent`: reward highlights, processing, time pressure) + one functional red (errors, rejected). Contrast is enforced by tests (4.5:1). Layout: 12px above the top bar and 24px below the bottom nav on every screen (`--safe-top`, `--safe-bottom`, also honouring device safe areas).
 
 ## Admin roles and permissions
-Tables: `admin_members, roles, role_permissions, member_roles`. Permissions: `task.manage`, `task.assign`, `review.decide`, `payout.mark_paid`, `user.manage`, `role.manage`, `task_text.manage`, `ticket.manage`, `design.view`. Owner has all, cannot be removed; members can hold several roles; every route checks the DB per request; every admin action audit-logged.
+Tables: `admin_members, roles, role_permissions, member_roles`. Permissions: `task.manage`, `task_text.manage`, `review.decide`, `payout.mark_paid`, `user.manage`, `ticket.manage`, `role.manage`. No default roles besides Owner: admins with "Manage roles" create roles and tick permissions. The owner has every permission and cannot be removed. Anyone else who manages roles can only give out permissions they hold themselves, cannot change their own roles, and only the owner gives out "Manage roles". "Manage users" covers workers; suspending or deleting a team member is the owner's call. Members can hold several roles; every route checks the DB per request; every admin action is audit-logged.
 
 ## Security (realistic)
 Frontend code can't be made uncopyable. Protection = server-side authz and logic, no secrets/prices/rules in client, CSP and security headers, minified bundles without public source maps, CSRF, rate limiting, uploads validated and served from a separate domain, UPI encrypted at rest and masked outside the payout screen, dependency audit in CI. Sales screenshots may contain customer data: private bucket, signed short-lived URLs, retention policy.
@@ -95,4 +95,4 @@ Because the backend comes last, the UI defines typed service interfaces and mock
 
 ## Time limit and claim rules (task template)
 - Time limit is entered in hours (decimals allowed) and stored as minutes; blank = unlimited (`timer_minutes` NULL, no expiry sweep for that claim).
-- Claim rules: an account may hold unlimited emails; each email (identity) may claim a given task once. Enforced by the DB unique constraint `(identity_id, template_id)`. `max_claims_per_account` stays as an optional extra cap (NULL = none).
+- Claim rules: an account may hold up to 10 emails; each email (identity) may claim a given task once, ever (an expired or voided claim does not free it). Enforced by the DB unique index `(identity_id, template_id)` over all claims (migration 0003). `max_claims_per_account` stays as an optional extra cap (NULL = none).
