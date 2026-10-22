@@ -45,23 +45,37 @@ interface QueueRow {
   note: string | null; keywords: string[]; keywords_matched: string[]; assigned_text: string | null; file_id: string;
 }
 
-export async function reviewQueue(ctx: Ctx, actor: AdminActor): Promise<ReviewQueueItem[]> {
-  needs(actor, "review.decide");
-  const now = ctx.now();
-  const rows = await ctx.db.query<QueueRow>(
-    `select s.id, u.name as worker, i.email, t.title, c.reward_paise, s.submitted_at, c.claimed_at, t.timer_minutes, s.note, t.keywords,
+const QUEUE_SELECT = `select s.id, u.name as worker, i.email, t.title, c.reward_paise, s.submitted_at, c.claimed_at, t.timer_minutes, s.note, t.keywords,
             s.keywords_matched, c.assigned_text, s.file_id
      from submissions s
      join task_claims c on c.id = s.claim_id join task_templates t on t.id = c.template_id
      join users u on u.id = c.user_id join identities i on i.id = c.identity_id
-     where s.workspace_id = $1 and s.status = 'pending' order by s.submitted_at limit 500`, [ctx.cfg.workspaceId]);
-  return rows.map((r) => ({
+     where s.workspace_id = $1 and s.status = 'pending'`;
+
+/** Waiting submissions, oldest or newest first, `limit` at a time (the screen asks for more with a bigger limit). */
+export async function reviewQueue(ctx: Ctx, actor: AdminActor, opts: { sort?: "oldest" | "newest"; limit?: number } = {}): Promise<ReviewQueueItem[]> {
+  needs(actor, "review.decide");
+  const order = opts.sort === "newest" ? "desc" : "asc";
+  const rows = await ctx.db.query<QueueRow>(`${QUEUE_SELECT} order by s.submitted_at ${order}, s.id limit $2`, [ctx.cfg.workspaceId, opts.limit ?? 50]);
+  return rows.map((r) => toQueueItem(r, ctx.now()));
+}
+
+/** One waiting submission, for the review screen. */
+export async function reviewItem(ctx: Ctx, actor: AdminActor, submissionId: string): Promise<ReviewQueueItem> {
+  needs(actor, "review.decide");
+  const [r] = await ctx.db.query<QueueRow>(`${QUEUE_SELECT} and s.id = $2`, [ctx.cfg.workspaceId, submissionId]);
+  if (!r) return notFound("Submission waiting for review");
+  return toQueueItem(r, ctx.now());
+}
+
+function toQueueItem(r: QueueRow, now: Date): ReviewQueueItem {
+  return ({
     id: r.id, worker: r.worker, identityEmail: maskEmail(r.email), taskTitle: r.title, reward: r.reward_paise,
     submittedAt: r.submitted_at.toISOString(), waitingMinutes: Math.max(Math.floor((now.getTime() - r.submitted_at.getTime()) / 60_000), 0),
     timeLimitMinutes: r.timer_minutes, timeTakenMinutes: Math.max(Math.round((r.submitted_at.getTime() - r.claimed_at.getTime()) / 60_000), 0),
     ...(r.note ? { workerNote: r.note } : {}), keywords: r.keywords, keywordsMatched: r.keywords_matched,
     ...(r.assigned_text ? { assignedText: r.assigned_text } : {}), ...(fileUrl(r.file_id) ? { proofUrl: fileUrl(r.file_id) as string } : {})
-  }));
+  });
 }
 
 /**

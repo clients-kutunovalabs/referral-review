@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactElement } from "react";
-import {
+import { ApiError,
   activeTill, agoLabel, formatLimit, hoursToMinutes, PERMISSIONS, TEXT_MODE_HELP, TEXT_MODE_LABEL, TEXT_MODE_ORDER, whenLabel,
   type AdminMember, type AdminTaskDetail, type AdminTaskRow, type AdminUserRow, type NewTaskInput, type PayoutRequest, type PermissionKey, type ReviewQueueItem, type Role, type TextMode
 } from "@rr/core";
@@ -49,7 +49,6 @@ const TAB_OF: Partial<Record<AdminScreen, string>> = {
 };
 const SCREEN_OF_KIND = { reviewqueue: "reviewqueue", tickets: "tickets", payouts: "payouts", tasks: "tasks" } as const;
 
-const isClosed = (t: AdminTaskRow): boolean => t.status === "closed" || t.status === "removed";
 const claimedText = (claimed: number, total: number | null) => (total === null ? "unlimited slots" : `${claimed} of ${total} claimed`);
 
 function taskPill(t: AdminTaskRow) {
@@ -237,10 +236,12 @@ function TasksScreen({ wide, canCreate, filter, setFilter, rev, onNew, onOpen }:
   wide: boolean; canCreate: boolean; filter: "active" | "closed"; setFilter: (f: "active" | "closed") => void; rev: number; onNew: () => void; onOpen: (id: string) => void;
 }) {
   const { api } = useServices();
-  const { data, error, loading, reload } = useAsync(() => api.admin.listTasks(), [rev]);
-  const all = data ?? [];
-  const activeCount = all.filter((t) => !isClosed(t)).length;
-  const rows = all.filter((t) => (isClosed(t) ? "closed" : "active") === filter);
+  const [limit, setLimit] = useState(PAGE);
+  const { data, error, loading, reload } = useAsync(() => api.admin.listTasks({ status: filter, limit }), [rev, filter, limit]);
+  const counts = useAsync(() => api.admin.taskCounts(), [rev]);
+  const rows = data ?? [];
+  const activeCount = counts.data?.active ?? 0; const closedCount = counts.data?.closed ?? 0;
+  const more = rows.length >= limit;
   const columns: Column<AdminTaskRow>[] = [
     { key: "title", header: "Title", render: (r) => r.title },
     { key: "reward", header: "Reward", width: "90px", render: (r) => formatRupees(r.reward) },
@@ -251,14 +252,15 @@ function TasksScreen({ wide, canCreate, filter, setFilter, rev, onNew, onOpen }:
   ];
   const open = (r: AdminTaskRow) => { if (r.status !== "removed") onOpen(r.id); };
   return (
-    <div className="screen"><TopBar title={wide ? "Task templates" : "Tasks"} subtitle={`${all.length} templates · ${activeCount} active`} {...(canCreate ? { actions: <Button variant="primary" onClick={onNew}>New task</Button> } : {})} />
+    <div className="screen"><TopBar title={wide ? "Task templates" : "Tasks"} subtitle={`${activeCount + closedCount} templates · ${activeCount} active`} {...(canCreate ? { actions: <Button variant="primary" onClick={onNew}>New task</Button> } : {})} />
       <div className="scrollarea"><div className="content">
-        <div className="tabs-bleed"><Tabs<"active" | "closed"> value={filter} onChange={setFilter} tabs={[{ id: "active", label: `Active (${activeCount})` }, { id: "closed", label: `Closed (${all.length - activeCount})` }]} /></div>
+        <div className="tabs-bleed"><Tabs<"active" | "closed"> value={filter} onChange={(f) => { setLimit(PAGE); setFilter(f); }} tabs={[{ id: "active", label: `Active (${activeCount})` }, { id: "closed", label: `Closed (${closedCount})` }]} /></div>
         {loading ? <Loading /> : null}
         {error ? <ErrorBox message={error} onRetry={reload} /> : null}
         {!loading && !error && rows.length === 0 ? <EmptyState>{filter === "active" ? "No active tasks." : "Nothing closed yet."}</EmptyState> : null}
         {wide && rows.length ? <DataTable caption="Task templates" columns={columns} rows={rows} rowKey={(r) => r.id} onRowClick={open} /> : null}
         {wide ? null : rows.map((r) => <AdminTaskCard key={r.id} t={r} {...(r.status !== "removed" ? { onOpen: () => onOpen(r.id) } : {})} />)}
+        {more ? <LoadMore onClick={() => setLimit(limit + PAGE)} /> : null}
       </div></div>
       {canCreate && !wide ? <div className="screen-footer"><Button variant="primary" block onClick={onNew}>New task</Button></div> : null}
     </div>
@@ -453,14 +455,18 @@ function TaskDetailScreen({ taskId, canManage, canTexts, rev, onBack, notify, gu
 
 function ReviewQueueScreen({ wide, sort, setSort, rev, onOpen }: { wide: boolean; sort: "oldest" | "newest"; setSort: (s: "oldest" | "newest") => void; rev: number; onOpen: (id: string) => void }) {
   const { api } = useServices();
-  const { data, error, loading, reload } = useAsync(() => api.admin.reviewQueue(), [rev], { refreshMs: 30_000 });
+  const [limit, setLimit] = useState(PAGE);
+  // The server sorts and pages, so Newest really means the newest of all waiting submissions, not of the first page.
+  const { data, error, loading, reload } = useAsync(() => api.admin.reviewQueue({ sort, limit }), [rev, sort, limit], { refreshMs: 30_000 });
   const queue = data ?? [];
-  const sorted = [...queue].sort((x, y) => (sort === "oldest" ? y.waitingMinutes - x.waitingMinutes : x.waitingMinutes - y.waitingMinutes));
+  const sorted = queue;
+  const more = queue.length >= limit;
+  const count = `${queue.length}${more ? "+" : ""}`;
   return (
-    <div className="screen"><TopBar title="Review queue" subtitle={`${queue.length} submission${queue.length === 1 ? "" : "s"} waiting for a decision`} /><div className="scrollarea"><div className="content">
+    <div className="screen"><TopBar title="Review queue" subtitle={`${count} submission${queue.length === 1 && !more ? "" : "s"} waiting for a decision`} /><div className="scrollarea"><div className="content">
       <div className="list-toolbar">
-        <span className="list-count"><strong>{queue.length}</strong> to review</span>
-        <Tabs<"oldest" | "newest"> inline value={sort} onChange={setSort} tabs={[{ id: "oldest", label: "Oldest" }, { id: "newest", label: "Newest" }]} />
+        <span className="list-count"><strong>{count}</strong> to review</span>
+        <Tabs<"oldest" | "newest"> inline value={sort} onChange={(s) => { setLimit(PAGE); setSort(s); }} tabs={[{ id: "oldest", label: "Oldest" }, { id: "newest", label: "Newest" }]} />
       </div>
       {loading ? <Loading /> : null}
       {error ? <ErrorBox message={error} onRetry={reload} /> : null}
@@ -473,14 +479,16 @@ function ReviewQueueScreen({ wide, sort, setSort, rev, onOpen }: { wide: boolean
         { key: "wait", header: "Waiting", width: "130px", render: (q) => agoLabel(q.submittedAt) }
       ]} /> : null}
       {wide ? null : sorted.map((q) => <ListRow key={q.id} onClick={() => onOpen(q.id)} title={q.worker} right={<span className="sub">{agoLabel(q.submittedAt)}</span>} sub={`${q.taskTitle} · ${q.identityEmail}`} />)}
+      {more ? <LoadMore onClick={() => setLimit(limit + PAGE)} /> : null}
     </div></div></div>
   );
 }
 
 function ReviewItemScreen({ id, rev, onBack, onDone }: { id: string; rev: number; onBack: () => void; onDone: (pct: OutcomePercent) => void }) {
   const { api } = useServices();
-  const { data, error, loading, reload } = useAsync(() => api.admin.reviewQueue(), [rev]);
-  const item: ReviewQueueItem | undefined = (data ?? []).find((q) => q.id === id) ?? (id ? undefined : data?.[0]);
+  const { data: item, error, loading, reload } = useAsync<ReviewQueueItem | undefined>(
+    () => (id ? api.admin.reviewItem(id).catch((e: unknown) => { if (e instanceof ApiError && e.code === "not_found") return undefined; throw e; }) : api.admin.reviewQueue({ limit: 1 }).then((l) => l[0])),
+    [rev, id]);
   if (loading) return <div className="screen"><TopBar title="Review submission" onBack={onBack} /><Loading /></div>;
   if (!item) return <div className="screen"><TopBar title="Review submission" onBack={onBack} /><div className="content">{error ? <ErrorBox message={error} onRetry={reload} /> : <EmptyState>Already reviewed.</EmptyState>}</div></div>;
   return <ReviewForm key={item.id} item={item} onBack={onBack} onDone={onDone} />;

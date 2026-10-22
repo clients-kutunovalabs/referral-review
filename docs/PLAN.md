@@ -68,18 +68,20 @@ referral-review/
   apps/
     web/        # user site + /admin, imports @rr/ui only
     ui-hub/     # dev/staging: /, /admin, /design-system
-    worker/     # claim-expiry sweeper, reconciliation job
+    worker/     # claim expiry, housekeeping, monthly upload clean-up, reconciliation (compiled to one JS file)
   packages/
     ui/         # tokens/, primitives/, screens/user, screens/admin, reference/ (original HTML)
-    db/         # Drizzle schema, migrations, triggers, seed
+    db/         # plain SQL migrations, triggers, Postgres + PGlite drivers
     money/      # Money type, outcome calc, tests
-    core/       # claims, task-texts (bag), ledger, payouts, rbac, identities
-    auth/       # Authgate adapter, sessions, CSRF
-    storage/    # object storage, upload validation, thumbnails
-    ai/         # script generator, typed input allow-list
-    config/     # eslint, tsconfig, Zod env schema
-  docs/ ARCHITECTURE.md MONEY.md SECURITY.md RUNBOOK.md POLICY.md
-  scripts/ backup, restore-test, reconcile
+    core/       # shared types, API contract, ports (adapter interfaces), fixtures
+    server/     # every business rule: claims, script bag, ledger, payouts, RBAC, sign-in, sessions, HTTP API
+    client/     # the browser side of the API
+    auth/       # SMTP / console email senders, mock sign-in for the gallery (Authgate adapter: not written)
+    storage/    # local disk + in-memory (S3 adapter: not written)
+    ai/         # Anthropic script writer (not connected), mock
+    config/     # Zod environment schema
+  docs/ ARCHITECTURE.md MONEY.md SECURITY.md RUNBOOK.md POLICY.md DEPLOY.md WORKLOG.md
+  ops/ backup, restore, verify-restore
 ```
 
 ## Data model additions

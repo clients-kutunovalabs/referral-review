@@ -27,6 +27,14 @@ function fake(handler: (req: { method: string; url: string; headers: Record<stri
 }
 
 describe("http client", () => {
+  it("keeps every error code the server can send, including account_inactive", async () => {
+    const { f } = fake(() => ({ status: 409, json: { error: { code: "account_inactive", message: "This account is suspended. Reject the request instead of paying it." } } }));
+    const http = createHttp({ fetch: f });
+    http.setCsrf("t");
+    const e = (await http.request("POST", "/api/admin/payouts/x/pay", { body: {} }).then(() => null, (x: unknown) => x)) as ApiError;
+    expect(e.code).toBe("account_inactive");
+    expect(e.message).toContain("suspended");
+  });
   it("fetches a CSRF token before the first write and sends it", async () => {
     const { f, calls } = fake((r) => (r.url === "/api/session" ? { json: { session: null, csrf: "tok123" } } : { json: { ok: true } }));
     const api = createHttpApi(createHttp({ fetch: f }));

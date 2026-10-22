@@ -10,6 +10,8 @@ Run **daily**: `DATABASE_URL=... UPLOAD_DIR=/data/uploads BACKUP_DIR=/backups ./
 **Restore for real:** create a new empty database, then `./ops/restore.sh <dump> <new database url> [uploads.tar.gz /data/uploads]`. It refuses a database that already has tables. Point the site at the new database only after `pnpm reconcile` says `reconcile.ok` on it.
 **Not in the backup, on purpose:** `SESSION_SECRET` and `UPI_ENCRYPTION_KEY`. Keep them in a password manager. Without the UPI key the restored UPI IDs cannot be read.
 
+Backup files are created readable by their owner only (`umask 077`). On a machine other people can log in to, put the database password in a `~/.pgpass` file (mode 600) instead of `DATABASE_URL`, because a password on the command line is visible to them while `pg_dump` runs.
+
 ## An alert arrives
 - **"Money records disagree"**: stop marking payouts as paid. Follow "Money reconciliation" below.
 - **"Background job failed"**: look at the worker log line `job.failed` for the job name. If `expire` keeps failing, claims are not freeing their slots.

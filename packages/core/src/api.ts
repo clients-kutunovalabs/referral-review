@@ -9,11 +9,14 @@ import type {
   TextMode, Ticket, WalletEntry
 } from "./contracts";
 
-export type ApiErrorCode =
-  | "bad_request" | "unauthenticated" | "forbidden" | "not_found" | "conflict" | "rate_limited" | "csrf" | "internal"
-  | "suspended" | "slots_full" | "task_closed" | "already_claimed" | "claim_limit" | "insufficient_balance" | "below_minimum"
-  | "payout_pending" | "account_inactive" | "invalid_code" | "not_pending" | "ticket_closed" | "upload_invalid"
-  | "code_expired" | "too_many_attempts" | "invalid_email" | "email_taken" | "weak_password" | "invalid_credentials";
+/** Every error code the API can answer with. The browser client checks against this same list, so the two cannot drift. */
+export const API_ERROR_CODES = [
+  "bad_request", "unauthenticated", "forbidden", "not_found", "conflict", "rate_limited", "csrf", "internal",
+  "suspended", "slots_full", "task_closed", "already_claimed", "claim_limit", "insufficient_balance", "below_minimum",
+  "payout_pending", "account_inactive", "invalid_code", "not_pending", "ticket_closed", "upload_invalid",
+  "code_expired", "too_many_attempts", "invalid_email", "email_taken", "weak_password", "invalid_credentials"
+] as const;
+export type ApiErrorCode = (typeof API_ERROR_CODES)[number];
 
 export class ApiError extends Error {
   constructor(public readonly code: ApiErrorCode, message: string, public readonly status = 400, public readonly retryAfterSeconds?: number) {
@@ -113,13 +116,17 @@ export interface AdminApi {
   me(): Promise<AdminMe>;
   dashboard(): Promise<DashboardView>;
 
-  listTasks(): Promise<AdminTaskRow[]>;
+  /** Newest first, `limit` (default 50) at a time; `status` keeps only the Active or the Closed tab. */
+  listTasks(opts?: { status?: "active" | "closed"; limit?: number }): Promise<AdminTaskRow[]>;
+  taskCounts(): Promise<{ active: number; closed: number }>;
   getTask(id: string): Promise<AdminTaskDetail>;
   createTask(input: NewTaskInput): Promise<AdminTaskRow>;
   setTaskStatus(id: string, status: "active" | "paused" | "removed"): Promise<void>;
   addScripts(id: string, scripts: string[]): Promise<string[]>;
 
-  reviewQueue(): Promise<ReviewQueueItem[]>;
+  /** Waiting submissions, oldest (default) or newest first, `limit` (default 50) at a time. */
+  reviewQueue(opts?: { sort?: "oldest" | "newest"; limit?: number }): Promise<ReviewQueueItem[]>;
+  reviewItem(submissionId: string): Promise<ReviewQueueItem>;
   decide(submissionId: string, outcome: OutcomePercent, note: string): Promise<void>;
 
   /** Every pending request, then the newest `historyLimit` (default 50) paid or rejected ones. */

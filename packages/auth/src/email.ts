@@ -15,9 +15,12 @@ export function renderEmail(m: OutgoingEmail): { subject: string; text: string }
   };
 }
 
+/** How long the site waits on the mail server before telling the person to try again (nodemailer's defaults are minutes). */
+export const SMTP_TIMEOUTS = { connectionTimeout: 15_000, greetingTimeout: 15_000, socketTimeout: 20_000 } as const;
+
 /** Sends through any SMTP server (smtps://user:pass@host:465). */
-export function createSmtpSender(smtpUrl: string, from: string): EmailSenderPort {
-  const transport = nodemailer.createTransport(smtpUrl);
+export function createSmtpSender(smtpUrl: string, from: string, timeouts: { connectionTimeout: number; greetingTimeout: number; socketTimeout: number } = SMTP_TIMEOUTS): EmailSenderPort {
+  const transport = nodemailer.createTransport({ url: smtpUrl, ...timeouts } as Parameters<typeof nodemailer.createTransport>[0]);
   return {
     async send(m) {
       const { subject, text } = renderEmail(m);

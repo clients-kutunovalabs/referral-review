@@ -1,4 +1,4 @@
-import { ApiError, type ApiErrorCode } from "@rr/core";
+import { API_ERROR_CODES, ApiError, type ApiErrorCode } from "@rr/core";
 import { encodeBody, reviveMoney } from "./decode";
 
 export interface HttpOptions {
@@ -13,11 +13,7 @@ export interface Http {
   setCsrf(token: string | null): void;
 }
 
-const ERROR_CODES = new Set<string>([
-  "bad_request", "unauthenticated", "forbidden", "not_found", "conflict", "rate_limited", "csrf", "internal", "suspended", "slots_full", "task_closed",
-  "already_claimed", "claim_limit", "insufficient_balance", "below_minimum", "payout_pending", "invalid_code", "not_pending", "ticket_closed", "upload_invalid",
-  "code_expired", "too_many_attempts", "invalid_email", "email_taken", "weak_password", "invalid_credentials"
-]);
+const ERROR_CODES = new Set<string>(API_ERROR_CODES);
 
 /** Talks to /api: JSON in and out, cookies for the session, a CSRF header on every write, money revived to bigint. */
 export function createHttp(opts: HttpOptions = {}): Http {

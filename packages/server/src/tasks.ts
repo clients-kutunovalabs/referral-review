@@ -30,7 +30,7 @@ export function deriveStatus(t: Pick<TemplateRow, "status" | "slots_total" | "ac
   return "active";
 }
 
-const SELECT = `select t.id, t.title, t.description, t.site_url, t.reward_paise, t.slots_total, t.timer_minutes, t.active_until, t.status,
+const SELECT = `select t.id, t.created_at, t.title, t.description, t.site_url, t.reward_paise, t.slots_total, t.timer_minutes, t.active_until, t.status,
   t.keywords, t.text_mode, t.ai_config, t.max_claims_per_account,
   (select count(*) from task_claims c where c.template_id = t.id and c.${LIVE_CLAIMS})::int as claimed
   from task_templates t`;
@@ -65,11 +65,27 @@ function toRow(r: TemplateRow, now: Date): AdminTaskRow {
   };
 }
 
-export async function listAdminTasks(ctx: Ctx, actor: AdminActor): Promise<AdminTaskRow[]> {
+/** Same rule as `deriveStatus`, in SQL: removed, or an active task whose slots are used up or whose end date has passed. Paused counts as active. */
+const CLOSED = "(x.status = 'removed' or (x.status = 'active' and ((x.slots_total is not null and x.claimed >= x.slots_total) or (x.active_until is not null and x.active_until <= $2::timestamptz))))";
+
+/** Newest first, `limit` at a time, optionally only the Active or only the Closed tab. */
+export async function listAdminTasks(ctx: Ctx, actor: AdminActor, opts: { status?: "active" | "closed"; limit?: number } = {}): Promise<AdminTaskRow[]> {
   needs(actor, "task.manage", "task_text.manage");
   const now = ctx.now();
-  const rows = await ctx.db.query<TemplateRow>(`${SELECT} where t.workspace_id = $1 order by t.created_at desc limit 500`, [ctx.cfg.workspaceId]);
+  // With no tab chosen, $2 (now) is still referenced so the parameter has a type.
+  const filter = opts.status === "closed" ? `where ${CLOSED}` : opts.status === "active" ? `where not ${CLOSED}` : "where $2::timestamptz is not null";
+  const rows = await ctx.db.query<TemplateRow>(
+    `select * from (${SELECT} where t.workspace_id = $1) x ${filter} order by x.created_at desc, x.id limit $3`, [ctx.cfg.workspaceId, now, opts.limit ?? 50]);
   return rows.map((r) => toRow(r, now));
+}
+
+/** How many templates each tab holds, without loading them. */
+export async function adminTaskCounts(ctx: Ctx, actor: AdminActor): Promise<{ active: number; closed: number }> {
+  needs(actor, "task.manage", "task_text.manage");
+  const [r] = await ctx.db.query<{ active: number; closed: number }>(
+    `select count(*) filter (where not ${CLOSED})::int as active, count(*) filter (where ${CLOSED})::int as closed from (${SELECT} where t.workspace_id = $1) x`,
+    [ctx.cfg.workspaceId, ctx.now()]);
+  return { active: r?.active ?? 0, closed: r?.closed ?? 0 };
 }
 
 export async function getAdminTask(ctx: Ctx, actor: AdminActor, id: string): Promise<AdminTaskDetail> {

@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { ApiError } from "@rr/core";
-import { addScripts, claimTask, createTask, expireClaims, getAdminTask, listBoard, listClaims, retryClaimText, saveUpload, setTaskStatus, submitProof } from "./index";
+import { addScripts, adminTaskCounts, claimTask, createTask, expireClaims, getAdminTask, listAdminTasks, listBoard, listClaims, retryClaimText, reviewItem, reviewQueue, saveUpload, setTaskStatus, submitProof } from "./index";
 import { PNG, addIdentityDirect, createTestCtx, engines, makeAdmin, makeTask, makeUser, taskInput, type TestCtx } from "./testing";
 import type { AdminActor } from "./rbac";
 
@@ -209,5 +209,39 @@ for (const engine of engines()) {
         expect(r.filter((x) => x.status === "fulfilled")).toHaveLength(1);
       });
     }
+
+    it("task templates come a page at a time, per tab, with counts for both tabs", async () => {
+      const before = await adminTaskCounts(ctx, admin);
+      const a = await makeTask(ctx, admin); const b = await makeTask(ctx, admin);
+      await setTaskStatus(ctx, admin, b, "removed");
+      const after = await adminTaskCounts(ctx, admin);
+      expect(after.active - before.active).toBe(1);
+      expect(after.closed - before.closed).toBe(1);
+      const active = await listAdminTasks(ctx, admin, { status: "active", limit: 1000 });
+      const closed = await listAdminTasks(ctx, admin, { status: "closed", limit: 1000 });
+      expect(active.some((t) => t.id === a)).toBe(true);
+      expect(closed.some((t) => t.id === b)).toBe(true);
+      expect(active.some((t) => t.id === b)).toBe(false);
+      expect(await listAdminTasks(ctx, admin, { limit: 1 })).toHaveLength(1);
+    });
+
+    it("the review queue sorts and pages on the server, and one waiting item can be read directly", async () => {
+      const task = await makeTask(ctx, admin, { timerMinutes: null });
+      const ids: string[] = [];
+      for (let i = 0; i < 3; i++) {
+        const u = await makeUser(ctx);
+        const c = await claimTask(ctx, u.userId, task, u.identityId);
+        await submitProof(ctx, u.userId, c.id, { fileId: (await saveUpload(ctx, u.userId, "proof", PNG)).fileId });
+        const [s] = await ctx.db.query<{ id: string }>("select id from submissions where claim_id = $1", [c.id]);
+        ids.push(s!.id);
+        ctx.clock.advance(60_000);
+      }
+      const newest = await reviewQueue(ctx, admin, { sort: "newest", limit: 1 });
+      expect(newest.map((q) => q.id)).toEqual([ids[2]]);
+      const oldest = await reviewQueue(ctx, admin, { sort: "oldest", limit: 1000 });
+      expect(oldest.findIndex((q) => q.id === ids[0])).toBeLessThan(oldest.findIndex((q) => q.id === ids[2]));
+      expect((await reviewItem(ctx, admin, ids[1]!)).id).toBe(ids[1]);
+      expect(await code(reviewItem(ctx, admin, "00000000-0000-0000-0000-00000000beef"))).toBe("not_found");
+    });
   });
 }

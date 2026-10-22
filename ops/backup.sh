@@ -6,6 +6,8 @@
 # NOT in the backup, on purpose: SESSION_SECRET and UPI_ENCRYPTION_KEY. Keep those in your password manager. Without the UPI key
 # the restored UPI IDs cannot be read.
 set -euo pipefail
+# Dumps hold personal data: only the user running the backup may read them.
+umask 077
 
 : "${DATABASE_URL:?set DATABASE_URL}"
 : "${BACKUP_DIR:?set BACKUP_DIR}"

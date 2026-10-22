@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { MIGRATIONS } from "./migrations.generated";
 import { migrate } from "./migrate";
 import { createBlankTestDb, createTestDb, engines } from "./testing";
+import { createPgDb } from "./pg";
 import { DEFAULT_WORKSPACE_ID, OWNER_ROLE_ID, isUniqueViolation, pgCode } from "./index";
 
 it("generated migrations match migrations/*.sql (run `pnpm --filter @rr/db embed` if this fails)", () => {
@@ -227,6 +228,31 @@ for (const engine of engines()) {
         await expect(migrate(db)).rejects.toThrow(/claimed the same task more than once/);
         expect((await db.query<{ id: string }>("select id from schema_migrations")).map((r) => r.id)).not.toContain("0003_audit_fixes");
       } finally { await close(); }
+    });
+  });
+}
+
+if (process.env["TEST_DATABASE_URL"]) {
+  describe("the real Postgres pool", () => {
+    it("survives a dropped idle connection: the error is reported, the process keeps running and the next query works", async () => {
+      const url = process.env["TEST_DATABASE_URL"] as string;
+      const errors: string[] = [];
+      const db = createPgDb({ connectionString: url, max: 1, onError: (e) => errors.push(e.message) });
+      const killer = createPgDb({ connectionString: url, max: 1 });
+      try {
+        const [{ pid }] = await db.query<{ pid: number }>("select pg_backend_pid() as pid") as [{ pid: number }];
+        await killer.query("select pg_terminate_backend($1)", [pid]); // the database drops our idle connection
+        for (let i = 0; i < 50 && !errors.length; i++) await new Promise((r) => setTimeout(r, 20));
+        expect(errors.length).toBe(1);
+        expect((await db.query<{ ok: number }>("select 1 as ok"))[0]!.ok).toBe(1);
+      } finally { await db.close(); await killer.close(); }
+    });
+    it("every connection carries the statement and idle-transaction time limits", async () => {
+      const db = createPgDb({ connectionString: process.env["TEST_DATABASE_URL"] as string, max: 1 });
+      try {
+        const [r] = await db.query<{ s: string; i: string }>("select current_setting('statement_timeout') as s, current_setting('idle_in_transaction_session_timeout') as i");
+        expect(r).toEqual({ s: "1min", i: "1min" });
+      } finally { await db.close(); }
     });
   });
 }

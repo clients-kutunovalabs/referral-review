@@ -20,9 +20,10 @@ export async function dashboard(ctx: Ctx, actor: AdminActor): Promise<DashboardV
     for (const r of rows) recent.push({ kind: "reviewqueue", text: `${r.worker} submitted proof for "${r.title}"`, at: r.at.toISOString() });
   }
   if (can("task.manage") || can("task_text.manage")) {
-    const tasks = await listAdminTasks(ctx, actor);
-    activeTasks = tasks.filter((t) => t.status === "active" || t.status === "closing_soon").length;
-    for (const t of tasks.filter((x) => x.status === "closed" && x.slotsTotal !== null && x.claimed >= x.slotsTotal).slice(0, 1)) {
+    const open = await listAdminTasks(ctx, actor, { status: "active", limit: 1000 });
+    activeTasks = open.filter((t) => t.status === "active" || t.status === "closing_soon").length;
+    const closed = await listAdminTasks(ctx, actor, { status: "closed", limit: 20 });
+    for (const t of closed.filter((x) => x.slotsTotal !== null && x.claimed >= x.slotsTotal).slice(0, 1)) {
       recent.push({ kind: "tasks", text: `"${t.title}" reached its slot limit`, at: ctx.now().toISOString() });
     }
   }

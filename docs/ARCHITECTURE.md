@@ -32,15 +32,17 @@ Anything outside the repo is behind an interface in `packages/core/src/ports.ts`
 
 | Port | Real | Mock / placeholder |
 |---|---|---|
-| Sign-in | built-in provider (`@rr/server`) | `createMockAuth`; Authgate will implement the server `AuthProvider` |
-| Database | PostgreSQL (`pg`) for Vista; PGlite for local development | the same SQL on both |
-| Email | SMTP (`@rr/auth/email`) | console sender (development only) |
-| File storage | local disk (`@rr/storage/local`) | in-memory; S3 adapter not written |
-| AI scripts | Anthropic (`@rr/ai`) | deterministic mock; "not enabled" when no key |
+| Sign-in | built-in provider (`@rr/server`), working | `createMockAuth`; Authgate adapter not written (implements the server `AuthProvider`) |
+| Database | PostgreSQL (`pg`, any Postgres 14+, Vista to confirm); PGlite for local development | the same SQL on both |
+| Email (one-time codes only) | SMTP (`@rr/auth/email`), working, 15-20 s timeouts | console sender (development only) |
+| File storage | local disk (`@rr/storage/local`), one server | in-memory; S3 adapter not written |
+| AI scripts | Anthropic (`@rr/ai`), written, not connected (`ANTHROPIC_API_KEY` + `AI_MODEL`) | deterministic mock; "not enabled" otherwise |
+| Alerts | JSON webhook (Slack, Discord) when `ALERT_WEBHOOK_URL` is set | off |
+| Payments | none: payers transfer by hand and attach a screenshot | no gateway, no UPI ID check |
 
 ## Data rules that live in the database
 
-Append-only ledger, reviews, payments and audit log; one credit per submission; one payment per payout; one pending payout per user; one live claim per email and task; a debit cannot exceed the balance; financial foreign keys are RESTRICT. See `packages/db/migrations/0001_init.sql`.
+Append-only ledger, reviews, payments and audit log; one credit per submission; one payment per payout; one pending payout per user; one claim per email and task, ever; a debit cannot exceed the balance; financial foreign keys are RESTRICT. See `packages/db/migrations/` (0001 schema, 0002 payout rejection, 0003 audit fixes).
 
 ## Vista
 

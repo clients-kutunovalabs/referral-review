@@ -162,7 +162,18 @@ export function createMockApi(opts: MockOptions): Mock {
         ]
       };
     },
-    async listTasks() { must("task.manage", "task_text.manage"); return clone([...tasks.map(taskRow), ...closedExtras]); },
+    async listTasks(o = {}) {
+      must("task.manage", "task_text.manage");
+      const all = [...tasks.map(taskRow), ...closedExtras];
+      const closed = (t: AdminTaskRow) => t.status === "closed" || t.status === "removed";
+      return clone(all.filter((t) => (o.status === "closed" ? closed(t) : o.status === "active" ? !closed(t) : true)).slice(0, o.limit ?? 50));
+    },
+    async taskCounts() {
+      must("task.manage", "task_text.manage");
+      const all = [...tasks.map(taskRow), ...closedExtras];
+      const closed = all.filter((t) => t.status === "closed" || t.status === "removed").length;
+      return { active: all.length - closed, closed };
+    },
     async getTask(tid) {
       must("task.manage", "task_text.manage");
       const t = tasks.find((x) => x.id === tid);
@@ -188,7 +199,18 @@ export function createMockApi(opts: MockOptions): Mock {
       else t.status = status;
     },
     async addScripts(tid, add) { must("task_text.manage"); scripts[tid] = [...(scripts[tid] ?? []), ...add]; return clone(scripts[tid] as string[]); },
-    async reviewQueue() { must("review.decide"); return clone(queue).map((q) => ({ ...q, waitingMinutes: Math.max(q.waitingMinutes, Math.floor((Date.now() - Date.parse(q.submittedAt)) / 60_000)) })); },
+    async reviewQueue(o = {}) {
+      must("review.decide");
+      const live = clone(queue).map((q) => ({ ...q, waitingMinutes: Math.max(q.waitingMinutes, Math.floor((Date.now() - Date.parse(q.submittedAt)) / 60_000)) }));
+      live.sort((x, y) => (o.sort === "newest" ? x.waitingMinutes - y.waitingMinutes : y.waitingMinutes - x.waitingMinutes));
+      return live.slice(0, o.limit ?? 50);
+    },
+    async reviewItem(sid) {
+      must("review.decide");
+      const q = queue.find((x) => x.id === sid);
+      if (!q) throw new ApiError("not_found", "Submission waiting for review was not found.", 404);
+      return clone(q);
+    },
     async decide(submissionId, outcome: OutcomePercent, note) {
       must("review.decide");
       const i = queue.findIndex((q) => q.id === submissionId);

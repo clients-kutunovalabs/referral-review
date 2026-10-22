@@ -24,14 +24,24 @@ function wrap(client: pg.Pool | pg.PoolClient): Queryable {
   };
 }
 
-export function createPgDb(opts: PgOptions): Db {
+/**
+ * Server-side limits on every connection: a query that runs for more than a minute, or a transaction left open and idle for a
+ * minute (a crashed request), is stopped by the database instead of holding locks on money rows.
+ */
+const SESSION_OPTIONS = "-c statement_timeout=60000 -c idle_in_transaction_session_timeout=60000";
+
+export function createPgDb(opts: PgOptions & { onError?: (err: Error) => void }): Db {
   const pool = new pg.Pool({
     connectionString: opts.connectionString,
     max: opts.max ?? 10,
+    connectionTimeoutMillis: 10_000, // a database that does not answer fails the request instead of hanging it
     types,
     ...(opts.ssl ? { ssl: { rejectUnauthorized: true } } : {}),
-    ...(opts.schema ? { options: `-c search_path=${opts.schema}` } : {})
+    options: `${SESSION_OPTIONS}${opts.schema ? ` -c search_path=${opts.schema}` : ""}`
   });
+  // An idle connection that drops (database restart, network blip) is reported here. Without a listener node-postgres
+  // would throw it as an unhandled error and stop the whole web server or worker. The pool replaces the connection itself.
+  pool.on("error", opts.onError ?? ((err) => console.error(JSON.stringify({ at: new Date().toISOString(), level: "error", event: "db.idle_connection_error", error: err.message }))));
   const base = wrap(pool);
   return {
     ...base,

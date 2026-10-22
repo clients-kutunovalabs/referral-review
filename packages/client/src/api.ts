@@ -2,6 +2,11 @@ import type { AdminApi, Api, UserApi } from "@rr/core";
 import type { Http } from "./http";
 
 const enc = encodeURIComponent;
+/** `?a=1&b=x` from the values that are set, or "" when none are. */
+const query = (q: Record<string, string | number | undefined>): string => {
+  const parts = Object.entries(q).filter(([, v]) => v !== undefined && v !== "").map(([k, v]) => `${k}=${enc(String(v))}`);
+  return parts.length ? `?${parts.join("&")}` : "";
+};
 
 export function createHttpApi(http: Http): Api {
   const get = <T>(path: string) => http.request<T>("GET", path);
@@ -33,12 +38,14 @@ export function createHttpApi(http: Http): Api {
   const admin: AdminApi = {
     me: () => get("/api/admin/me"),
     dashboard: () => get("/api/admin/dashboard"),
-    listTasks: () => get("/api/admin/tasks"),
+    listTasks: (o = {}) => get(`/api/admin/tasks${query({ status: o.status, limit: o.limit })}`),
+    taskCounts: () => get("/api/admin/task-counts"),
     getTask: (id) => get(`/api/admin/tasks/${enc(id)}`),
     createTask: (input) => post("/api/admin/tasks", input),
     setTaskStatus: (id, status) => post(`/api/admin/tasks/${enc(id)}/status`, { status }),
     addScripts: (id, scripts) => post(`/api/admin/tasks/${enc(id)}/scripts`, { scripts }),
-    reviewQueue: () => get("/api/admin/review"),
+    reviewQueue: (o = {}) => get(`/api/admin/review${query({ sort: o.sort, limit: o.limit })}`),
+    reviewItem: (id) => get(`/api/admin/review/${enc(id)}`),
     decide: (submissionId, outcome, note) => post(`/api/admin/review/${enc(submissionId)}/decide`, { outcome, note }),
     listPayouts: (historyLimit) => get(`/api/admin/payouts${historyLimit ? `?limit=${historyLimit}` : ""}`),
     getPayout: (id) => get(`/api/admin/payouts/${enc(id)}`),

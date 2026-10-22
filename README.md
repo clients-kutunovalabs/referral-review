@@ -23,7 +23,7 @@ Everything done, every issue found and fixed, and everything deferred: [docs/WOR
 npm run dev           # http://localhost:3000. Installs with pnpm on first run (fetches pnpm if you lack it). Embedded database; sign-in codes are printed in this terminal.
 ```
 (Plain `npm install` is blocked on purpose: the workspace needs pnpm. `npm run dev` does the install for you. Windows, macOS and Linux; Node 20+.)
-Open **`/dev`** (the terminal prints the full link) for one-click sign-in as a demo worker or a demo admin, with sample tasks, a review waiting and a ticket. Those pages exist only in development, only on `localhost`, and the site refuses to start with `DEV_LOGIN` on in production. The demo accounts' password is `dev password 123` if you want the real login screens.
+Open **`/dev`** (the terminal prints the full link) for one-click sign-in as a demo worker or a demo admin, with sample tasks, a review waiting and a ticket. Those pages exist only under `npm run dev` (a built site can never open them), only on `localhost`. The demo accounts' password is `dev password 123` if you want the real login screens.
 
 It uses port 3000, or the next free one if another program has it (the terminal says which). For an admin login at `/admin`, put `OWNER_EMAIL` and `OWNER_PASSWORD` in a `.env` file at the repo root (copy `.env.example`); `npm run dev` loads it. Plain `pnpm dev:web` does not read the root `.env`.
 

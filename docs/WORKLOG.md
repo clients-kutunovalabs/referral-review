@@ -126,7 +126,7 @@ Test-harness mistakes made along the way, in the open: two shell commands that k
 | **One web server only** | Screenshots live on local disk. Several servers need the S3 adapter. |
 | **Offline use** (service worker) | The site installs to the home screen but needs a connection for every screen. |
 | **Sign-in redirect for bookmarks** | Bookmarks and Reload keep the screen (`/#/mytasks`, `/admin#/taskdetail?taskId=...`). If the session has ended, sign-in comes first and lands on the home screen, not the bookmarked one. The address uses the `#` part, so the server never sees it. |
-| **Pagination for the rest** | Users, payout history and resolved tickets load 50 at a time ("Load more"). Still capped: tasks (500), review queue (500 waiting), a worker's own tasks and wallet (500). Fine for a sales-team beta. |
+| **Paging of the worker's own lists** | Admin lists (users, payout history, resolved tickets, task templates, review queue) load 50 at a time. A worker's own tasks and wallet still show the latest 500, help tickets 200: bounded by one person's activity. |
 | **Retention policy for screenshots that are used** | Unused uploads are deleted monthly; screenshots attached to work, payments or tickets are kept for good. |
 | **Change main email screen** | The main (login) email cannot be changed from the app. Change password is done. |
 | **Audit-log viewer, settings screen** (minimum payout is a database setting) | Read with SQL for now. |
@@ -173,4 +173,33 @@ Test-harness mistakes made along the way, in the open: two shell commands that k
 | 21 | The worker ran TypeScript tooling at runtime; CI actions were pinned to tags. | Worker compiled to one JS file and run with node; actions pinned to commits. |
 | 22 | Unused `signedUrl` in the storage port. | Removed (storage gained `delete` for the clean-up). |
 | -- | The Help and Support lists showed a just-resolved ticket under Open for up to 30 s (also made the browser test flaky). | Lists re-read on every tab switch. |
+
+## Second audit (October 2026)
+
+| Found | Fix |
+|---|---|
+| The browser client did not know the new `account_inactive` error and reported it as "internal". | One shared list of error codes in `@rr/core`, used by the server types and the client. |
+| A dropped idle database connection would stop the web server or worker (no pool error listener); no connect or query time limits. | Pool errors are logged and the connection replaced; 10 s connect timeout; queries over a minute and transactions idle over a minute are stopped by the database. Tested on real Postgres. |
+| A mail server that accepts the connection and never answers hung sign-up for minutes. | 15-20 s SMTP timeouts. Tested with a silent server. |
+| Backups were written world-readable. | `umask 077`; `.pgpass` advice for shared machines. |
+| Screenshots could be downloaded with no rate limit. | 600 an hour per person. |
+| Review queue and task templates were capped at 500, and "Newest" sorted only the first 500. | Sorted and paged on the server ("Load more"); task tab counts from the server; the review screen reads one item directly. |
+| Docs described Authgate and S3 as built, and the old claim rule. | Corrected. |
+
+## What is left
+
+| Area | State | What it needs |
+|---|---|---|
+| **Sign-in: Authgate adapter** | The built-in provider works today (passwords, one-time codes, sessions, reset, change password). | Authgate's API. It plugs into the server `AuthProvider` (`packages/server/src/auth.ts`); users, sessions and everything else stay as they are. |
+| **Database: Vista** | Works with any PostgreSQL 14+ through `DATABASE_URL`. | Confirm with Vista: a direct SQL connection (transactions, row locks and triggers are required), who runs migrations (`AUTO_MIGRATE`), and their backups. |
+| **File storage: S3-compatible adapter** | Local disk, fine for one web server. | Needed for a second web server or a separate upload domain. The `StoragePort` is ready (put, get, delete). |
+| **Email** | SMTP adapter works with any provider's SMTP (one-time codes only, by policy). | An SMTP account. An API adapter (SES, Resend) only if SMTP is blocked where you host. |
+| **Notifications** | None by policy: no emails except codes. In-app: lists refresh on their own. | Unread markers / badges if wanted (not built). |
+| **AI scripts** | Anthropic adapter written, off. | `ANTHROPIC_API_KEY` + `AI_MODEL`. When turned on, make the claim return at once and write the script a moment later (today the claim waits up to 25 s). |
+| **Payments** | Manual UPI transfer with a required screenshot. | Gateway payouts and UPI ID (VPA) validation need a paid payment-gateway account. One-UPI-per-worker returns when UPI IDs are saved per account. |
+| **Alerts / monitoring** | Webhook alerts built (errors, failed jobs, money mismatches); health check at `/api/health?strict=1`. | Set `ALERT_WEBHOOK_URL`; point an uptime monitor at the health check. No metrics dashboards. |
+| **Backups** | `ops/backup.sh`, `restore.sh`, `verify-restore.sh` built and tested in CI. | Schedule them, copy off the machine (`AFTER_BACKUP`), run the restore test monthly. |
+| **Product features not built** | | Change the main email; account anonymisation tool (DPDP requests); audit-log viewer; settings screen (minimum payout is a database value); paging of the worker's own lists; offline use. |
+| **Upgrades** | Current versions are patched and `pnpm audit` is clean. | Next 16, ESLint 10, TypeScript 7, Vite 8: one at a time, each its own change. |
+| **Before launch (yours)** | | Hosting, domain, HTTPS proxy and `TRUST_PROXY_HOPS`; Terms and Privacy Policy (DPDP Act); a CA on TDS and payout cadence; an outside penetration test; a screen-reader and keyboard pass; a UPI key rotation script; optional breached-password check. |
 

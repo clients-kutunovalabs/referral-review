@@ -16,8 +16,8 @@ import { hit } from "../ratelimit";
 import { loadAdmin, type AdminActor } from "../rbac";
 import { addMember, createRole, deleteRole, listMembers, listRoles, setMemberRoles, setRolePermissions } from "../roles";
 import { csrfToken, createSession, resolveSession, revokeSession, type SessionInfo } from "../sessions";
-import { decide, reviewQueue, submitProof } from "../submissions";
-import { addScripts, createTask, getAdminTask, listAdminTasks, listBoard, setTaskStatus } from "../tasks";
+import { decide, reviewItem, reviewQueue, submitProof } from "../submissions";
+import { addScripts, adminTaskCounts, createTask, getAdminTask, listAdminTasks, listBoard, setTaskStatus } from "../tasks";
 import { assignTicket, createTicket, getAdminTicket, getUserTicket, listAdminTickets, listUserTickets, replyTicket, resolveTicket, ticketAgents, userSendMessage } from "../tickets";
 import { getUser, listUsers, setUserStatus } from "../users";
 import { walletView } from "../wallet";
@@ -168,7 +168,7 @@ export function createApi(ctx: Ctx, deps: { auth?: AuthProvider } = {}): (req: R
       if (file.size > 5 * 1024 * 1024) throw new ApiError("upload_invalid", "Image must be under 5 MB.", 413);
       return saveUpload(rc.ctx, rc.userId, kind, new Uint8Array(await file.arrayBuffer()));
     }),
-    mk("GET", "/api/files/:id", "user", undefined, async (rc) => {
+    mk("GET", "/api/files/:id", "user", lim("file-read", 600, HOUR), async (rc) => {
       const admin = await loadAdmin(rc.ctx.db, rc.userId);
       const f = await readFile(rc.ctx, rc.params["id"] as string, rc.userId, admin);
       return new Response(f.bytes as BodyInit, {
@@ -183,13 +183,18 @@ export function createApi(ctx: Ctx, deps: { auth?: AuthProvider } = {}): (req: R
     mk("GET", "/api/admin/me", "admin", undefined, (rc) => ({ userId: rc.admin.userId, name: rc.admin.name, isOwner: rc.admin.isOwner, roleIds: rc.admin.roleIds, permissions: [...rc.admin.permissions] })),
     mk("GET", "/api/admin/dashboard", "admin", undefined, (rc) => dashboard(rc.ctx, rc.admin)),
 
-    mk("GET", "/api/admin/tasks", "admin", undefined, (rc) => listAdminTasks(rc.ctx, rc.admin)),
+    mk("GET", "/api/admin/tasks", "admin", undefined, (rc) => {
+      const status = rc.query.get("status");
+      return listAdminTasks(rc.ctx, rc.admin, { ...(status === "active" || status === "closed" ? { status } : {}), limit: pageLimit(rc.query) });
+    }),
+    mk("GET", "/api/admin/task-counts", "admin", undefined, (rc) => adminTaskCounts(rc.ctx, rc.admin)),
     mk("POST", "/api/admin/tasks", "admin", lim("admin-task", 60, HOUR), async (rc) => createTask(rc.ctx, rc.admin, (await rc.body(schemas.newTask)) as Parameters<typeof createTask>[2])),
     mk("GET", "/api/admin/tasks/:id", "admin", undefined, (rc) => getAdminTask(rc.ctx, rc.admin, rc.params["id"] as string)),
     mk("POST", "/api/admin/tasks/:id/status", "admin", undefined, async (rc) => { await setTaskStatus(rc.ctx, rc.admin, rc.params["id"] as string, (await rc.body(schemas.taskStatus)).status); return OK; }),
     mk("POST", "/api/admin/tasks/:id/scripts", "admin", undefined, async (rc) => addScripts(rc.ctx, rc.admin, rc.params["id"] as string, (await rc.body(schemas.scripts)).scripts)),
 
-    mk("GET", "/api/admin/review", "admin", undefined, (rc) => reviewQueue(rc.ctx, rc.admin)),
+    mk("GET", "/api/admin/review", "admin", undefined, (rc) => reviewQueue(rc.ctx, rc.admin, { sort: rc.query.get("sort") === "newest" ? "newest" : "oldest", limit: pageLimit(rc.query) })),
+    mk("GET", "/api/admin/review/:id", "admin", undefined, (rc) => reviewItem(rc.ctx, rc.admin, rc.params["id"] as string)),
     mk("POST", "/api/admin/review/:id/decide", "admin", undefined, async (rc) => {
       const b = await rc.body(schemas.decide);
       await decide(rc.ctx, rc.admin, rc.params["id"] as string, b.outcome as OutcomePercent, b.note);
