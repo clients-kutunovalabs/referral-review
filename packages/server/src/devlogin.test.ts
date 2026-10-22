@@ -21,7 +21,7 @@ for (const engine of engines()) {
       expect(await reviewQueue(ctx, admin)).toHaveLength(1);
 
       const w = await devLogin(ctx, "worker");
-      expect(w.location).toBe("/");
+      expect(w.location).toBe("/app");
       const worker = (await resolveSession(ctx, tokenOf(w.cookie)))!;
       expect((await balanceOf(ctx.db, worker.userId)).available).toBe(4000n);
     });

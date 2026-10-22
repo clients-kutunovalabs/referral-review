@@ -1,11 +1,12 @@
-import { expireClaims, purgeExpired, purgeUnusedFiles, recordHeartbeat, reconcile, sendAlert, type Ctx } from "@rr/server";
+import { expireClaims, purgeExpired, purgeOldScreenshots, purgeUnusedFiles, recordHeartbeat, reconcile, sendAlert, type Ctx } from "@rr/server";
 
 export type Log = (event: string, data?: Record<string, unknown>) => void;
 
 /** `filesEveryMs` defaults to 30 days: uploads nobody used are cleaned up monthly. */
-export interface Schedule { expireEveryMs: number; purgeEveryMs: number; reconcileEveryMs: number; filesEveryMs?: number }
-const MONTH_MS = 30 * 86_400_000;
-export const DEFAULT_SCHEDULE: Schedule = { expireEveryMs: 60_000, purgeEveryMs: 3_600_000, reconcileEveryMs: 6 * 3_600_000, filesEveryMs: MONTH_MS };
+export interface Schedule { expireEveryMs: number; purgeEveryMs: number; reconcileEveryMs: number; filesEveryMs?: number; screenshotsEveryMs?: number }
+const DAY_MS = 86_400_000;
+const MONTH_MS = 30 * DAY_MS;
+export const DEFAULT_SCHEDULE: Schedule = { expireEveryMs: 60_000, purgeEveryMs: 3_600_000, reconcileEveryMs: 6 * 3_600_000, filesEveryMs: MONTH_MS, screenshotsEveryMs: DAY_MS };
 
 /** Claims past their deadline become expired, which frees the slot. */
 export async function runExpire(ctx: Ctx, log: Log): Promise<number> {
@@ -27,6 +28,13 @@ export async function runPurgeFiles(ctx: Ctx, log: Log): Promise<number> {
   return n;
 }
 
+/** Daily: work-proof screenshots reviewed 30+ days ago and images of tickets resolved 30+ days ago. Payment proofs are kept. */
+export async function runPurgeScreenshots(ctx: Ctx, log: Log): Promise<number> {
+  const n = await purgeOldScreenshots(ctx);
+  log("screenshots.purged", { count: n });
+  return n;
+}
+
 /** A non-empty problem list is logged as an error: it means money records disagree and nobody should be paid until it is understood. */
 export async function runReconcile(ctx: Ctx, log: Log) {
   const r = await reconcile(ctx);
@@ -40,7 +48,7 @@ export async function runReconcile(ctx: Ctx, log: Log) {
  * `now` and `sleep` are injectable so the schedule can be tested without waiting.
  */
 export async function work(ctx: Ctx, log: Log, signal: AbortSignal, schedule: Schedule = DEFAULT_SCHEDULE, clock: { now: () => number; sleep: (ms: number) => Promise<void> } = { now: Date.now, sleep: (ms) => new Promise((r) => setTimeout(r, ms)) }): Promise<void> {
-  const next = { heartbeat: 0, expire: 0, purge: 0, reconcile: 0, files: 0 };
+  const next = { heartbeat: 0, expire: 0, purge: 0, reconcile: 0, files: 0, screenshots: 0 };
   const due = async (key: keyof typeof next, every: number, job: () => Promise<unknown>, name: string) => {
     if (clock.now() < next[key]) return;
     next[key] = clock.now() + every;
@@ -56,6 +64,7 @@ export async function work(ctx: Ctx, log: Log, signal: AbortSignal, schedule: Sc
     await due("purge", schedule.purgeEveryMs, () => runPurge(ctx, log), "purge");
     await due("reconcile", schedule.reconcileEveryMs, () => runReconcile(ctx, log), "reconcile");
     await due("files", schedule.filesEveryMs ?? MONTH_MS, () => runPurgeFiles(ctx, log), "files");
+    await due("screenshots", schedule.screenshotsEveryMs ?? DAY_MS, () => runPurgeScreenshots(ctx, log), "screenshots");
     await clock.sleep(Math.min(5_000, schedule.expireEveryMs));
   }
   log("worker.stop");

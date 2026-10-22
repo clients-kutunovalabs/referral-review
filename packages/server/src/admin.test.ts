@@ -4,7 +4,7 @@ import { OWNER_ROLE_ID } from "@rr/db";
 import {
   addMember, assignTicket, createRole, createSession, createTicket, dashboard, deleteRole, fileUrl, getAdminTicket, getUserTicket, listAdminTickets, listMembers,
   listRoles, listUserTickets, listUsers, loadAdmin, readFile, replyTicket, resolveSession, resolveTicket, saveUpload, setMemberRoles, setRolePermissions,
-  setUserStatus, sniffImage, ticketAgents, userSendMessage, mayUpload, getUser
+  setUserStatus, sniffImage, ticketAgents, userSendMessage, mayUpload, getUser, purgeOldScreenshots, decide, markPaid, requestPayout
 } from "./index";
 import { PNG, createTestCtx, engines, fund, makeAdmin, makeTask, makeUser, submitted, type TestCtx } from "./testing";
 import type { AdminActor } from "./rbac";
@@ -283,6 +283,42 @@ for (const engine of engines()) {
       const r = await createRole(ctx, a, "Audited role");
       const [row] = await ctx.db.query<{ actor_user_id: string; action: string }>("select actor_user_id, action from admin_audit_log where target_id = $1", [r.id]);
       expect(row).toEqual({ actor_user_id: a.userId, action: "role.create" });
+    });
+
+    describe("screenshot retention", () => {
+      it("removes work proofs 30 days after the decision and ticket images 30 days after resolving; keeps pending, open and payment proofs", async () => {
+        const u = await makeUser(ctx);
+        const reviewed = await submitted(ctx, u, await makeTask(ctx, owner, { reward: 50_000n }));
+        await decide(ctx, owner, reviewed.submissionId, 100, "Good.");
+        const waiting = await submitted(ctx, u, await makeTask(ctx, owner));
+        const img = await saveUpload(ctx, u.userId, "ticket_attachment", PNG);
+        const closedT = await createTicket(ctx, u.userId, { title: "Old question", body: "Resolved long ago.", fileId: img.fileId });
+        await resolveTicket(ctx, owner, closedT.id);
+        const img2 = await saveUpload(ctx, u.userId, "ticket_attachment", PNG);
+        await createTicket(ctx, u.userId, { title: "Still open", body: "Not resolved.", fileId: img2.fileId });
+        const payer = await makeAdmin(ctx, ["payout.mark_paid"]);
+        const p = await requestPayout(ctx, u.userId, 20_000n, "keep1@okbank");
+        const proof = await saveUpload(ctx, payer.userId, "payment_proof", PNG);
+        await markPaid(ctx, payer, p.id, proof.fileId);
+        const fileOf = async (sub: string) => (await ctx.db.query<{ file_id: string }>("select file_id from submissions where id = $1", [sub]))[0]!.file_id;
+        const purged = async (id: string) => (await ctx.db.query<{ p: boolean }>("select purged_at is not null as p from files where id = $1", [id]))[0]!.p;
+
+        ctx.clock.advance(29 * 86_400_000);
+        await purgeOldScreenshots(ctx);
+        expect(await purged(await fileOf(reviewed.submissionId))).toBe(false);
+        ctx.clock.advance(2 * 86_400_000);
+        expect(await purgeOldScreenshots(ctx)).toBeGreaterThanOrEqual(2);
+        expect(await purged(await fileOf(reviewed.submissionId))).toBe(true);
+        expect(await purged(img.fileId)).toBe(true);
+        expect(await purged(await fileOf(waiting.submissionId))).toBe(false); // still waiting for review
+        expect(await purged(img2.fileId)).toBe(false);                          // ticket still open
+        expect(await purged(proof.fileId)).toBe(false);                         // payment proof kept
+        // the image is gone, the records are not; the file route says so and the chat marks it
+        expect(await code(readFile(ctx, await fileOf(reviewed.submissionId), u.userId, null))).toBe("gone");
+        const t = await getUserTicket(ctx, u.userId, closedT.id);
+        expect(t.messages.find((m) => m.attachment)!.attachment).toMatchObject({ removed: true });
+        expect(await purgeOldScreenshots(ctx)).toBe(0); // running again does nothing
+      });
     });
   });
 }

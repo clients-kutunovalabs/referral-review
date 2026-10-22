@@ -36,11 +36,12 @@ export function mayUpload(kind: UploadKind, admin: AdminActor | null): boolean {
 
 /** A file is readable by its owner, or by an admin whose permission covers that kind of file. */
 export async function readFile(ctx: Ctx, fileId: string, viewerId: string, admin: AdminActor | null): Promise<{ bytes: Uint8Array; contentType: string }> {
-  const [f] = await ctx.db.query<{ owner_user_id: string; kind: UploadKind; storage_key: string; content_type: string }>(
-    "select owner_user_id, kind, storage_key, content_type from files where id = $1 and workspace_id = $2", [fileId, ctx.cfg.workspaceId]);
+  const [f] = await ctx.db.query<{ owner_user_id: string; kind: UploadKind; storage_key: string; content_type: string; purged_at: Date | null }>(
+    "select owner_user_id, kind, storage_key, content_type, purged_at from files where id = $1 and workspace_id = $2", [fileId, ctx.cfg.workspaceId]);
   if (!f) return notFound("File");
   const allowed = f.owner_user_id === viewerId || !!admin?.permissions.has(ADMIN_FOR[f.kind]);
   if (!allowed) return forbidden();
+  if (f.purged_at) return fail("gone", "This screenshot was removed 30 days after it was dealt with.", 410);
   const { bytes } = await ctx.storage.get(f.storage_key);
   return { bytes, contentType: f.content_type };
 }

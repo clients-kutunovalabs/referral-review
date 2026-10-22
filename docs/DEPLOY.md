@@ -8,7 +8,7 @@ This is the checklist from "code works" to "people can use it". Nothing here nee
 |---|---|---|
 | A PostgreSQL 14+ database (Vista) | All data. **Check that Vista gives a direct SQL connection string.** The ledger relies on triggers, row locks and transactions; a REST-only database cannot run this code as is. | `DATABASE_URL`, `DATABASE_SSL=1` |
 | A mail server (SMTP) | The only emails sent are one-time codes (sign-up, password reset, extra email). Without it nobody can sign up. | `SMTP_URL`, `MAIL_FROM` |
-| A domain with HTTPS | Cookies are `Secure`; the site refuses to start in production over http. | `APP_URL=https://...` |
+| A domain with HTTPS | Cookies are `Secure`; the site refuses to start in production over http. `APP_URL` is also the address search engines see: the public page's canonical link, share image, `robots.txt` and `sitemap.xml` are built from it. | `APP_URL=https://...` |
 | A server that runs Docker (or Node 22) with a **persistent disk** | Screenshots are stored on disk. | `UPLOAD_DIR` (mount a volume) |
 | Two generated secrets | Sign CSRF tokens; encrypt UPI IDs. **Back up the UPI key.** Losing it makes stored UPI IDs unreadable. | `SESSION_SECRET`, `UPI_ENCRYPTION_KEY` |
 | (Optional) A webhook for alerts | Posts "money records disagree", "a background job failed" and "unexpected server error" to Slack, Discord or any JSON webhook. Messages carry no personal data. | `ALERT_WEBHOOK_URL` |

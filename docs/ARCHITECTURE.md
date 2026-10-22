@@ -16,6 +16,11 @@ packages/auth   mock sign-in, email senders (SMTP, console)
 packages/storage, packages/ai, packages/config   file storage, script writer, environment checks
 ```
 
+## Pages
+
+- `/`: the public KwikTask page. A route handler returns finished HTML (all search and share tags in `<head>`, JSON-LD, inline CSS from `@rr/ui/landing`, no JavaScript bundle), so crawlers and answer engines read it without running scripts. `robots.txt`, `sitemap.xml`, `manifest.webmanifest` and `llms.txt` sit beside it.
+- `/app` (worker) and `/admin`: the apps, `noindex`, kept out of search by `robots.txt`.
+
 ## Request flow
 
 ```

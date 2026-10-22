@@ -15,7 +15,7 @@ export async function GET(req: Request): Promise<Response> {
 <p class="warn">Development only. This page and one-click sign-in do not exist in production: the site refuses to start with <code>DEV_LOGIN</code> on there.</p>
 <a class="btn" href="/dev/login?as=worker">Open the worker app, signed in<small>${DEV_ACCOUNTS.worker.name} · has money to withdraw · http://localhost</small></a>
 <a class="btn" href="/dev/login?as=admin">Open the admin app, signed in<small>${DEV_ACCOUNTS.admin.name} · every permission · a review and a ticket are waiting</small></a>
-<a class="btn" href="/">Worker app, normal login screen</a>
+<a class="btn" href="/app">Worker app, normal login screen</a>
 <a class="btn" href="/admin">Admin app, normal login screen</a>
 <h2>To try the real login screens</h2>
 <p>Password for every demo account: <code>${DEV_PASSWORD}</code></p>

@@ -20,7 +20,9 @@ export function Conversation({ messages, me }: { messages: TicketMessage[]; me: 
             ) : (
               <div className={`msg ${m.sender === me ? "me" : "them"}`}>
                 <div className="msg-name">{m.sender === me ? "You" : m.senderName}</div>
-                {m.attachment ? <img className="msg-img" src={m.attachment.url} alt={m.attachment.name} /> : null}
+                {m.attachment ? (m.attachment.removed
+                  ? <div className="msg-removed">Image removed 30 days after the ticket was resolved.</div>
+                  : <img className="msg-img" src={m.attachment.url} alt={m.attachment.name} />) : null}
                 <div className="msg-body">{m.body}</div>
                 <div className="msg-time">{time}</div>
               </div>

@@ -14,7 +14,7 @@ export const API_ERROR_CODES = [
   "bad_request", "unauthenticated", "forbidden", "not_found", "conflict", "rate_limited", "csrf", "internal",
   "suspended", "slots_full", "task_closed", "already_claimed", "claim_limit", "insufficient_balance", "below_minimum",
   "payout_pending", "account_inactive", "invalid_code", "not_pending", "ticket_closed", "upload_invalid",
-  "code_expired", "too_many_attempts", "invalid_email", "email_taken", "weak_password", "invalid_credentials"
+  "code_expired", "too_many_attempts", "invalid_email", "email_taken", "weak_password", "invalid_credentials", "gone"
 ] as const;
 export type ApiErrorCode = (typeof API_ERROR_CODES)[number];
 

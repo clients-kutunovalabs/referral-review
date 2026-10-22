@@ -51,7 +51,7 @@ Money already left your bank, so this is a bookkeeping fix: do not delete anythi
 Admin, Users and roles, the person, Suspend. They are signed out at once and cannot log in, claim or ask for payouts. Their credits and requests stay visible. A payout they already requested cannot be paid while they are suspended: reject it (the amount is released) or reinstate them first. Only the owner can suspend or delete a member of the admin team.
 
 ## Uploads and deleted accounts (automatic)
-The worker removes uploads older than 30 days that no submission, payment or ticket uses, once a month (`docker run ... tasks-worker purge-files` runs it now). Emails of accounts deleted at least 30 days ago are released every hour, so the address can sign up again; the old account's records stay.
+The worker removes uploads older than 30 days that no submission, payment or ticket uses, once a month (`docker run ... tasks-worker purge-files` runs it now). Once a day it also deletes the image bytes of work proofs reviewed 30+ days ago and ticket images of tickets resolved 30+ days ago (`tasks-worker purge-screenshots` runs it now); the file row stays with `purged_at` set, the API answers 410 for it, and every deletion is in the audit log (`files.retention_purge`). Payment screenshots are never removed. Emails of accounts deleted at least 30 days ago are released every hour, so the address can sign up again; the old account's records stay.
 
 ## Rotating secrets
 - `SESSION_SECRET`: changing it signs out nobody (sessions are looked up by hash) but invalidates open CSRF tokens and any pending one-time codes. Do it at a quiet time.

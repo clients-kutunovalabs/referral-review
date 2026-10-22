@@ -25,6 +25,8 @@ npm run dev           # http://localhost:3000. Installs with pnpm on first run (
 (Plain `npm install` is blocked on purpose: the workspace needs pnpm. `npm run dev` does the install for you. Windows, macOS and Linux; Node 20+.)
 Open **`/dev`** (the terminal prints the full link) for one-click sign-in as a demo worker or a demo admin, with sample tasks, a review waiting and a ticket. Those pages exist only under `npm run dev` (a built site can never open them), only on `localhost`. The demo accounts' password is `dev password 123` if you want the real login screens.
 
+Addresses: `/` is the public KwikTask page (the only page search engines index), `/app` the worker app, `/admin` the admin app. Old `/#/...` bookmarks are forwarded to `/app#/...`.
+
 It uses port 3000, or the next free one if another program has it (the terminal says which). For an admin login at `/admin`, put `OWNER_EMAIL` and `OWNER_PASSWORD` in a `.env` file at the repo root (copy `.env.example`); `npm run dev` loads it. Plain `pnpm dev:web` does not read the root `.env`.
 
 ```

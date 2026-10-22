@@ -24,11 +24,12 @@ const toTicket = (r: TicketRow, messages: TicketMessage[] = []): Ticket => ({
 });
 
 async function messagesOf(q: Queryable, ticketId: string): Promise<TicketMessage[]> {
-  const rows = await q.query<{ id: string; sender_type: TicketMessage["sender"]; sender_name: string; body: string; created_at: Date; attachment_file_id: string | null }>(
-    "select id, sender_type, sender_name, body, created_at, attachment_file_id from ticket_messages where ticket_id = $1 order by seq", [ticketId]);
+  const rows = await q.query<{ id: string; sender_type: TicketMessage["sender"]; sender_name: string; body: string; created_at: Date; attachment_file_id: string | null; purged: boolean }>(
+    `select m.id, m.sender_type, m.sender_name, m.body, m.created_at, m.attachment_file_id, (f.purged_at is not null) as purged
+     from ticket_messages m left join files f on f.id = m.attachment_file_id where m.ticket_id = $1 order by m.seq`, [ticketId]);
   return rows.map((m) => ({
     id: m.id, sender: m.sender_type, senderName: m.sender_name, body: m.body, at: m.created_at.toISOString(),
-    ...(m.attachment_file_id ? { attachment: { name: "attachment", url: fileUrl(m.attachment_file_id) as string } } : {})
+    ...(m.attachment_file_id ? { attachment: { name: "attachment", url: fileUrl(m.attachment_file_id) as string, ...(m.purged ? { removed: true as const } : {}) } } : {})
   }));
 }
 

@@ -38,6 +38,10 @@
       "default": "./src/hub/index.tsx"
     },
     "./styles.css": "./src/styles/index.css",
-    "./fonts.css": "./src/styles/fonts.css"
+    "./fonts.css": "./src/styles/fonts.css",
+    "./landing": {
+      "types": "./src/landing/index.ts",
+      "default": "./src/landing/index.ts"
+    }
   }
 }

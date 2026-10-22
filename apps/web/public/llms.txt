@@ -1,0 +1,19 @@
+# KwikTask
+
+> KwikTask is a simple task board and task management system. Admins assign tasks and manage tasks; workers claim a task in one tap, do it, upload a screenshot as proof, get reviewed by a person, and withdraw their earnings to UPI.
+
+## What makes KwikTask different
+- Several emails, one login: one account can hold up to 10 verified emails; each email can take every task once; all earnings go to one wallet.
+- Quick and simple: sign up with an email and a one-time code; every task shows its reward, slots left and time limit up front; works on any phone as an installable web app.
+- Easy payment and cash withdrawal: approved work is credited straight away; workers withdraw by typing an amount and a UPI ID; every payment is recorded with its payment screenshot.
+- Fair, explained reviews: every submission is reviewed by a person who pays 100%, 75%, 50%, 25% or 0% of the reward, always with a note.
+- Built for sales tasks: tasks can carry sales scripts (shared out evenly among workers) or keywords to mention.
+- Team roles: the owner decides who can create tasks, review work, make payments, manage users or handle support.
+
+## Who it is for
+Sales teams, field teams and freelancers who are paid per completed task, and the businesses that assign, review and pay for that work.
+
+## Links
+- Home: /
+- Sign up or log in (workers): /app
+- Admin login: /admin

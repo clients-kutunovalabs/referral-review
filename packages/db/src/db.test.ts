@@ -205,7 +205,7 @@ for (const engine of engines()) {
         const WS = DEFAULT_WORKSPACE_ID;
         const [u] = await db.query<{ id: string }>("insert into users (workspace_id, name, status) values ($1,'Gone','deleted') returning id", [WS]);
         await db.query("insert into identities (workspace_id, user_id, email, is_primary) values ($1,$2,'gone@x.co',true)", [WS, u!.id]);
-        expect(await migrate(db)).toEqual(["0003_audit_fixes"]);
+        expect((await migrate(db))[0]).toBe("0003_audit_fixes"); // and every later migration
         const [row] = await db.query<{ deleted_at: Date | null; released_at: Date | null }>(
           "select u.deleted_at, i.released_at from users u join identities i on i.user_id = u.id where u.id = $1", [u!.id]);
         expect(row!.deleted_at).not.toBeNull(); // dated now, so the 30 days start at the upgrade

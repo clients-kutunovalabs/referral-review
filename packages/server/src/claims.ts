@@ -65,16 +65,18 @@ export async function claimTask(ctx: Ctx, userId: string, taskId: string, identi
       active_until: Date | null; text_mode: string; max_claims_per_account: number | null;
     }>("select id, status, reward_paise, slots_total, timer_minutes, active_until, text_mode, max_claims_per_account from task_templates where id = $1 and workspace_id = $2 for update", [taskId, ctx.cfg.workspaceId]);
     if (!tpl || tpl.status === "removed") return notFound("Task");
+    // Claims whose timer ran out free their slot now, not at the worker's next sweep (up to a minute later).
+    await t.query("update task_claims set status = 'expired', ended_at = $2 where template_id = $1 and status = 'claimed' and expires_at <= $2", [taskId, now]);
 
+    // "same" counts every claim this email ever made on the task (one claim per email, ever); the account cap counts live claims.
+    // Checked before the slots, so someone pressing Claim again on a task that has since filled up is told they already have it.
+    const [mine] = await t.query<{ n: number; same: number }>(
+      `select count(*) filter (where ${LIVE_CLAIMS})::int as n, count(*) filter (where identity_id = $2)::int as same from task_claims where template_id = $1 and user_id = $3`, [taskId, identityId, userId]);
+    if (mine && mine.same > 0) return conflict("already_claimed", "You already claimed this task with this email.");
     const [{ claimed } = { claimed: 0 }] = await t.query<{ claimed: number }>(`select count(*)::int as claimed from task_claims where template_id = $1 and ${LIVE_CLAIMS}`, [taskId]);
     const state = deriveStatus({ status: tpl.status, slots_total: tpl.slots_total, active_until: tpl.active_until, claimed }, now);
     if (state === "paused") return fail("task_closed", "This task is paused right now.", 409);
     if (state === "closed") return tpl.slots_total !== null && claimed >= tpl.slots_total ? fail("slots_full", "All slots for this task are taken.", 409) : fail("task_closed", "This task has closed.", 409);
-
-    // "same" counts every claim this email ever made on the task (one claim per email, ever); the account cap counts live claims.
-    const [mine] = await t.query<{ n: number; same: number }>(
-      `select count(*) filter (where ${LIVE_CLAIMS})::int as n, count(*) filter (where identity_id = $2)::int as same from task_claims where template_id = $1 and user_id = $3`, [taskId, identityId, userId]);
-    if (mine && mine.same > 0) return conflict("already_claimed", "You already claimed this task with this email.");
     if (tpl.max_claims_per_account !== null && mine && mine.n >= tpl.max_claims_per_account) return conflict("claim_limit", "You have reached the limit for this task.");
 
     let text: string | null = null; let source: "pool" | "ai" | null = null; let textStatus: TextStatus = "none";

@@ -31,16 +31,18 @@ Screenshots of key screens are written to `e2e/out/`. The script exits non-zero 
 It is safe to run repeatedly against the same database: every run uses fresh names and fresh UPI IDs (one UPI ID can belong to only one worker). It is **not** for a real site: it creates accounts and pays out fake money.
 
 
-## The other two checks
+## The other checks
 
 Same running site (and the same mail catcher), different questions:
 
 ```
 node e2e/security.mjs      # attack-minded: headers, one worker reaching another's data, admin routes as a worker, forged and malformed requests,
                            # uploads that are not images, error leaks, and script injection in a real browser. EXPECT_HSTS=1 for a production build.
+OWNER_EMAIL=... OWNER_PASSWORD=... node e2e/load.mjs   # 50 people at once (USERS=n), end to end: races, limits, edge cases, response times.
+                           # SPREAD_IPS=1 gives each person their own address (start the site with TRUST_PROXY_HOPS=1 for that).
 node e2e/a11y.mjs          # accessibility: axe-core (WCAG 2.1 A/AA) over every screen at phone, tablet and desktop widths. Needs `npm run dev` (it uses /dev).
 ```
 
-Both exit non-zero when something is wrong. Automated accessibility checks find only part of the problems; also try the screens with a keyboard and a screen reader.
+Each exits non-zero when something is wrong. Automated accessibility checks find only part of the problems; also try the screens with a keyboard and a screen reader.
 
 CI runs the journey and the attack checks against the real Docker images on every push (see `.github/workflows/ci.yml`).

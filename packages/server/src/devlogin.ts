@@ -72,5 +72,5 @@ export async function devLogin(ctx: Ctx, as: "worker" | "admin"): Promise<{ cook
   await ensureDemoData(ctx);
   const who = await ensureUser(ctx, as === "admin" ? DEV_ACCOUNTS.admin : DEV_ACCOUNTS.worker);
   const s = await createSession(ctx, who.userId, { userAgent: "dev-login" });
-  return { cookie: sessionCookie(ctx, s.token, s.expiresAt), location: as === "admin" ? "/admin" : "/" };
+  return { cookie: sessionCookie(ctx, s.token, s.expiresAt), location: as === "admin" ? "/admin" : "/app" };
 }

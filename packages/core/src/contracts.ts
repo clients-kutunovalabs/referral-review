@@ -175,7 +175,7 @@ export interface TicketMessage {
   senderName: string;
   body: string;
   at: string; // ISO
-  attachment?: { name: string; url: string }; // image, one per ticket for now
+  attachment?: { name: string; url: string; removed?: true }; // image, one per ticket for now; `removed` once deleted after 30 days
 }
 export interface Ticket {
   id: string;

@@ -36,6 +36,26 @@ for (const engine of engines()) {
       await expect(claimTask(ctx, u.userId, task, second)).resolves.toMatchObject({ status: "claimed" });
     });
 
+    it("pressing Claim again after the task filled up says 'already claimed', not 'slots full'", async () => {
+      const a = await makeUser(ctx); const b = await makeUser(ctx);
+      const task = await makeTask(ctx, admin, { slotsTotal: 2 });
+      await claimTask(ctx, a.userId, task, a.identityId);
+      await claimTask(ctx, b.userId, task, b.identityId);
+      expect(await code(claimTask(ctx, a.userId, task, a.identityId))).toBe("already_claimed");
+      const c = await makeUser(ctx);
+      expect(await code(claimTask(ctx, c.userId, task, c.identityId))).toBe("slots_full");
+    });
+
+    it("a claim whose timer ran out frees its slot at once, before the expiry sweep runs", async () => {
+      const a = await makeUser(ctx); const b = await makeUser(ctx);
+      const task = await makeTask(ctx, admin, { slotsTotal: 1, timerMinutes: 1 });
+      const first = await claimTask(ctx, a.userId, task, a.identityId);
+      expect(await code(claimTask(ctx, b.userId, task, b.identityId))).toBe("slots_full");
+      ctx.clock.advance(61_000);
+      await expect(claimTask(ctx, b.userId, task, b.identityId)).resolves.toMatchObject({ status: "claimed" });
+      expect((await listClaims(ctx, a.userId)).find((c) => c.id === first.id)?.status).toBe("expired");
+    });
+
     it("the per-account cap counts every email of the account", async () => {
       const u = await makeUser(ctx);
       const task = await makeTask(ctx, admin, { maxClaimsPerAccount: 2 });

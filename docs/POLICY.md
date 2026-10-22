@@ -9,6 +9,7 @@
 - Terms of Service and Privacy Policy (DPDP Act) need review before launch.
 
 - Emails per account: up to 10 (the login email included). An email already linked to an account gets the same answer as a new one but no code, so nobody can find out who is registered.
+- Screenshots: a work-proof screenshot is deleted 30 days after its review decision, and a ticket image 30 days after the ticket is resolved. The records (who did what, the decision, the note, the chat text) stay; the app says the image was removed. Pending reviews and open tickets are never touched. Payment screenshots are kept for good (proof of every payout).
 - Deleted accounts: every record is kept for good. The account's emails are released 30 days after deletion, so the address can sign up again as a new account.
 - Email: we send no emails except one-time verification codes: when an account is created, when an extra email is added, and when someone resets a forgotten password (a code, never a link). Workers see review results, payments and status in the app only.
 - Sign-in: the built-in provider owns identity today (sign-up, password, sessions, reset); Authgate will replace it behind the same server interface once its API is available. A session ends after **one week (168 hours) without a visit**, and every visit restarts that week, with no upper limit. The account's first email is verified once at sign-up. Extra emails are added and verified inside the site, one code each. Admins are invited, so the admin sign-in has no sign-up.

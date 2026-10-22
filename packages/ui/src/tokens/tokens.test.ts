@@ -43,3 +43,10 @@ describe("contrast (WCAG AA 4.5:1)", () => {
     it(`--${c} on --${c}-bg`, () => expect(ratio(t[`--${c}`]!, t[`--${c}-bg`]!)).toBeGreaterThanOrEqual(4.5));
   }
 });
+
+describe("landing page tokens", () => {
+  it("every extra token the landing page uses has the same value as tokens.css", async () => {
+    const { LANDING_EXTRA_TOKENS } = await import("../landing");
+    for (const [k, v] of Object.entries(LANDING_EXTRA_TOKENS)) expect(css).toContain(`${k}: ${v};`);
+  });
+});

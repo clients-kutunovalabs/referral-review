@@ -7,6 +7,8 @@ const DAY_MS = 86_400_000;
 export const EMAIL_RELEASE_DAYS = 30;
 /** Uploads that nothing refers to are removed once they are this old. */
 export const UNUSED_FILE_DAYS = 30;
+/** Work-proof screenshots are deleted this long after the review decision, ticket images this long after the ticket is resolved. */
+export const SCREENSHOT_RETENTION_DAYS = 30;
 
 /** Removes rows that are only useful while fresh. Never touches money, reviews, tickets or the audit log. */
 export async function purgeExpired(ctx: Ctx): Promise<{ sessions: number; codes: number; tickets: number; rateLimits: number; releasedEmails: number }> {
@@ -35,6 +37,36 @@ export async function releaseDeletedEmails(ctx: Ctx): Promise<number> {
     if (rows.length) await audit(t, ctx, null, "user.release_emails", undefined, { count: rows.length });
     return rows.length;
   });
+}
+
+/**
+ * Daily: deletes the stored image of work-proof screenshots reviewed 30+ days ago and of ticket images whose ticket was resolved
+ * 30+ days ago. The file row and every record stay; `purged_at` is set and the file route answers "removed". Payment-proof
+ * screenshots are never touched (they are the evidence that money was paid), nor anything still waiting for review or in an
+ * open ticket.
+ */
+export async function purgeOldScreenshots(ctx: Ctx): Promise<number> {
+  const cutoff = new Date(ctx.now().getTime() - SCREENSHOT_RETENTION_DAYS * DAY_MS);
+  let removed = 0;
+  for (;;) {
+    const due = await ctx.db.tx(async (t) => {
+      const rows = await t.query<{ id: string; storage_key: string }>(
+        `update files set purged_at = $3 where id in (
+           select f.id from files f where f.workspace_id = $1 and f.purged_at is null and (
+             (f.kind = 'proof' and exists (select 1 from submissions s join reviews r on r.submission_id = s.id where s.file_id = f.id and r.created_at <= $2))
+             or (f.kind = 'ticket_attachment' and exists (select 1 from ticket_messages m join tickets k on k.id = m.ticket_id
+                   where m.attachment_file_id = f.id and k.status = 'closed' and k.resolved_at <= $2)))
+           limit 200 for update skip locked)
+         returning id, storage_key`, [ctx.cfg.workspaceId, cutoff, ctx.now()]);
+      if (rows.length) await audit(t, ctx, null, "files.retention_purge", undefined, { count: rows.length });
+      return rows;
+    });
+    for (const f of due) {
+      try { await ctx.storage.delete(f.storage_key); } catch { logEvent("warn", "files.delete_failed", {}); }
+    }
+    removed += due.length;
+    if (due.length < 200) return removed;
+  }
 }
 
 /**

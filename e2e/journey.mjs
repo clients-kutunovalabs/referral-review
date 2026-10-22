@@ -50,9 +50,26 @@ const actx = await browser.newContext({ viewport: { width: 1440, height: 900 } }
 const w = await wctx.newPage(); const a = await actx.newPage();
 watch(w, "worker"); watch(a, "admin");
 
+// -------- the public page --------
+await step("public: the KwikTask page has its search and share tags in <head>, links to the app, and search files", async () => {
+  const html = await (await fetch(BASE + "/", { headers: { "user-agent": "Mozilla/5.0" } })).text();
+  const head = html.slice(0, html.indexOf("</head>"));
+  for (const tag of ["<title>KwikTask", 'name="description"', 'rel="canonical"', 'property="og:image"', "application/ld+json", 'name="robots" content="index'])
+    if (!head.includes(tag)) throw new Error("missing in <head>: " + tag);
+  if (html.includes("/_next/")) throw new Error("the public page should not load app code");
+  const robots = await (await fetch(BASE + "/robots.txt")).text();
+  if (!/Disallow: \/app/.test(robots) || !/Disallow: \/admin/.test(robots) || !/Sitemap: /.test(robots)) throw new Error("robots.txt: " + robots);
+  if (!(await (await fetch(BASE + "/sitemap.xml")).text()).includes("<loc>")) throw new Error("sitemap has no pages");
+  if (!(await (await fetch(BASE + "/llms.txt")).text()).startsWith("# KwikTask")) throw new Error("llms.txt missing");
+  if (!/noindex/.test(await (await fetch(BASE + "/app")).text())) throw new Error("the app must stay out of search");
+  await w.goto(BASE + "/");
+  await w.getByRole("link", { name: "Get started" }).first().click();
+  await w.waitForURL(/\/app$/);
+});
+
 // -------- worker signs up --------
 await step("worker: sees the login screen, not a flash of the wrong layout", async () => {
-  const res = await w.goto(BASE + "/");
+  const res = await w.goto(BASE + "/app");
   await see(w, "Log in");
   const csp = res.headers()["content-security-policy"] ?? "";
   if (!/script-src 'self' 'nonce-/.test(csp) || !/frame-ancestors 'none'/.test(csp)) throw new Error("CSP missing: " + csp);
@@ -334,16 +351,17 @@ await step("worker: Reload and bookmarks stay on the same screen (the address sh
   await w.reload();
   await see(w, "My tasks");
   if (!/#\/mytasks/.test(w.url())) throw new Error("reload lost the address: " + w.url());
-  // a bookmark opened in a fresh tab of the same signed-in browser
+  // an old bookmark from when the app lived at "/" (forwarded to /app), opened in a fresh tab of the same signed-in browser
   const tab = await wctx.newPage();
   await tab.goto(BASE + "/#/wallet");
+  await tab.waitForURL(/\/app#\/wallet/);
   await tab.getByText(/Available|Wallet/).first().waitFor({ timeout: 10000 });
   await tab.close();
   // nonsense in the address must not break the app or open anything: it just lands on the board
-  await w.goto(BASE + "/#/<img src=x onerror=window.__x=1>");
+  await w.goto(BASE + "/app#/<img src=x onerror=window.__x=1>");
   await w.reload();
   await w.getByRole("button", { name: /Switch email/ }).waitFor({ timeout: 10000 });
-  await w.goto(BASE + "/#/notAScreen?taskId=../../etc");
+  await w.goto(BASE + "/app#/notAScreen?taskId=../../etc");
   await w.reload();
   await w.getByRole("button", { name: /Switch email/ }).waitFor({ timeout: 10000 });
   if (await w.evaluate("window.__x")) throw new Error("script from the address ran");

@@ -91,7 +91,8 @@ process.env.DEV_LOGIN = "1"; // one-click sign-in for testing; the server refuse
 console.log(`\nStarting the site at http://localhost:${port}${port !== FIRST_PORT && !process.env.RR_PORT_QUIET ? `  (${FIRST_PORT} is taken by another program)` : ""}`);
 if (fromEnvFile.length) console.log(`Loaded from .env: ${fromEnvFile.join(", ")}`);
 console.log(`
-  Worker app:   http://localhost:${port}/
+  Landing page: http://localhost:${port}/
+  Worker app:   http://localhost:${port}/app
   Admin app:    http://localhost:${port}/admin
   Launch pad:   http://localhost:${port}/dev            (one-click sign-in for both, with demo data)
     signed in as worker: http://localhost:${port}/dev/login?as=worker

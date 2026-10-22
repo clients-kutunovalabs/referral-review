@@ -123,11 +123,10 @@ Test-harness mistakes made along the way, in the open: two shell commands that k
 | Item | Effect today |
 |---|---|
 | ~~Docker image never built~~ | **Done**: both images build, run as a non-root user, pass the 18-step browser journey, the attack checks and a backup-restore test. CI repeats all of it on every push. First thing to do on a machine with Docker. |
-| **One web server only** | Screenshots live on local disk. Several servers need the S3 adapter. |
+| **One web server only** | Screenshots live on local disk and are deleted 30 days after they are dealt with, so the disk stays small. A second web server would need shared storage (S3 adapter). |
 | **Offline use** (service worker) | The site installs to the home screen but needs a connection for every screen. |
-| **Sign-in redirect for bookmarks** | Bookmarks and Reload keep the screen (`/#/mytasks`, `/admin#/taskdetail?taskId=...`). If the session has ended, sign-in comes first and lands on the home screen, not the bookmarked one. The address uses the `#` part, so the server never sees it. |
+| **Sign-in redirect for bookmarks** | Bookmarks and Reload keep the screen (`/app#/mytasks`, `/admin#/taskdetail?taskId=...`). If the session has ended, sign-in comes first and lands on the home screen, not the bookmarked one. The address uses the `#` part, so the server never sees it. |
 | **Paging of the worker's own lists** | Admin lists (users, payout history, resolved tickets, task templates, review queue) load 50 at a time. A worker's own tasks and wallet still show the latest 500, help tickets 200: bounded by one person's activity. |
-| **Retention policy for screenshots that are used** | Unused uploads are deleted monthly; screenshots attached to work, payments or tickets are kept for good. |
 | **Change main email screen** | The main (login) email cannot be changed from the app. Change password is done. |
 | **Audit-log viewer, settings screen** (minimum payout is a database setting) | Read with SQL for now. |
 | **Notification badge / unread markers** | Replies appear by refresh only. |
@@ -192,7 +191,7 @@ Test-harness mistakes made along the way, in the open: two shell commands that k
 |---|---|---|
 | **Sign-in: Authgate adapter** | The built-in provider works today (passwords, one-time codes, sessions, reset, change password). | Authgate's API. It plugs into the server `AuthProvider` (`packages/server/src/auth.ts`); users, sessions and everything else stay as they are. |
 | **Database: Vista** | Works with any PostgreSQL 14+ through `DATABASE_URL`. | Confirm with Vista: a direct SQL connection (transactions, row locks and triggers are required), who runs migrations (`AUTO_MIGRATE`), and their backups. |
-| **File storage: S3-compatible adapter** | Local disk, fine for one web server. | Needed for a second web server or a separate upload domain. The `StoragePort` is ready (put, get, delete). |
+| **File storage: S3-compatible adapter** | Not needed now: local disk with 30-day retention (work proofs and ticket images; payment proofs kept). | Only if you run a second web server or want uploads on a separate domain. The `StoragePort` is ready (put, get, delete). |
 | **Email** | SMTP adapter works with any provider's SMTP (one-time codes only, by policy). | An SMTP account. An API adapter (SES, Resend) only if SMTP is blocked where you host. |
 | **Notifications** | None by policy: no emails except codes. In-app: lists refresh on their own. | Unread markers / badges if wanted (not built). |
 | **AI scripts** | Anthropic adapter written, off. | `ANTHROPIC_API_KEY` + `AI_MODEL`. When turned on, make the claim return at once and write the script a moment later (today the claim waits up to 25 s). |
@@ -203,3 +202,34 @@ Test-harness mistakes made along the way, in the open: two shell commands that k
 | **Upgrades** | Current versions are patched and `pnpm audit` is clean. | Next 16, ESLint 10, TypeScript 7, Vite 8: one at a time, each its own change. |
 | **Before launch (yours)** | | Hosting, domain, HTTPS proxy and `TRUST_PROXY_HOPS`; Terms and Privacy Policy (DPDP Act); a CA on TDS and payout cadence; an outside penetration test; a screen-reader and keyboard pass; a UPI key rotation script; optional breached-password check. |
 
+
+## Round 3: public page and search, speed, 50 people at once, screenshot retention
+
+**Public page.** `/` is now the KwikTask page: what it is, how it works, the selling points (several emails under one login, quick and simple, easy payment and UPI withdrawal, manual review with notes, admin roles), an FAQ and "Get started". It is finished HTML from a route handler: every search and share tag is in `<head>` (title, description, keywords, canonical, Open Graph and Twitter card with a 1200x630 image), JSON-LD for `SoftwareApplication`, `WebSite` and `FAQPage`, no JavaScript bundle. `robots.txt` (only `/` and `/llms.txt` allowed), `sitemap.xml`, and `llms.txt` (a plain summary for AI answer engines). The worker app moved to `/app`; old `/#/...` bookmarks are forwarded. Ranking itself also needs a live domain, time, links from other sites and Search Console; the code only makes the page eligible and well described.
+
+**Speed (Lighthouse 12, production build, local).**
+
+| Page | Mobile | Desktop | Accessibility | Best practices | SEO |
+|---|---|---|---|---|---|
+| `/` KwikTask page | 100 | 100 | 100 | 100 | 100 |
+| `/app` worker app | 97 | 100 | 100 | 100 | 54 (noindex on purpose) |
+| `/admin` | 98 | 100 | 100 | 100 | 54 (noindex on purpose) |
+
+**50 people at once** (`e2e/load.mjs`, Docker images, real PostgreSQL, mail catcher). Every step runs for everyone at the same moment: sign-up with emailed codes, home screens, two extra emails each, a 30-slot claim race, the same email again, other emails on an open task, uploads and submissions, two reviewers on the same queue, double payout requests, payments, tickets and replies, password guessing, the 10-email cap under concurrency, staff paying themselves, a suspended worker's payout, a deleted account, timed claims expiring, and 5 real browsers signing in during the load.
+
+- Each person from their own address: everything as designed. 0 server errors; exactly 30 of 47 claims won; scripts shared 10/10/10; every submission decided exactly once; one payout each; the cap held at 10 emails (9 of 10 parallel adds won). Slowest step: setting the password (p95 1.4 s, deliberate: password hashing); everything else p95 under 0.6 s.
+- Everyone from one office address: 0 server errors and no races, but see the limits below.
+
+Fixed from the run:
+| Found | Fix |
+|---|---|
+| Pressing Claim again on a task that had filled up said "All slots are taken" instead of "You already claimed this". | The already-claimed check runs first. Test added. |
+| A claim whose timer ran out kept its slot until the next minute's sweep, so the next person was turned away for up to a minute. | Claiming a task expires its overdue claims first, under the same lock. Test added. (The board can still show the task as full for up to a minute.) |
+
+Limits that work as built but matter (decide):
+| Limit | What happens | Recommendation |
+|---|---|---|
+| Sign-up codes: 20 per address per 10 minutes | 30 of 50 people behind one office connection could not sign up together. | For an office launch, raise it for the office IP or onboard in groups of 20; keep it for the public. |
+| Wrong password: 5 per email + address per 15 minutes | From a shared address, a colleague's wrong guesses lock the real person out for 15 minutes. | Acceptable; from their own phone network they can still sign in. |
+
+**Screenshot retention instead of S3.** Work-proof screenshots are deleted 30 days after the review decision and ticket images 30 days after the ticket is resolved (daily worker job, `purge-screenshots`). Payment screenshots are kept. Records stay; the app says "Image removed". Migration `0004_file_retention.sql`.

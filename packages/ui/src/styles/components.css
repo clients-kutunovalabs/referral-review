@@ -350,3 +350,4 @@ select { appearance: none; -webkit-appearance: none; padding-right: 36px; backgr
 .proof-link { display: block; margin-bottom: var(--space-5); }
 .proof-img { display: block; width: 100%; max-height: 460px; object-fit: contain; background: var(--surface-1); border: var(--border-width) solid var(--border); border-radius: var(--radius-md); }
 .load-more { display: flex; justify-content: center; margin: var(--space-6) 0; }
+.msg-removed { font-size: var(--text-sm); font-style: italic; opacity: 0.75; margin-bottom: var(--space-3); }

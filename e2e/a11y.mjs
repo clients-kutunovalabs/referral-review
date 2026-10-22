@@ -48,9 +48,10 @@ for (const [wname, size] of Object.entries(WIDTHS)) {
   // signed out: the login and the sign-up screens
   {
     const ctx = await browser.newContext({ viewport: size, bypassCSP: true }); const p = await ctx.newPage();
-    for (const path of ["/", "/admin"]) { await p.goto(BASE + path); await p.getByLabel("Password", { exact: true }).waitFor(); await scan(p, `${wname} ${path} login`); }
-    await p.goto(BASE + "/"); await p.getByRole("button", { name: "Create account" }).click(); await scan(p, `${wname} sign up`);
-    await p.goto(BASE + "/"); const forgot = p.getByRole("button", { name: /forgot/i }).first(); if (await forgot.count()) { await forgot.click(); await scan(p, `${wname} forgot password`); }
+    await p.goto(BASE + "/"); await scan(p, `${wname} public page`);
+    for (const path of ["/app", "/admin"]) { await p.goto(BASE + path); await p.getByLabel("Password", { exact: true }).waitFor(); await scan(p, `${wname} ${path} login`); }
+    await p.goto(BASE + "/app"); await p.getByRole("button", { name: "Create account" }).click(); await scan(p, `${wname} sign up`);
+    await p.goto(BASE + "/app"); const forgot = p.getByRole("button", { name: /forgot/i }).first(); if (await forgot.count()) { await forgot.click(); await scan(p, `${wname} forgot password`); }
     await ctx.close();
   }
   for (const as of ["worker", "admin"]) {

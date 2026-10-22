@@ -193,7 +193,7 @@ await check("script in a ticket or a note is shown as text and never runs", asyn
   const browser = await chromium.launch({ ...(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {}), args: ["--no-sandbox"] });
   try {
     const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } }); const p = await ctx.newPage();
-    await p.goto(BASE + "/"); await p.getByLabel("Email").fill(A.email); await p.getByLabel("Password", { exact: true }).fill("a long password 1");
+    await p.goto(BASE + "/app"); await p.getByLabel("Email").fill(A.email); await p.getByLabel("Password", { exact: true }).fill("a long password 1");
     await p.getByRole("button", { name: "Log in" }).click(); await p.getByRole("button", { name: "Help" }).waitFor({ timeout: 15000 });
     await p.getByRole("button", { name: "Help" }).click(); await p.getByText("Markup test").first().click();
     await p.getByText("onerror", { exact: false }).first().waitFor({ timeout: 10000 }); // the markup is visible as plain text
