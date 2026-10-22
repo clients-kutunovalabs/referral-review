@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ConfigError, loadConfig } from "./index";
 
-const prod = { NODE_ENV: "production", APP_URL: "https://tasks.example.com", DATABASE_URL: "postgres://u:p@h/db", SESSION_SECRET: "x".repeat(40), UPI_ENCRYPTION_KEY: Buffer.alloc(32, 1).toString("base64"), SMTP_URL: "smtps://u:p@smtp.example.com:465" };
+const prod = { NODE_ENV: "production", TRUST_PROXY_HOPS: "1", APP_URL: "https://tasks.example.com", DATABASE_URL: "postgres://u:p@h/db", SESSION_SECRET: "x".repeat(40), UPI_ENCRYPTION_KEY: Buffer.alloc(32, 1).toString("base64"), SMTP_URL: "smtps://u:p@smtp.example.com:465" };
 const problems = (env: Record<string, string>) => { try { loadConfig(env); return []; } catch (e) { return (e as ConfigError).problems; } };
 
 describe("loadConfig", () => {
@@ -10,6 +10,19 @@ describe("loadConfig", () => {
     expect(loadConfig({ DEV_LOGIN: "1" }).devLogin).toBe(true);
     expect(problems({ ...prod, DEV_LOGIN: "1" }).join(" ")).toContain("DEV_LOGIN");
     expect(problems({ ...prod, NODE_ENV: "development", APP_ENV: "production", DEV_LOGIN: "true" }).join(" ")).toContain("DEV_LOGIN");
+    // a production build can never turn it on, even when APP_ENV relaxes the other checks
+    expect(problems({ ...prod, APP_ENV: "development", DEV_LOGIN: "1" }).join(" ")).toContain("DEV_LOGIN");
+    expect(problems({ NODE_ENV: "test", DEV_LOGIN: "1" }).join(" ")).toContain("DEV_LOGIN");
+  });
+  it("needs TRUST_PROXY_HOPS spelled out in production", () => {
+    const { TRUST_PROXY_HOPS: _hops, ...noHops } = prod; void _hops;
+    expect(problems(noHops).join(" ")).toContain("TRUST_PROXY_HOPS");
+    expect(loadConfig({ ...prod, TRUST_PROXY_HOPS: "0" }).trustProxyHops).toBe(0);
+  });
+  it("keeps AI off unless both the key and the model are set", () => {
+    expect(loadConfig({}).aiModel).toBeUndefined();
+    expect(problems({ ANTHROPIC_API_KEY: "k" }).join(" ")).toContain("AI_MODEL");
+    expect(loadConfig({ ANTHROPIC_API_KEY: "k", AI_MODEL: "some-model" })).toMatchObject({ anthropicApiKey: "k", aiModel: "some-model" });
   });
 
   it("runs in development with nothing set", () => {
@@ -32,8 +45,9 @@ describe("loadConfig", () => {
     expect(problems({ OWNER_EMAIL: "a@b.co" }).join()).toContain("OWNER_EMAIL and OWNER_PASSWORD");
     expect(problems({ SESSION_SECRET: "short" }).join()).toContain("at least 32");
   });
-  it("APP_ENV overrides NODE_ENV, so a production build can be tried locally", () => {
-    expect(loadConfig({ NODE_ENV: "production", APP_ENV: "development" })).toMatchObject({ production: false, emailMode: "console" });
+  it("APP_ENV=development lets a production build run over http with test email, but still needs real secrets and a database", () => {
+    expect(loadConfig({ ...prod, APP_URL: "http://localhost:3100", APP_ENV: "development", SMTP_URL: "" })).toMatchObject({ production: false, emailMode: "console" });
+    expect(problems({ NODE_ENV: "production", APP_ENV: "development" }).join("\n")).toMatch(/SESSION_SECRET[\s\S]*UPI_ENCRYPTION_KEY[\s\S]*DATABASE_URL/);
     expect(problems({ NODE_ENV: "development", APP_ENV: "production" }).length).toBeGreaterThan(0);
   });
   it("treats empty strings as unset and parses booleans and numbers", () => {

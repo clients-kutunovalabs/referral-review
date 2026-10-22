@@ -40,15 +40,15 @@ export function createHttpApi(http: Http): Api {
     addScripts: (id, scripts) => post(`/api/admin/tasks/${enc(id)}/scripts`, { scripts }),
     reviewQueue: () => get("/api/admin/review"),
     decide: (submissionId, outcome, note) => post(`/api/admin/review/${enc(submissionId)}/decide`, { outcome, note }),
-    listPayouts: () => get("/api/admin/payouts"),
+    listPayouts: (historyLimit) => get(`/api/admin/payouts${historyLimit ? `?limit=${historyLimit}` : ""}`),
     getPayout: (id) => get(`/api/admin/payouts/${enc(id)}`),
     async markPaid(id, proof) {
       const proofFileId = await http.upload("payment_proof", proof);
       await post(`/api/admin/payouts/${enc(id)}/pay`, { proofFileId });
     },
     rejectPayout: (id, reason) => post(`/api/admin/payouts/${enc(id)}/reject`, { reason }),
-    releaseUpi: (upi) => post("/api/admin/upi/release", { upi }),
-    listUsers: () => get("/api/admin/users"),
+    listUsers: (limit) => get(`/api/admin/users${limit ? `?limit=${limit}` : ""}`),
+    getUser: (userId) => get(`/api/admin/users/${enc(userId)}`),
     setUserStatus: (userId, status) => post(`/api/admin/users/${enc(userId)}/status`, { status }),
     listMembers: () => get("/api/admin/members"),
     addMember: (email) => post("/api/admin/members", { email }),
@@ -57,7 +57,7 @@ export function createHttpApi(http: Http): Api {
     createRole: (name) => post("/api/admin/roles", { name }),
     setRolePermissions: (roleId, permissions) => post(`/api/admin/roles/${enc(roleId)}/permissions`, { permissions }),
     deleteRole: (roleId) => http.request("DELETE", `/api/admin/roles/${enc(roleId)}`),
-    listTickets: () => get("/api/admin/tickets"),
+    listTickets: (closedLimit) => get(`/api/admin/tickets${closedLimit ? `?limit=${closedLimit}` : ""}`),
     getTicket: (id) => get(`/api/admin/tickets/${enc(id)}`),
     assignTicket: (id, assigneeUserId) => post(`/api/admin/tickets/${enc(id)}/assign`, { assigneeId: assigneeUserId }),
     replyTicket: (id, body) => post(`/api/admin/tickets/${enc(id)}/reply`, { body }),

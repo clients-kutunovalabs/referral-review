@@ -26,7 +26,7 @@ export const DEV_ACCOUNTS = {
 const PIXEL = Uint8Array.from(Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64"));
 
 async function ensureUser(ctx: Ctx, a: { email: string; name: string; phone?: string }): Promise<{ userId: string; identityId: string }> {
-  const [found] = await ctx.db.query<{ user_id: string; id: string }>("select user_id, id from identities where workspace_id = $1 and lower(email) = $2", [ctx.cfg.workspaceId, a.email]);
+  const [found] = await ctx.db.query<{ user_id: string; id: string }>("select user_id, id from identities where workspace_id = $1 and lower(email) = $2 and released_at is null", [ctx.cfg.workspaceId, a.email]);
   if (found) return { userId: found.user_id, identityId: found.id };
   const hash = await hashPassword(DEV_PASSWORD);
   return ctx.db.tx(async (t) => {

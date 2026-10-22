@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { whenLabel } from "@rr/core";
 import { Button, DataTable, EmptyState, ListRow, Select, StatusPill, Tabs, TopBar, useLayout } from "../../primitives";
-import { ErrorBox, Loading, messageOf, needsReply, useAsync } from "../../data";
+import { ErrorBox, LoadMore, Loading, PAGE, messageOf, needsReply, useAsync } from "../../data";
 import { useServices } from "../../services";
 import { Composer, Conversation } from "../shared/Conversation";
 
@@ -9,16 +9,19 @@ export type SupportTab = "open" | "closed";
 
 export function AdminTicketList({ tab, setTab, onOpen, version = 0 }: { tab: SupportTab; setTab: (t: SupportTab) => void; onOpen: (id: string) => void; version?: number }) {
   const { api } = useServices();
-  const { data, error, loading, reload } = useAsync(() => api.admin.listTickets(), [version], { refreshMs: 20_000 });
+  const [limit, setLimit] = useState(PAGE);
+  // Re-read on every tab switch, so a ticket just resolved or reopened is already in the right list.
+  const { data, error, loading, reload } = useAsync(() => api.admin.listTickets(limit), [version, limit, tab], { refreshMs: 20_000 });
   const tickets = data ?? [];
   const open = tickets.filter((t) => t.status === "open");
   const closed = tickets.filter((t) => t.status === "closed");
   const list = tab === "open" ? open : closed;
+  const moreClosed = closed.length >= limit;
   const wide = useLayout() !== "phone";
   const waiting = open.filter(needsReply).length;
   return (
     <div className="screen"><TopBar title="Support" subtitle={`${open.length} open · ${waiting} need a reply`} />
-      <Tabs<SupportTab> value={tab} onChange={setTab} tabs={[{ id: "open", label: `Open (${open.length})` }, { id: "closed", label: `Closed (${closed.length})` }]} />
+      <Tabs<SupportTab> value={tab} onChange={setTab} tabs={[{ id: "open", label: `Open (${open.length})` }, { id: "closed", label: `Closed (${closed.length}${moreClosed ? "+" : ""})` }]} />
       <div className="scrollarea"><div className="content">
         {loading ? <Loading /> : null}
         {error ? <ErrorBox message={error} onRetry={reload} /> : null}
@@ -38,6 +41,7 @@ export function AdminTicketList({ tab, setTab, onOpen, version = 0 }: { tab: Sup
             right={tab === "open" && needsReply(t) ? <StatusPill tone="coral">Needs reply</StatusPill> : <span className="sub">#{t.number}</span>}
             sub={`${t.customerName} · ${t.assignee ? `Assigned to ${t.assignee}` : "Unassigned"} · ${t.status === "closed" ? `Resolved ${whenLabel(t.resolvedAt ?? t.updatedAt)}` : `Updated ${whenLabel(t.updatedAt)}`}`} />
         ))}
+        {tab === "closed" && moreClosed ? <LoadMore onClick={() => setLimit(limit + PAGE)} /> : null}
       </div></div>
     </div>
   );

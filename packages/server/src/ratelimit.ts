@@ -23,3 +23,8 @@ export async function hit(q: Queryable, key: string, limit: number, windowSecond
 export async function clear(q: Queryable, key: string): Promise<void> {
   await q.query("delete from rate_limits where key = $1", [key]);
 }
+
+/** Clears `key` and every key that starts with `key:` (for example one email's per-address counters). */
+export async function clearFamily(q: Queryable, key: string): Promise<void> {
+  await q.query("delete from rate_limits where key = $1 or left(key, length($2)) = $2", [key, `${key}:`]);
+}

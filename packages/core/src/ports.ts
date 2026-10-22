@@ -75,7 +75,7 @@ export interface OutgoingEmail { to: string; kind: EmailKind; code: string; expi
 /** Starts as Authgate's default sender; swapped for a real sender once one is configured. */
 export interface EmailSenderPort { send(message: OutgoingEmail): Promise<void> }
 
-/* ---------- File storage (private bucket, short-lived signed URLs) ---------- */
+/* ---------- File storage (private; files are only served through the authorised /api/files route) ---------- */
 
 export type UploadKind = "proof" | "payment_proof" | "ticket_attachment";
 export const UPLOAD_RULES = { maxBytes: 5 * 1024 * 1024, contentTypes: ["image/png", "image/jpeg", "image/webp"] as readonly string[] };
@@ -85,7 +85,8 @@ export interface StoragePort {
   put(input: { kind: UploadKind; contentType: string; bytes: Uint8Array }): Promise<{ key: string }>;
   /** Reads a stored file back. The server streams it after checking who is asking. */
   get(key: string): Promise<{ bytes: Uint8Array; contentType: string }>;
-  signedUrl(key: string, ttlSeconds: number): Promise<string>;
+  /** Removes a stored file. Used only by the monthly clean-up of uploads nothing refers to. A missing file is not an error. */
+  delete(key: string): Promise<void>;
 }
 
 /* ---------- AI script generation ---------- */

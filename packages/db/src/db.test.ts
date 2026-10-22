@@ -36,7 +36,7 @@ for (const engine of engines()) {
       const { db, close } = await setup();
       expect(await migrate(db)).toEqual([]);
       expect((await db.query("select id from workspaces"))[0]).toEqual({ id: WS });
-      expect((await db.query<{ n: number }>("select count(*)::int as n from role_permissions where role_id = $1", [OWNER_ROLE_ID]))[0]!.n).toBe(9);
+      expect((await db.query<{ n: number }>("select count(*)::int as n from role_permissions where role_id = $1", [OWNER_ROLE_ID]))[0]!.n).toBe(7);
       await close();
     });
 
@@ -102,7 +102,7 @@ for (const engine of engines()) {
       await close();
     });
 
-    it("one live claim per email and task, but an expired claim frees the slot", async () => {
+    it("one claim per email and task, ever: an expired or voided claim does not free the email", async () => {
       const { db, close } = await setup();
       const u = await user(db);
       const [t] = await db.query<{ id: string }>("insert into task_templates (workspace_id, title, description, site_url, reward_paise) values ($1,'t','d','https://x.co',4000) returning id", [WS]);
@@ -110,7 +110,33 @@ for (const engine of engines()) {
       await claim();
       expect(isUniqueViolation(await claim().then(() => null, (e: unknown) => e))).toBe(true);
       await db.query("update task_claims set status = 'expired'");
-      await claim();
+      expect(isUniqueViolation(await claim().then(() => null, (e: unknown) => e))).toBe(true);
+      await close();
+    });
+
+    it("a released email (account deleted 30+ days ago) no longer blocks the address; a live one does", async () => {
+      const { db, close } = await setup();
+      const u = await user(db);
+      const [{ email }] = await db.query<{ email: string }>("select email from identities where id = $1", [u.identityId]) as [{ email: string }];
+      const again = () => db.query("insert into identities (workspace_id, user_id, email) values ($1,$2,$3)", [WS, u.userId, email.toUpperCase()]);
+      expect(isUniqueViolation(await again().then(() => null, (e: unknown) => e))).toBe(true);
+      await db.query("update identities set released_at = now() where id = $1", [u.identityId]);
+      await again();
+      await close();
+    });
+
+    it("a deleted account must carry its deletion time, and only a deleted one", async () => {
+      const { db, close } = await setup();
+      const u = await user(db);
+      await expect(db.query("update users set status = 'deleted' where id = $1", [u.userId])).rejects.toThrow();
+      await db.query("update users set status = 'deleted', deleted_at = now() where id = $1", [u.userId]);
+      await expect(db.query("update users set deleted_at = null where id = $1", [u.userId])).rejects.toThrow();
+      await close();
+    });
+
+    it("the removed permissions can no longer be granted", async () => {
+      const { db, close } = await setup();
+      await expect(db.query("insert into role_permissions (role_id, permission) values ($1, 'design.view')", [OWNER_ROLE_ID])).rejects.toThrow();
       await close();
     });
 
@@ -159,6 +185,47 @@ for (const engine of engines()) {
         await expect(db.query("update payout_requests set status = 'rejected', reject_reason = 'x', rejected_at = now(), rejected_by = $2 where id = $1", [paid, u!.id])).rejects.toThrow();
         // running the migrations again changes nothing
         expect(await migrate(db)).toEqual([]);
+      } finally { await close(); }
+    });
+
+    /** A database with only the first `n` migrations applied, as a site that launched on that version would have. */
+    async function upTo(n: number) {
+      const t = await createBlankTestDb(engine);
+      await t.db.tx(async (q) => {
+        await q.exec("create table schema_migrations (id text primary key, applied_at timestamptz not null default now())");
+        for (const m of MIGRATIONS.slice(0, n)) { await q.exec(m.sql); await q.query("insert into schema_migrations (id) values ($1)", [m.id]); }
+      });
+      return t;
+    }
+
+    it("migration 0003 keeps deleted accounts' records, dates their deletion, and drops the removed permissions", async () => {
+      const { db, close } = await upTo(2);
+      try {
+        const WS = DEFAULT_WORKSPACE_ID;
+        const [u] = await db.query<{ id: string }>("insert into users (workspace_id, name, status) values ($1,'Gone','deleted') returning id", [WS]);
+        await db.query("insert into identities (workspace_id, user_id, email, is_primary) values ($1,$2,'gone@x.co',true)", [WS, u!.id]);
+        expect(await migrate(db)).toEqual(["0003_audit_fixes"]);
+        const [row] = await db.query<{ deleted_at: Date | null; released_at: Date | null }>(
+          "select u.deleted_at, i.released_at from users u join identities i on i.user_id = u.id where u.id = $1", [u!.id]);
+        expect(row!.deleted_at).not.toBeNull(); // dated now, so the 30 days start at the upgrade
+        expect(row!.released_at).toBeNull();
+        const perms = (await db.query<{ permission: string }>("select permission from role_permissions where role_id = $1", [OWNER_ROLE_ID])).map((r) => r.permission);
+        expect(perms).not.toContain("task.assign");
+        expect(perms).not.toContain("design.view");
+      } finally { await close(); }
+    });
+
+    it("migration 0003 stops, changing nothing, if an email already claimed the same task twice", async () => {
+      const { db, close } = await upTo(2);
+      try {
+        const WS = DEFAULT_WORKSPACE_ID;
+        const [u] = await db.query<{ id: string }>("insert into users (workspace_id, name) values ($1,'Twice') returning id", [WS]);
+        const [i] = await db.query<{ id: string }>("insert into identities (workspace_id, user_id, email, is_primary) values ($1,$2,'twice@x.co',true) returning id", [WS, u!.id]);
+        const [t] = await db.query<{ id: string }>("insert into task_templates (workspace_id, title, description, site_url, reward_paise) values ($1,'t','d','https://x.co',4000) returning id", [WS]);
+        const claim = (status: string) => db.query("insert into task_claims (workspace_id, template_id, user_id, identity_id, reward_paise, status) values ($1,$2,$3,$4,4000,$5)", [WS, t!.id, u!.id, i!.id, status]);
+        await claim("expired"); await claim("claimed");
+        await expect(migrate(db)).rejects.toThrow(/claimed the same task more than once/);
+        expect((await db.query<{ id: string }>("select id from schema_migrations")).map((r) => r.id)).not.toContain("0003_audit_fixes");
       } finally { await close(); }
     });
   });

@@ -551,7 +551,7 @@ function IdentitiesScreen({ identities, activeId, onSwitch, onAdded, onLogout, o
       {verifying ? (
         <Card>
           <CodeForm email={verifying.email} sent={verifying.sent} cancelLabel="Use a different email" onCancel={() => setVerifying(null)}
-            intro={<p className="note-text" style={{ marginTop: 0 }}>We sent a 6-digit code to <strong>{verifying.email}</strong> to confirm it.</p>}
+            intro={<p className="note-text" style={{ marginTop: 0 }}>We sent a 6-digit code to <strong>{verifying.email}</strong> to confirm it. If that email is already linked to an account, no code is sent and it cannot be added.</p>}
             onVerify={async (code) => { await api.user.addIdentity(verifying.email, code); onAdded(); setVerifying(null); setEmail(""); }}
             onResend={async () => { const sent = await emailVerification.send(verifying.email); setVerifying({ email: verifying.email, sent }); return sent; }} />
         </Card>

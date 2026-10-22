@@ -84,7 +84,7 @@ for (const engine of engines()) {
       expect(await code(claimTask(ctx, u.userId, await makeTask(ctx, admin), u.identityId))).toBe("suspended");
     });
 
-    it("an expired claim frees the slot and the email can claim again", async () => {
+    it("an expired claim frees the slot, but that email can never claim the task again", async () => {
       const u = await makeUser(ctx);
       const task = await makeTask(ctx, admin, { slotsTotal: 1, timerMinutes: 10 });
       await claimTask(ctx, u.userId, task, u.identityId);
@@ -93,7 +93,10 @@ for (const engine of engines()) {
       ctx.clock.advance(11 * 60_000);
       expect(await expireClaims(ctx)).toBeGreaterThanOrEqual(1);
       expect((await listClaims(ctx, u.userId))[0]!.status).toBe("expired");
-      await expect(claimTask(ctx, u.userId, task, u.identityId)).resolves.toMatchObject({ status: "claimed" });
+      expect(await code(claimTask(ctx, u.userId, task, u.identityId))).toBe("already_claimed");
+      // the slot is free again for someone else
+      const v = await makeUser(ctx);
+      await expect(claimTask(ctx, v.userId, task, v.identityId)).resolves.toMatchObject({ status: "claimed" });
     });
 
     it("cannot submit after the timer ran out, even before the sweeper runs", async () => {

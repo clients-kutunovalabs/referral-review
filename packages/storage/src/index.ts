@@ -17,15 +17,14 @@ export function createMockStorage(): StoragePort {
       if (!f) throw new Error("File not found.");
       return f;
     },
-    async signedUrl(key, ttlSeconds) {
-      if (!files.has(key)) throw new Error("File not found.");
-      return `mock://${key}?expires=${ttlSeconds}`;
+    async delete(key) {
+      files.delete(key);
     }
   };
 }
 
-/** Placeholder for the real object-storage adapter (S3-compatible: private bucket, separate upload domain, short-lived signed URLs). */
+/** Placeholder for the real object-storage adapter (S3-compatible, private bucket). */
 export function createObjectStorage(config: { endpoint: string }): StoragePort {
   const unavailable = async (): Promise<never> => { throw new Error(`Object storage is not connected yet (${config.endpoint || "no OBJECT_STORAGE_ENDPOINT"}).`); };
-  return { put: unavailable, get: unavailable, signedUrl: unavailable };
+  return { put: unavailable, get: unavailable, delete: unavailable };
 }

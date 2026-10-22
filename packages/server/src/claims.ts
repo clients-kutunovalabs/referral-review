@@ -71,8 +71,9 @@ export async function claimTask(ctx: Ctx, userId: string, taskId: string, identi
     if (state === "paused") return fail("task_closed", "This task is paused right now.", 409);
     if (state === "closed") return tpl.slots_total !== null && claimed >= tpl.slots_total ? fail("slots_full", "All slots for this task are taken.", 409) : fail("task_closed", "This task has closed.", 409);
 
+    // "same" counts every claim this email ever made on the task (one claim per email, ever); the account cap counts live claims.
     const [mine] = await t.query<{ n: number; same: number }>(
-      `select count(*)::int as n, count(*) filter (where identity_id = $2)::int as same from task_claims where template_id = $1 and user_id = $3 and ${LIVE_CLAIMS}`, [taskId, identityId, userId]);
+      `select count(*) filter (where ${LIVE_CLAIMS})::int as n, count(*) filter (where identity_id = $2)::int as same from task_claims where template_id = $1 and user_id = $3`, [taskId, identityId, userId]);
     if (mine && mine.same > 0) return conflict("already_claimed", "You already claimed this task with this email.");
     if (tpl.max_claims_per_account !== null && mine && mine.n >= tpl.max_claims_per_account) return conflict("claim_limit", "You have reached the limit for this task.");
 

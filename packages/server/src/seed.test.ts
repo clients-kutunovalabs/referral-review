@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { PERMISSIONS } from "@rr/core";
 import { OWNER_ROLE_ID } from "@rr/db";
 import { createBuiltinAuth, loadAdmin, seedOwner } from "./index";
 import { createTestCtx, engines, type TestCtx } from "./testing";
@@ -16,7 +17,7 @@ for (const engine of engines()) {
       const { userId } = await createBuiltinAuth(ctx).signIn("boss@example.com", "owner password 1");
       const admin = (await loadAdmin(ctx.db, userId))!;
       expect(admin).toMatchObject({ isOwner: true, name: "The Boss", roleIds: [OWNER_ROLE_ID] });
-      expect(admin.permissions.size).toBe(9);
+      expect(admin.permissions.size).toBe(PERMISSIONS.length);
       const [c] = await ctx.db.query<{ n: number }>("select count(*)::int as n from admin_members where is_owner");
       expect(c!.n).toBe(1);
     });

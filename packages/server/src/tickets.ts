@@ -94,11 +94,12 @@ export async function userSendMessage(ctx: Ctx, userId: string, ticketId: string
 
 /* ---------- support side ---------- */
 
-export async function listAdminTickets(ctx: Ctx, actor: AdminActor): Promise<Ticket[]> {
+/** Every open ticket, then the newest `closedLimit` resolved ones; the screen asks for more with a bigger limit. */
+export async function listAdminTickets(ctx: Ctx, actor: AdminActor, closedLimit = 50): Promise<Ticket[]> {
   needs(actor, "ticket.manage");
   const rows = await ctx.db.query<TicketRow>(
-    `(${SELECT} where t.workspace_id = $1 and t.status = 'open' order by t.updated_at desc limit 500)
-     union all (${SELECT} where t.workspace_id = $1 and t.status = 'closed' order by t.updated_at desc limit 200)`, [ctx.cfg.workspaceId]);
+    `(${SELECT} where t.workspace_id = $1 and t.status = 'open' order by t.updated_at desc limit 1000)
+     union all (${SELECT} where t.workspace_id = $1 and t.status = 'closed' order by t.updated_at desc, t.id limit $2)`, [ctx.cfg.workspaceId, closedLimit]);
   return rows.map((r) => toTicket(r));
 }
 export async function getAdminTicket(ctx: Ctx, actor: AdminActor, id: string): Promise<Ticket> {

@@ -207,9 +207,9 @@ export const adminUsers: AdminUserRow[] = [
 ];
 
 export const roles: Role[] = [
-  { id: "role-owner", name: "Owner", permissions: ["task.manage", "task.assign", "task_text.manage", "review.decide", "payout.mark_paid", "user.manage", "ticket.manage", "role.manage", "design.view"] },
+  { id: "role-owner", name: "Owner", permissions: ["task.manage", "task_text.manage", "review.decide", "payout.mark_paid", "user.manage", "ticket.manage", "role.manage"] },
   { id: "role-payments", name: "Payments", permissions: ["payout.mark_paid"] },
-  { id: "role-tasks", name: "Task manager", permissions: ["task.manage", "task.assign", "task_text.manage"] },
+  { id: "role-tasks", name: "Task manager", permissions: ["task.manage", "task_text.manage"] },
   { id: "role-reviewer", name: "Reviewer", permissions: ["review.decide"] },
   { id: "role-support", name: "Support", permissions: ["ticket.manage"] }
 ];

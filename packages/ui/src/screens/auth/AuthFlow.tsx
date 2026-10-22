@@ -75,7 +75,10 @@ export function AuthFlow({ brand, allowSignUp = true, signUpFields = [], initial
     ); break;
     case "verify": body = (
       <CodeForm email={email} sent={sent} cancelLabel="Use a different email" onCancel={() => go("signUp")}
-        intro={<p className="note-text" style={{ marginTop: 0 }}>We sent a 6-digit code to <strong>{email}</strong>. You only need to confirm this address once.</p>}
+        intro={<>
+          <p className="note-text" style={{ marginTop: 0 }}>We sent a 6-digit code to <strong>{email}</strong>. You only need to confirm this address once.</p>
+          <p className="hint" style={{ marginTop: 0 }}>No code after a minute? If you already have an account with this email, <button type="button" className="expander" style={{ padding: 0, minHeight: 0 }} onClick={() => go("signIn")}>log in</button> or reset your password instead.</p>
+        </>}
         onVerify={async (code) => { setTicket((await auth.verifyCode(email, code, "signup")).ticket); go("createPassword"); }}
         onResend={async () => { const s = await auth.requestCode(email, "signup", profile); setSent(s); return s; }} />
     ); break;

@@ -15,10 +15,10 @@ export async function createRuntime(cfg: AppConfig = loadConfig()): Promise<Runt
     db,
     cfg: {
       workspaceId: cfg.workspaceId, upiKey: cfg.upiKey, secret: cfg.secret, baseUrl: cfg.appUrl, trustProxyHops: cfg.trustProxyHops,
-      sessionIdleHours: cfg.sessionIdleHours, alertWebhookUrl: cfg.alertWebhookUrl, maxIdentitiesPerUser: cfg.maxIdentitiesPerUser, aiEnabled: !!cfg.anthropicApiKey
+      sessionIdleHours: cfg.sessionIdleHours, alertWebhookUrl: cfg.alertWebhookUrl, maxIdentitiesPerUser: cfg.maxIdentitiesPerUser, aiEnabled: !!(cfg.anthropicApiKey && cfg.aiModel)
     },
     storage: createLocalStorage(cfg.uploadDir),
-    ai: cfg.anthropicApiKey ? createAnthropicAi({ apiKey: cfg.anthropicApiKey, model: cfg.aiModel }) : aiNotConfigured,
+    ai: cfg.anthropicApiKey && cfg.aiModel ? createAnthropicAi({ apiKey: cfg.anthropicApiKey, model: cfg.aiModel }) : aiNotConfigured,
     email: cfg.emailMode === "smtp" ? createSmtpSender(cfg.smtpUrl as string, cfg.mailFrom) : createConsoleSender(),
     now: () => new Date()
   };

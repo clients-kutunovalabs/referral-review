@@ -18,7 +18,6 @@ export const schemas = {
   submit: z.object({ fileId: id, note: text(2100).optional() }).strict(),
   payout: z.object({ amountPaise: paise, upi: text(120) }).strict(),
   rejectPayout: z.object({ reason: text(200) }).strict(),
-  releaseUpi: z.object({ upi: text(120) }).strict(),
   changePassword: z.object({ current: text(200), next: text(200) }).strict(),
   sendIdentityCode: z.object({ email }).strict(),
   addIdentity: z.object({ email, code: z.string().regex(/^\d{6}$/, "Enter the 6-digit code.") }).strict(),

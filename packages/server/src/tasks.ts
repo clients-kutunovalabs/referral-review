@@ -66,14 +66,14 @@ function toRow(r: TemplateRow, now: Date): AdminTaskRow {
 }
 
 export async function listAdminTasks(ctx: Ctx, actor: AdminActor): Promise<AdminTaskRow[]> {
-  needs(actor, "task.manage", "task.assign");
+  needs(actor, "task.manage", "task_text.manage");
   const now = ctx.now();
   const rows = await ctx.db.query<TemplateRow>(`${SELECT} where t.workspace_id = $1 order by t.created_at desc limit 500`, [ctx.cfg.workspaceId]);
   return rows.map((r) => toRow(r, now));
 }
 
 export async function getAdminTask(ctx: Ctx, actor: AdminActor, id: string): Promise<AdminTaskDetail> {
-  needs(actor, "task.manage", "task.assign");
+  needs(actor, "task.manage", "task_text.manage");
   const [r] = await ctx.db.query<TemplateRow>(`${SELECT} where t.id = $1 and t.workspace_id = $2`, [id, ctx.cfg.workspaceId]);
   if (!r) return notFound("Task");
   const scripts = await ctx.db.query<{ body: string }>("select body from task_texts where template_id = $1 order by seq", [id]);

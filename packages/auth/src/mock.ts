@@ -60,8 +60,8 @@ export function createMockAuth(opts: MockAuthOptions = {}): AuthPort {
       const email = normalise(rawEmail);
       if (!EMAIL.test(email)) throw new AuthError("invalid_email", "Enter a valid email address.");
       const exists = accounts.has(email);
-      if (purpose === "signup" && exists) throw new AuthError("email_taken", "An account with this email already exists. Log in instead.");
-      const { sent, code } = otp.issue(keyOf(email, purpose), purpose === "signup" || exists);
+      // Same answer whether or not the email has an account: sign-up sends a code only to a new email, reset only to a known one.
+      const { sent, code } = otp.issue(keyOf(email, purpose), purpose === "signup" ? !exists : exists);
       if (purpose === "signup") profiles.set(email, profile ?? {});
       if (code) await sender.send({ to: email, kind: purpose === "signup" ? "signup_code" : "reset_code", code, expiresInMinutes: OTP_RULES.ttlMs / 60_000 });
       return sent;
@@ -121,8 +121,8 @@ export function createMockEmailVerification(opts: OtpOptions & { sender?: EmailS
     async send(rawEmail) {
       const email = normalise(rawEmail);
       if (!EMAIL.test(email)) throw new AuthError("invalid_email", "Enter a valid email address.");
-      if (opts.isTaken?.(email)) throw new AuthError("email_taken", "That email is already linked to an account.");
-      const { sent, code } = otp.issue(`identity:${email}`);
+      // An email another account holds gets the same answer but no code, so it can never be added.
+      const { sent, code } = otp.issue(`identity:${email}`, !opts.isTaken?.(email));
       if (code) await sender.send({ to: email, kind: "identity_code", code, expiresInMinutes: OTP_RULES.ttlMs / 60_000 });
       return sent;
     },

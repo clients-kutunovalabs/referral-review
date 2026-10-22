@@ -33,8 +33,10 @@ describe("sign up: email -> code -> password", () => {
   it("rejects a bad email and an email that already has an account", async () => {
     const { auth } = setup();
     await failsWith(auth.requestCode("nope", "signup"), "invalid_email");
-    const s = createMockAuth({ users: [{ email: "a@b.co", password: "password1" }] });
-    await failsWith(s.requestCode("a@b.co", "signup"), "email_taken");
+    // an existing email gets the same answer, but no code
+    const outbox = createOutbox(); const t = createMockAuth({ users: [{ email: "a@b.co", password: "password1" }], sender: outbox });
+    await expect(t.requestCode("a@b.co", "signup")).resolves.toBeDefined();
+    expect(outbox.sent).toHaveLength(0);
   });
   it("short passwords do not burn the ticket", async () => {
     const { auth, outbox } = setup();
@@ -128,8 +130,11 @@ describe("extra email verification (site-owned)", () => {
     expect(() => v.check("second@example.com", code(outbox))).not.toThrow();
     expect(() => v.check("second@example.com", code(outbox))).toThrow(/not valid/);
   });
-  it("refuses an email another account holds", async () => {
-    const v = createMockEmailVerification({ isTaken: (e) => e === "taken@b.co" });
-    await failsWith(v.send("taken@b.co"), "email_taken");
+  it("an email another account holds gets the same answer but no code, so it can never be added", async () => {
+    const outbox = createOutbox();
+    const v = createMockEmailVerification({ isTaken: (e) => e === "taken@b.co", sender: outbox });
+    await expect(v.send("taken@b.co")).resolves.toBeDefined();
+    expect(outbox.sent).toHaveLength(0);
+    expect(() => v.check("taken@b.co", "123456")).toThrow();
   });
 });

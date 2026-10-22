@@ -12,7 +12,7 @@ import type {
 export type ApiErrorCode =
   | "bad_request" | "unauthenticated" | "forbidden" | "not_found" | "conflict" | "rate_limited" | "csrf" | "internal"
   | "suspended" | "slots_full" | "task_closed" | "already_claimed" | "claim_limit" | "insufficient_balance" | "below_minimum"
-  | "payout_pending" | "upi_unavailable" | "invalid_code" | "not_pending" | "ticket_closed" | "upload_invalid"
+  | "payout_pending" | "account_inactive" | "invalid_code" | "not_pending" | "ticket_closed" | "upload_invalid"
   | "code_expired" | "too_many_attempts" | "invalid_email" | "email_taken" | "weak_password" | "invalid_credentials";
 
 export class ApiError extends Error {
@@ -122,16 +122,17 @@ export interface AdminApi {
   reviewQueue(): Promise<ReviewQueueItem[]>;
   decide(submissionId: string, outcome: OutcomePercent, note: string): Promise<void>;
 
-  listPayouts(): Promise<PayoutRequest[]>;
+  /** Every pending request, then the newest `historyLimit` (default 50) paid or rejected ones. */
+  listPayouts(historyLimit?: number): Promise<PayoutRequest[]>;
   /** Includes the full UPI ID. Reading it is audit-logged. */
   getPayout(id: string): Promise<PayoutRequest>;
   markPaid(id: string, proof: File): Promise<void>;
   /** Refuse a request (for example the UPI ID is wrong). The reason is shown to the worker and the held amount is released. */
   rejectPayout(id: string, reason: string): Promise<void>;
-  /** Free a UPI ID from the worker it is linked to, for someone who lost their old account. */
-  releaseUpi(upi: string): Promise<void>;
 
-  listUsers(): Promise<AdminUserRow[]>;
+  /** Newest first, `limit` (default 50) at a time. */
+  listUsers(limit?: number): Promise<AdminUserRow[]>;
+  getUser(userId: string): Promise<AdminUserRow>;
   setUserStatus(userId: string, status: "active" | "suspended" | "deleted"): Promise<void>;
 
   listMembers(): Promise<AdminMember[]>;
@@ -142,7 +143,8 @@ export interface AdminApi {
   setRolePermissions(roleId: string, permissions: PermissionKey[]): Promise<void>;
   deleteRole(roleId: string): Promise<void>;
 
-  listTickets(): Promise<Ticket[]>;
+  /** Every open ticket, then the newest `closedLimit` (default 50) resolved ones. */
+  listTickets(closedLimit?: number): Promise<Ticket[]>;
   getTicket(id: string): Promise<Ticket>;
   assignTicket(id: string, assigneeUserId: string | null): Promise<Ticket>;
   replyTicket(id: string, body: string): Promise<Ticket>;

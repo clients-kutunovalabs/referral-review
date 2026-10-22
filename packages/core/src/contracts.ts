@@ -125,14 +125,12 @@ export interface AdminUserRow {
 
 export const PERMISSIONS = [
   { key: "task.manage", label: "Create and edit tasks" },
-  { key: "task.assign", label: "Assign tasks" },
   { key: "task_text.manage", label: "Manage scripts" },
   { key: "review.decide", label: "Review submissions" },
   { key: "payout.mark_paid", label: "Make payments" },
   { key: "user.manage", label: "Manage users" },
   { key: "ticket.manage", label: "Handle support tickets" },
-  { key: "role.manage", label: "Manage roles" },
-  { key: "design.view", label: "View design system" }
+  { key: "role.manage", label: "Manage roles" }
 ] as const;
 export type PermissionKey = (typeof PERMISSIONS)[number]["key"];
 

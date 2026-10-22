@@ -1,11 +1,12 @@
 import type { Runtime } from "@rr/server/runtime-api";
 
 /**
- * The quick-login pages exist only in development, only when DEV_LOGIN is on, and only for a browser on this very machine
- * (a phone or laptop on the same network gets a plain 404). Configuration also refuses DEV_LOGIN in production.
+ * The quick-login pages exist only under `next dev` (NODE_ENV=development; a built site always runs as production, so they can
+ * never open there whatever the environment says), only when DEV_LOGIN is on (configuration refuses it anywhere else), and,
+ * as an extra layer, only for a browser on this machine (anything else gets a plain 404).
  */
 export function devLoginAllowed(rt: Runtime, req: Request): boolean {
-  if (!rt.cfg.devLogin || rt.cfg.production || process.env.NODE_ENV === "production") return false;
+  if (process.env.NODE_ENV !== "development" || !rt.cfg.devLogin || rt.cfg.production) return false;
   const host = (req.headers.get("host") ?? "").replace(/:\d+$/, "").toLowerCase();
   return host === "localhost" || host === "127.0.0.1" || host === "[::1]";
 }

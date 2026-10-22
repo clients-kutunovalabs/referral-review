@@ -4,7 +4,7 @@ import { OWNER_ROLE_ID } from "@rr/db";
 import {
   addMember, assignTicket, createRole, createSession, createTicket, dashboard, deleteRole, fileUrl, getAdminTicket, getUserTicket, listAdminTickets, listMembers,
   listRoles, listUserTickets, listUsers, loadAdmin, readFile, replyTicket, resolveSession, resolveTicket, saveUpload, setMemberRoles, setRolePermissions,
-  setUserStatus, sniffImage, ticketAgents, userSendMessage, mayUpload
+  setUserStatus, sniffImage, ticketAgents, userSendMessage, mayUpload, getUser
 } from "./index";
 import { PNG, createTestCtx, engines, fund, makeAdmin, makeTask, makeUser, submitted, type TestCtx } from "./testing";
 import type { AdminActor } from "./rbac";
@@ -43,8 +43,8 @@ for (const engine of engines()) {
         const r = await createRole(ctx, owner, "Support lead");
         expect(await code(createRole(ctx, owner, "support LEAD"))).toBe("conflict");
         expect(await code(createRole(ctx, owner, "  "))).toBe("bad_request");
-        await setRolePermissions(ctx, owner, r.id, ["ticket.manage", "ticket.manage", "task.assign"]);
-        expect((await listRoles(ctx)).find((x) => x.id === r.id)!.permissions.sort()).toEqual(["task.assign", "ticket.manage"]);
+        await setRolePermissions(ctx, owner, r.id, ["ticket.manage", "ticket.manage", "review.decide"]);
+        expect((await listRoles(ctx)).find((x) => x.id === r.id)!.permissions.sort()).toEqual(["review.decide", "ticket.manage"]);
         expect(await code(setRolePermissions(ctx, owner, r.id, ["made.up" as never]))).toBe("bad_request");
         expect(await code(setRolePermissions(ctx, owner, OWNER_ROLE_ID, []))).toBe("forbidden");
         expect(await code(deleteRole(ctx, owner, OWNER_ROLE_ID))).toBe("forbidden");
@@ -70,6 +70,39 @@ for (const engine of engines()) {
         expect(await code(setMemberRoles(ctx, owner, w.userId, [OWNER_ROLE_ID]))).toBe("bad_request");
         await deleteRole(ctx, owner, r.id);
         expect((await listMembers(ctx, owner)).find((x) => x.id === w.userId)!.roleIds).toEqual([]);
+      });
+      it("a role manager cannot raise themselves or anyone past their own permissions; only the owner hands out Manage roles", async () => {
+        const mgr = await makeAdmin(ctx, ["role.manage", "ticket.manage"]);
+        const big = await createRole(ctx, owner, "Everything but roles");
+        // the test "owner" holds every permission but is not THE owner, so it also cannot hand out Manage roles
+        expect(await code(setRolePermissions(ctx, owner, big.id, ["role.manage"]))).toBe("forbidden");
+        await setRolePermissions(ctx, owner, big.id, ["payout.mark_paid", "ticket.manage"]);
+        // not on themselves, not beyond what they hold, not on a role holding more than they do
+        const mine = (await listMembers(ctx, owner)).find((m) => m.id === mgr.userId)!.roleIds;
+        expect(await code(setMemberRoles(ctx, mgr, mgr.userId, mine))).toBe("forbidden");
+        const w = await makeUser(ctx); await addMember(ctx, owner, w.email);
+        expect(await code(setMemberRoles(ctx, mgr, w.userId, [big.id]))).toBe("forbidden");
+        expect(await code(setRolePermissions(ctx, mgr, big.id, ["ticket.manage"]))).toBe("forbidden");
+        expect(await code(deleteRole(ctx, mgr, big.id))).toBe("forbidden");
+        const fresh = await createRole(ctx, mgr, "Helpdesk");
+        expect(await code(setRolePermissions(ctx, mgr, fresh.id, ["payout.mark_paid"]))).toBe("forbidden");
+        expect(await code(setRolePermissions(ctx, mgr, fresh.id, ["role.manage"]))).toBe("forbidden");
+        // within their own permissions, they can
+        await setRolePermissions(ctx, mgr, fresh.id, ["ticket.manage"]);
+        await setMemberRoles(ctx, mgr, w.userId, [fresh.id]);
+        expect([...(await loadAdmin(ctx.db, w.userId))!.permissions]).toEqual(["ticket.manage"]);
+        // and cannot take power away from someone who has more than they do
+        await setMemberRoles(ctx, owner, w.userId, [big.id]);
+        expect(await code(setMemberRoles(ctx, mgr, w.userId, []))).toBe("forbidden");
+      });
+      it("the real owner can hand out Manage roles", async () => {
+        const [o] = await ctx.db.query<{ user_id: string }>("select user_id from admin_members where is_owner");
+        const theOwner = o ? (await loadAdmin(ctx.db, o.user_id))! : await (async () => {
+          await ctx.db.query("update admin_members set is_owner = true where user_id = $1", [owner.userId]);
+          return (await loadAdmin(ctx.db, owner.userId))!;
+        })();
+        const r = await createRole(ctx, theOwner, "Team lead");
+        await expect(setRolePermissions(ctx, theOwner, r.id, ["role.manage"])).resolves.toBeUndefined();
       });
       it("the owner member cannot be given other roles", async () => {
         const [o] = await ctx.db.query<{ user_id: string }>("select user_id from admin_members limit 1");
@@ -103,6 +136,25 @@ for (const engine of engines()) {
         await ctx.db.query("update admin_members set is_owner = true where user_id = $1 and not exists (select 1 from admin_members where is_owner)", [owner.userId]);
         const [o] = await ctx.db.query<{ user_id: string }>("select user_id from admin_members where is_owner");
         expect(await code(setUserStatus(ctx, mgr, o!.user_id, "suspended"))).toBe("forbidden");
+      });
+      it("the user list comes a page at a time, newest first, and one user can be read directly", async () => {
+        const made = [];
+        for (let i = 0; i < 3; i++) { made.push(await makeUser(ctx)); ctx.clock.advance(1000); }
+        await ctx.db.query("update users set created_at = $2 where id = $1", [made[2]!.userId, new Date(Date.now() + 86_400_000 * 365)]);
+        const first = await listUsers(ctx, owner, 1);
+        expect(first.map((u) => u.id)).toEqual([made[2]!.userId]);
+        expect((await listUsers(ctx, owner, 2))).toHaveLength(2);
+        expect(await getUser(ctx, owner, made[0]!.userId)).toMatchObject({ id: made[0]!.userId, status: "active" });
+        expect(await code(getUser(ctx, owner, "00000000-0000-0000-0000-00000000dead"))).toBe("not_found");
+      });
+      it("a user manager handles workers, not the admin team; deleting dates the deletion", async () => {
+        const mgr = await makeAdmin(ctx, ["user.manage"]);
+        const colleague = await makeAdmin(ctx, ["review.decide"]);
+        expect(await code(setUserStatus(ctx, mgr, colleague.userId, "suspended"))).toBe("forbidden");
+        const w = await makeUser(ctx);
+        await setUserStatus(ctx, mgr, w.userId, "deleted");
+        const [u] = await ctx.db.query<{ deleted_at: Date | null }>("select deleted_at from users where id = $1", [w.userId]);
+        expect(u!.deleted_at).not.toBeNull();
       });
       it("a suspended worker cannot submit, but their past records stay visible to admins", async () => {
         const u = await makeUser(ctx);

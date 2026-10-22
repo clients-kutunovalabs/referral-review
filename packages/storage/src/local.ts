@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, resolve, sep } from "node:path";
 import { UPLOAD_RULES, type StoragePort, type UploadKind } from "@rr/core";
 
@@ -37,7 +37,9 @@ export function createLocalStorage(dir: string): StoragePort {
       const bytes = await readFile(pathOf(key));
       return { bytes: new Uint8Array(bytes), contentType: TYPE[key.split(".").pop() as string] as string };
     },
-    async signedUrl() { throw new Error("The local store has no signed URLs: files are served through /api/files after an access check."); }
+    async delete(key) {
+      await rm(pathOf(key), { force: true });
+    }
   };
 }
 

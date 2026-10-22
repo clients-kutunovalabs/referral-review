@@ -109,7 +109,6 @@ export function createMockApi(opts: MockOptions): Mock {
     wallet: () => wait({ earned, entries: [...entries].sort((a, b) => (a.at < b.at ? 1 : -1)), identities, payouts: myPayouts.map((p) => { const { upiFull: _f, ...rest } = p; void _f; return rest; }) }),
     async requestPayout(amount, upi) {
       if (myPayouts.some((p) => p.status === "pending")) throw new ApiError("payout_pending", "You already have a payout request processing.", 409);
-      if (upi.toLowerCase() === "taken@okhdfc") throw new ApiError("upi_unavailable", "This UPI ID can't be used for a payout. Check it and try again, or contact support.", 409);
       const [name = "", bank = ""] = upi.split("@");
       const p: PayoutRequest = { id: id("p"), who: WORKER, amount, status: "pending", upiMasked: `${name.slice(0, 3)}••@${bank}`, upiFull: upi, at: now() };
       myPayouts.unshift(p);
@@ -163,9 +162,9 @@ export function createMockApi(opts: MockOptions): Mock {
         ]
       };
     },
-    async listTasks() { must("task.manage", "task.assign"); return clone([...tasks.map(taskRow), ...closedExtras]); },
+    async listTasks() { must("task.manage", "task_text.manage"); return clone([...tasks.map(taskRow), ...closedExtras]); },
     async getTask(tid) {
-      must("task.manage", "task.assign");
+      must("task.manage", "task_text.manage");
       const t = tasks.find((x) => x.id === tid);
       if (!t) throw new ApiError("not_found", "Task was not found.", 404);
       const detail: AdminTaskDetail = { ...taskRow(t), description: t.description, siteUrl: t.siteUrl, keywords: t.keywords, ...(t.aiConfig ? { aiConfig: t.aiConfig } : {}), maxClaimsPerAccount: t.maxClaimsPerAccount, scripts: scripts[tid] ?? [] };
@@ -207,7 +206,11 @@ export function createMockApi(opts: MockOptions): Mock {
         }
       }
     },
-    async listPayouts() { must("payout.mark_paid"); return clone(payerList()); },
+    async listPayouts(historyLimit = 50) {
+      must("payout.mark_paid");
+      const all = payerList();
+      return clone([...all.filter((p) => p.status === "pending"), ...all.filter((p) => p.status !== "pending").slice(0, historyLimit)]);
+    },
     async getPayout(pid) {
       must("payout.mark_paid");
       const p = findPayout(pid);
@@ -227,11 +230,13 @@ export function createMockApi(opts: MockOptions): Mock {
       if (reason.trim().length < 3) throw new ApiError("bad_request", "Say why it is rejected, so the worker knows what to fix.", 400);
       p.status = "rejected"; p.rejectReason = reason.trim(); p.rejectedAt = now();
     },
-    async releaseUpi(upi) {
-      must("payout.mark_paid");
-      if (upi.trim().toLowerCase() !== "taken@okhdfc") throw new ApiError("not_found", "A link for that UPI ID was not found.", 404);
+    async listUsers(limit = 50) { must("user.manage"); return clone(users.slice(0, limit)); },
+    async getUser(uid) {
+      must("user.manage");
+      const u = users.find((x) => x.id === uid);
+      if (!u) throw new ApiError("not_found", "User was not found.", 404);
+      return clone(u);
     },
-    async listUsers() { must("user.manage"); return clone(users); },
     async setUserStatus(uid, status) {
       must("user.manage");
       const u = users.find((x) => x.id === uid);
@@ -265,7 +270,10 @@ export function createMockApi(opts: MockOptions): Mock {
       roles.splice(roles.findIndex((r) => r.id === rid), 1);
       for (const m of members) m.roleIds = m.roleIds.filter((x) => x !== rid);
     },
-    async listTickets() { must("ticket.manage"); return clone(tickets.map(ticketList)); },
+    async listTickets(closedLimit = 50) {
+      must("ticket.manage");
+      return clone([...tickets.filter((t) => t.status === "open"), ...tickets.filter((t) => t.status === "closed").slice(0, closedLimit)].map(ticketList));
+    },
     async getTicket(tid) { must("ticket.manage"); return getTicket(tid); },
     async assignTicket(tid, assigneeUserId) {
       must("ticket.manage");

@@ -93,7 +93,6 @@ await check("a worker cannot reach any admin route (403)", async () => {
   for (const p of PRIVATE.filter((x) => x.startsWith("/api/admin"))) { const r = await A.c.get(p); expect(r.status === 403, `${p} gave ${r.status}`); }
   const w = await A.c.post("/api/admin/tasks", { title: "x" }); expect(w.status === 403, "worker could create a task: " + w.status);
   const rej = await A.c.post(`/api/admin/payouts/${crypto.randomUUID()}/reject`, { reason: "nope nope" }); expect(rej.status === 403, "worker could reject a payout: " + rej.status);
-  const rel = await A.c.post("/api/admin/upi/release", { upi: "a@b" }); expect(rel.status === 403, "worker could release a UPI ID: " + rel.status);
   const dec = await A.c.post(`/api/admin/review/${crypto.randomUUID()}/decide`, { outcome: 100, note: "self approve" }); expect(dec.status === 403, "worker could approve work: " + dec.status);
 });
 

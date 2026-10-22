@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { ApiError } from "@rr/core";
 import { OUTCOME_PERCENTS, rupees } from "@rr/money";
 import {
-  balanceOf, claimTask, decide, getPayout, listClaims, listPayouts, markPaid, reconcile, rejectPayout, releaseUpi, requestPayout, reviewQueue, saveUpload, walletView
+  balanceOf, claimTask, decide, getPayout, listClaims, listPayouts, markPaid, reconcile, rejectPayout, requestPayout, reviewQueue, saveUpload, walletView
 } from "./index";
 import { PNG, createTestCtx, engines, fund, makeAdmin, makeTask, makeUser, submitted, type TestCtx } from "./testing";
 import type { AdminActor } from "./rbac";
@@ -181,20 +181,15 @@ for (const engine of engines()) {
         await expect(ctx.db.query("update payout_requests set status = 'pending', reject_reason = null, rejected_at = null, rejected_by = null where id = $1", [p.id])).rejects.toThrow();
       });
 
-      it("one UPI ID belongs to one worker: refused while another waits on it, and once it has been paid to someone else", async () => {
+      it("one-UPI-per-worker is postponed: two workers may use the same UPI ID, even at the same time", async () => {
         const a = await makeUser(ctx); const b = await makeUser(ctx);
         await fund(ctx, a, reviewer, owner, 100n); await fund(ctx, b, reviewer, owner, 100n);
         const shared = `shared${Date.now().toString(36)}@okbank`;
         const first = await requestPayout(ctx, a.userId, rupees(20), shared);
-        // waiting on a's request, even with different letter case, b cannot use it, and is not told whose it is
-        const err = (await requestPayout(ctx, b.userId, rupees(20), shared.toUpperCase()).then(() => null, (e: unknown) => e)) as ApiError;
-        expect(err.code).toBe("upi_unavailable");
-        expect(err.message).not.toContain(a.name);
-        expect(await balance(b.userId)).toBe(rupees(100)); // nothing was held for b
+        await expect(requestPayout(ctx, b.userId, rupees(20), shared.toUpperCase())).resolves.toMatchObject({ status: "pending" });
         await markPaid(ctx, payer, first.id, await proof(payer));
-        expect(await code(requestPayout(ctx, b.userId, rupees(20), shared))).toBe("upi_unavailable");
-        // the owner can keep using it
-        await expect(requestPayout(ctx, a.userId, rupees(20), shared)).resolves.toMatchObject({ status: "pending" });
+        const [bound] = await ctx.db.query<{ n: number }>("select count(*)::int as n from upi_bindings");
+        expect(bound!.n).toBe(0); // nothing links an ID to a worker any more
       });
 
       it("a rejected request does not claim the UPI ID, so a mistyped ID cannot block its real owner", async () => {
@@ -206,30 +201,24 @@ for (const engine of engines()) {
         await expect(requestPayout(ctx, b.userId, rupees(20), typo)).resolves.toMatchObject({ status: "pending" });
       });
 
-      it("an admin can release a UPI ID for a worker who lost their old account; it is logged", async () => {
-        const old = await makeUser(ctx); const fresh = await makeUser(ctx);
-        await fund(ctx, old, reviewer, owner, 100n); await fund(ctx, fresh, reviewer, owner, 100n);
-        const id = `lost${Date.now().toString(36)}@okbank`;
-        await markPaid(ctx, payer, (await requestPayout(ctx, old.userId, rupees(20), id)).id, await proof(payer));
-        expect(await code(requestPayout(ctx, fresh.userId, rupees(20), id))).toBe("upi_unavailable");
-        expect(await code(releaseUpi(ctx, reviewer, id))).toBe("forbidden");
-        expect(await code(releaseUpi(ctx, payer, "nobody@okbank"))).toBe("not_found");
-        await releaseUpi(ctx, payer, id);
-        const [log] = await ctx.db.query<{ n: number }>("select count(*)::int as n from admin_audit_log where action = 'payout.release_upi' and target_id = $1", [old.userId]);
-        expect(log!.n).toBe(1);
-        await expect(requestPayout(ctx, fresh.userId, rupees(20), id)).resolves.toMatchObject({ status: "pending" });
+      it("a payer cannot pay their own request; the owner can", async () => {
+        const self = await makeAdmin(ctx, ["payout.mark_paid"]);
+        const me = { userId: self.userId, identityId: (await ctx.db.query<{ id: string }>("select id from identities where user_id = $1", [self.userId]))[0]!.id, email: "", name: self.name };
+        await fund(ctx, me, reviewer, owner, 100n);
+        const p = await requestPayout(ctx, self.userId, rupees(20), `self${Date.now().toString(36)}@okbank`);
+        expect(await code(markPaid(ctx, self, p.id, await proof(self)))).toBe("forbidden");
+        await expect(markPaid(ctx, payer, p.id, await proof(payer))).resolves.toBeUndefined();
       });
 
-      it("paying is refused, and nothing moves, if the UPI ID got linked to another worker in the meantime", async () => {
-        const a = await makeUser(ctx); const b = await makeUser(ctx);
-        await fund(ctx, a, reviewer, owner, 100n);
-        const id = `late${Date.now().toString(36)}@okbank`;
-        const p = await requestPayout(ctx, a.userId, rupees(20), id);
-        const [h] = await ctx.db.query<{ upi_hash: string }>("select upi_hash from payout_requests where id = $1", [p.id]);
-        await ctx.db.query("insert into upi_bindings (upi_hash, user_id) values ($1,$2)", [h!.upi_hash, b.userId]);
-        expect(await code(markPaid(ctx, payer, p.id, await proof(payer)))).toBe("conflict");
-        expect((await balanceOf(ctx.db, a.userId)).debits).toBe(0n);
-        await rejectPayout(ctx, payer, p.id, "This UPI ID can't be used");
+      it("a suspended or deleted worker's request is not paid; rejecting it releases the amount", async () => {
+        const u = await makeUser(ctx);
+        await fund(ctx, u, reviewer, owner, 100n);
+        const p = await requestPayout(ctx, u.userId, rupees(20), upiFor(u));
+        await ctx.db.query("update users set status = 'suspended' where id = $1", [u.userId]);
+        expect(await code(markPaid(ctx, payer, p.id, await proof(payer)))).toBe("account_inactive");
+        expect((await balanceOf(ctx.db, u.userId)).debits).toBe(0n);
+        await rejectPayout(ctx, payer, p.id, "Account is suspended");
+        expect((await balanceOf(ctx.db, u.userId)).pending).toBe(0n);
       });
 
       it("proof must be the payer's own payment screenshot, used once", async () => {
@@ -254,13 +243,13 @@ for (const engine of engines()) {
         expect(await code(markPaid(ctx, reviewer, p.id, await proof(payer)))).toBe("forbidden");
       });
 
-      it("a suspended worker cannot request a payout but the admin can still pay what was requested", async () => {
+      it("a suspended worker cannot request a payout, and what they requested before is not paid", async () => {
         const u = await makeUser(ctx);
         await fund(ctx, u, reviewer, owner, 50n);
         const p = await requestPayout(ctx, u.userId, rupees(20), upiFor(u));
         await ctx.db.query("update users set status = 'suspended' where id = $1", [u.userId]);
         expect(await code(requestPayout(ctx, u.userId, rupees(10), upiFor(u)))).toBe("suspended");
-        await expect(markPaid(ctx, payer, p.id, await proof(payer))).resolves.toBeUndefined();
+        expect(await code(markPaid(ctx, payer, p.id, await proof(payer)))).toBe("account_inactive");
       });
 
       it("the ledger cannot be changed, even by buggy application code", async () => {
@@ -314,16 +303,6 @@ for (const engine of engines()) {
           const out = await Promise.allSettled(Array.from({ length: 10 }, () => requestPayout(ctx, u.userId, rupees(60), upiFor(u))));
           expect(out.filter((o) => o.status === "fulfilled")).toHaveLength(1);
           expect((await balanceOf(ctx.db, u.userId)).pending).toBe(rupees(60));
-        });
-
-        it("two workers requesting the same UPI ID at once: exactly one request is created", async () => {
-          const a = await makeUser(ctx); const b = await makeUser(ctx);
-          await fund(ctx, a, reviewer, owner, 100n); await fund(ctx, b, reviewer, owner, 100n);
-          const id = `race${Date.now().toString(36)}@okbank`;
-          const out = await Promise.allSettled([requestPayout(ctx, a.userId, rupees(20), id), requestPayout(ctx, b.userId, rupees(20), id)]);
-          expect(out.filter((o) => o.status === "fulfilled")).toHaveLength(1);
-          const lost = out.find((o) => o.status === "rejected") as PromiseRejectedResult;
-          expect((lost.reason as ApiError).code).toBe("upi_unavailable");
         });
 
         it("two payers paying the same request at once: it is paid once, one debit", async () => {

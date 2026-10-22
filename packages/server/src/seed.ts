@@ -14,7 +14,7 @@ export async function seedOwner(ctx: Ctx, owner: { email: string; name: string; 
   if (!isEmail(email)) return fail("invalid_email", "OWNER_EMAIL is not a valid email address.");
   const hash = await hashPassword(owner.password);
   return ctx.db.tx(async (t) => {
-    const [existing] = await t.query<{ user_id: string }>("select user_id from identities where workspace_id = $1 and lower(email) = $2 and is_primary", [ctx.cfg.workspaceId, email]);
+    const [existing] = await t.query<{ user_id: string }>("select user_id from identities where workspace_id = $1 and lower(email) = $2 and is_primary and released_at is null", [ctx.cfg.workspaceId, email]);
     let userId = existing?.user_id;
     let created = false;
     if (!userId) {

@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { PERMISSIONS } from "@rr/core";
 import { balanceOf, createBuiltinAuth, loadAdmin, resolveSession, reviewQueue } from "./index";
 import { devLogin, DEV_ACCOUNTS, DEV_PASSWORD } from "./devlogin";
 import { createTestCtx, engines, type TestCtx } from "./testing";
@@ -16,7 +17,7 @@ for (const engine of engines()) {
       expect(a.location).toBe("/admin");
       const adminSession = (await resolveSession(ctx, tokenOf(a.cookie)))!;
       const admin = (await loadAdmin(ctx.db, adminSession.userId))!;
-      expect(admin.permissions.size).toBe(9);
+      expect(admin.permissions.size).toBe(PERMISSIONS.length);
       expect(await reviewQueue(ctx, admin)).toHaveLength(1);
 
       const w = await devLogin(ctx, "worker");

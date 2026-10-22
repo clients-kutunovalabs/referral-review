@@ -10,7 +10,8 @@ export type HelpTab = "open" | "closed";
 /** Help: two lists, Open and Closed, so rows need no status. */
 export function HelpScreen({ tab, setTab, onOpen, onCreate, version = 0 }: { tab: HelpTab; setTab: (t: HelpTab) => void; onOpen: (id: string) => void; onCreate: () => void; version?: number }) {
   const { api } = useServices();
-  const { data: tickets, error, loading, reload } = useAsync(() => api.user.listTickets(), [version], { refreshMs: 30_000 });
+  // Re-read on every tab switch: a ticket resolved a moment ago must already be under Closed, not 30 seconds later.
+  const { data: tickets, error, loading, reload } = useAsync(() => api.user.listTickets(), [version, tab], { refreshMs: 30_000 });
   const wide = useLayout() !== "phone";
   const open = (tickets ?? []).filter((t) => t.status === "open");
   const closed = (tickets ?? []).filter((t) => t.status === "closed");

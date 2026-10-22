@@ -11,7 +11,7 @@ import { dashboard } from "../dashboard";
 import { UPLOAD_KINDS } from "../constants";
 import { mayUpload, readFile, saveUpload } from "../files";
 import { addIdentity, getMe, sendIdentityCode } from "../identities";
-import { getPayout, listPayouts, markPaid, rejectPayout, releaseUpi, requestPayout } from "../payouts";
+import { getPayout, listPayouts, markPaid, rejectPayout, requestPayout } from "../payouts";
 import { hit } from "../ratelimit";
 import { loadAdmin, type AdminActor } from "../rbac";
 import { addMember, createRole, deleteRole, listMembers, listRoles, setMemberRoles, setRolePermissions } from "../roles";
@@ -19,7 +19,7 @@ import { csrfToken, createSession, resolveSession, revokeSession, type SessionIn
 import { decide, reviewQueue, submitProof } from "../submissions";
 import { addScripts, createTask, getAdminTask, listAdminTasks, listBoard, setTaskStatus } from "../tasks";
 import { assignTicket, createTicket, getAdminTicket, getUserTicket, listAdminTickets, listUserTickets, replyTicket, resolveTicket, ticketAgents, userSendMessage } from "../tickets";
-import { listUsers, setUserStatus } from "../users";
+import { getUser, listUsers, setUserStatus } from "../users";
 import { walletView } from "../wallet";
 import { clearCookie, clientIp, cookieName, errorResponse, json, readCapped, readCookie, readJson, sessionCookie, SECURITY_HEADERS } from "./util";
 import { schemas } from "./schemas";
@@ -34,6 +34,12 @@ interface Rc {
 }
 interface Limit { name: string; max: number; windowSeconds: number; per: "ip" | "user" }
 interface Route { method: string; regex: RegExp; keys: string[]; level: Level; limit?: Limit; run: (rc: Rc) => unknown }
+
+/** `?limit=` for lists that load more as the admin scrolls: 50 by default, at most 1000. */
+function pageLimit(q: URLSearchParams): number {
+  const n = Number(q.get("limit") ?? "50");
+  return Number.isInteger(n) && n > 0 ? Math.min(n, 1000) : 50;
+}
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MIN = 60; const HOUR = 3600;
@@ -88,7 +94,7 @@ export function createApi(ctx: Ctx, deps: { auth?: AuthProvider } = {}): (req: R
     }),
     mk("POST", "/api/auth/sign-in", "public", AUTH_IP("sign-in", 30), async (rc) => {
       const b = await rc.body(schemas.signIn);
-      return startSession(rc, auth, (await auth.signIn(b.email, b.password)).userId);
+      return startSession(rc, auth, (await auth.signIn(b.email, b.password, rc.ip)).userId);
     }),
     mk("POST", "/api/auth/sign-out", "optional", undefined, async (rc) => {
       const token = readCookie(rc.req, cookieName(rc.ctx));
@@ -190,13 +196,13 @@ export function createApi(ctx: Ctx, deps: { auth?: AuthProvider } = {}): (req: R
       return OK;
     }),
 
-    mk("GET", "/api/admin/payouts", "admin", undefined, (rc) => listPayouts(rc.ctx, rc.admin)),
+    mk("GET", "/api/admin/payouts", "admin", undefined, (rc) => listPayouts(rc.ctx, rc.admin, pageLimit(rc.query))),
     mk("GET", "/api/admin/payouts/:id", "admin", lim("view-upi", 120, HOUR), (rc) => getPayout(rc.ctx, rc.admin, rc.params["id"] as string)),
     mk("POST", "/api/admin/payouts/:id/reject", "admin", undefined, async (rc) => { await rejectPayout(rc.ctx, rc.admin, rc.params["id"] as string, (await rc.body(schemas.rejectPayout)).reason); return OK; }),
-    mk("POST", "/api/admin/upi/release", "admin", lim("release-upi", 30, HOUR), async (rc) => { await releaseUpi(rc.ctx, rc.admin, (await rc.body(schemas.releaseUpi)).upi); return OK; }),
     mk("POST", "/api/admin/payouts/:id/pay", "admin", undefined, async (rc) => { await markPaid(rc.ctx, rc.admin, rc.params["id"] as string, (await rc.body(schemas.pay)).proofFileId); return OK; }),
 
-    mk("GET", "/api/admin/users", "admin", undefined, (rc) => listUsers(rc.ctx, rc.admin)),
+    mk("GET", "/api/admin/users", "admin", undefined, (rc) => listUsers(rc.ctx, rc.admin, pageLimit(rc.query))),
+    mk("GET", "/api/admin/users/:id", "admin", undefined, (rc) => getUser(rc.ctx, rc.admin, rc.params["id"] as string)),
     mk("POST", "/api/admin/users/:id/status", "admin", undefined, async (rc) => { await setUserStatus(rc.ctx, rc.admin, rc.params["id"] as string, (await rc.body(schemas.userStatus)).status); return OK; }),
 
     mk("GET", "/api/admin/members", "admin", undefined, (rc) => listMembers(rc.ctx, rc.admin)),
@@ -207,7 +213,7 @@ export function createApi(ctx: Ctx, deps: { auth?: AuthProvider } = {}): (req: R
     mk("POST", "/api/admin/roles/:id/permissions", "admin", undefined, async (rc) => { await setRolePermissions(rc.ctx, rc.admin, rc.params["id"] as string, (await rc.body(schemas.rolePermissions)).permissions as never); return OK; }),
     mk("DELETE", "/api/admin/roles/:id", "admin", undefined, async (rc) => { await deleteRole(rc.ctx, rc.admin, rc.params["id"] as string); return OK; }),
 
-    mk("GET", "/api/admin/tickets", "admin", undefined, (rc) => listAdminTickets(rc.ctx, rc.admin)),
+    mk("GET", "/api/admin/tickets", "admin", undefined, (rc) => listAdminTickets(rc.ctx, rc.admin, pageLimit(rc.query))),
     mk("GET", "/api/admin/tickets/:id", "admin", undefined, (rc) => getAdminTicket(rc.ctx, rc.admin, rc.params["id"] as string)),
     mk("POST", "/api/admin/tickets/:id/assign", "admin", undefined, async (rc) => assignTicket(rc.ctx, rc.admin, rc.params["id"] as string, (await rc.body(schemas.assign)).assigneeId)),
     mk("POST", "/api/admin/tickets/:id/reply", "admin", undefined, async (rc) => replyTicket(rc.ctx, rc.admin, rc.params["id"] as string, (await rc.body(schemas.reply)).body)),

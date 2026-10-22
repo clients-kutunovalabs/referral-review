@@ -22,6 +22,13 @@ describe("local storage", () => {
     expect(a.key).not.toBe(b.key);
     expect(readdirSync(join(dir, "proof")).length).toBeGreaterThanOrEqual(2);
   });
+  it("deletes a file, and deleting a missing one is not an error", async () => {
+    const { key } = await s.put({ kind: "proof", contentType: "image/png", bytes: PNG });
+    await s.delete(key);
+    await expect(s.get(key)).rejects.toThrow();
+    await expect(s.delete(key)).resolves.toBeUndefined();
+    await expect(s.delete("../../etc/passwd")).rejects.toThrow("Invalid file key");
+  });
   it("refuses keys that try to leave the folder", async () => {
     for (const k of ["../../etc/passwd", "proof/../../x.png", "/etc/passwd", "proof/abc.png", "proof/00000000-0000-0000-0000-000000000000.svg"]) {
       await expect(s.get(k)).rejects.toThrow(/Invalid file key/);

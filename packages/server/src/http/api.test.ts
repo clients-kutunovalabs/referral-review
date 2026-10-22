@@ -55,7 +55,7 @@ for (const engine of engines()) {
       const [u] = await ctx.db.query<{ user_id: string }>("select user_id from identities where lower(email) = $1", [email]);
       await ctx.db.query("insert into admin_members (user_id, workspace_id) values ($1,$2)", [u!.user_id, ctx.cfg.workspaceId]);
       const [r] = await ctx.db.query<{ id: string }>("insert into roles (workspace_id, name) values ($1,$2) returning id", [ctx.cfg.workspaceId, `r${Math.random()}`]);
-      const list = perms === "all" ? ["task.manage", "task.assign", "task_text.manage", "review.decide", "payout.mark_paid", "user.manage", "ticket.manage", "role.manage", "design.view"] : perms;
+      const list = perms === "all" ? ["task.manage", "task_text.manage", "review.decide", "payout.mark_paid", "user.manage", "ticket.manage", "role.manage"] : perms;
       for (const p of list) await ctx.db.query("insert into role_permissions (role_id, permission) values ($1,$2)", [r!.id, p]);
       await ctx.db.query("insert into member_roles (user_id, role_id) values ($1,$2)", [u!.user_id, r!.id]);
     }
@@ -252,7 +252,7 @@ for (const engine of engines()) {
         expect(dash.payoutsDue).toBeGreaterThanOrEqual(0);
       });
 
-      it("a payer rejects a request with a reason over HTTP; the worker sees it and can ask again; a taken UPI ID gets the generic message", async () => {
+      it("a payer rejects a request with a reason over HTTP; the worker sees it and can ask again", async () => {
         const owner = browser(api, "10.3.0.1"); const o = await signUp(owner, "Meera"); await makeAdminFor(o.email, "all");
         const worker = browser(api, "10.3.0.2"); const w = await signUp(worker, "Ravi");
         const other = browser(api, "10.3.0.3"); const x = await signUp(other, "Kiran");
@@ -266,11 +266,8 @@ for (const engine of engines()) {
         const upi = `http${Date.now().toString(36)}@okbank`;
         const req = await worker.post("/api/payouts", { amountPaise: "3000", upi });
         expect(req.status).toBe(200);
-        // another worker cannot use the same ID: generic message, no mention of who holds it
-        const taken = await other.post("/api/payouts", { amountPaise: "3000", upi });
-        expect(taken.status).toBe(409);
-        expect(taken.body.error.code).toBe("upi_unavailable");
-        expect(taken.body.error.message).not.toMatch(/Ravi|another/i);
+        // one-UPI-per-worker is postponed: another worker may use the same ID
+        expect((await other.post("/api/payouts", { amountPaise: "3000", upi })).status).toBe(200);
         // the payer refuses it
         expect((await owner.post(`/api/admin/payouts/${req.body.id}/reject`, { reason: "x" })).status).toBe(400);
         expect((await owner.post(`/api/admin/payouts/${req.body.id}/reject`, { reason: "UPI ID is invalid. Check it and try again." })).status).toBe(200);
@@ -278,9 +275,8 @@ for (const engine of engines()) {
         expect(mine).toMatchObject({ status: "rejected", rejectReason: "UPI ID is invalid. Check it and try again." });
         expect((await owner.post(`/api/admin/payouts/${req.body.id}/reject`, { reason: "again please" })).body.error.code).toBe("not_pending");
         expect((await worker.post("/api/payouts", { amountPaise: "3000", upi })).status).toBe(200); // the amount is free again
-        // a non-admin cannot reject or release
+        // a non-admin cannot reject
         expect((await worker.post(`/api/admin/payouts/${req.body.id}/reject`, { reason: "nope nope" })).status).toBe(403);
-        expect((await worker.post("/api/admin/upi/release", { upi })).status).toBe(403);
       });
 
       it("changing the password over HTTP: wrong current is a 400 (the app stays signed in), other browsers are signed out", async () => {

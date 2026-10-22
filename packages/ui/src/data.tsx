@@ -68,6 +68,14 @@ export function Loading({ label = "Loading…" }: { label?: string }) {
   return <div className="empty" role="status">{label}</div>;
 }
 
+/** Long lists load this many rows at a time. */
+export const PAGE = 50;
+
+/** Asks the server for the next rows of a long list (users, payout history, resolved tickets). */
+export function LoadMore({ onClick }: { onClick: () => void }) {
+  return <div className="load-more"><Button onClick={onClick}>Load more</Button></div>;
+}
+
 export function ErrorBox({ message, onRetry }: { message: string; onRetry?: () => void }) {
   return (
     <div className="card alert" role="alert">

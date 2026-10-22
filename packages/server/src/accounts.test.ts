@@ -1,10 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { ApiError } from "@rr/core";
 import {
-  addIdentity, createBuiltinAuth, createSession, csrfToken, decryptUpi, encryptUpi, hashPassword, getMe, purgeExpired, resolveSession,
-  revokeSession, sendIdentityCode, verifyPassword, type AuthProvider
+  addIdentity, createBuiltinAuth, createSession, csrfToken, decryptUpi, encryptUpi, hashPassword, getMe, purgeExpired, purgeUnusedFiles, resolveSession,
+  revokeSession, saveUpload, sendIdentityCode, setUserStatus, submitProof, claimTask, verifyPassword, type AuthProvider
 } from "./index";
-import { createTestCtx, engines, makeUser, type TestCtx } from "./testing";
+import { PNG, createTestCtx, engines, makeAdmin, makeTask, makeUser, type TestCtx } from "./testing";
 
 const err = async (p: Promise<unknown>) => (await p.then(() => null, (e: unknown) => e)) as ApiError | null;
 const code = async (p: Promise<unknown>) => (await err(p))?.code;
@@ -45,13 +45,19 @@ for (const engine of engines()) {
       expect(await verifyPassword("wrong", c!.password_hash)).toBe(false);
     });
 
-    it("validates the sign-up details and refuses an email that already has an account", async () => {
+    it("validates the sign-up details; an email that already has an account gets the same answer but no code", async () => {
       expect(await code(auth.requestCode("nope", "signup", { name: "A" }))).toBe("invalid_email");
       expect(await code(auth.requestCode(email(), "signup", { name: " " }))).toBe("bad_request");
       expect(await code(auth.requestCode(email(), "signup", { name: "A", phone: "abc" }))).toBe("bad_request");
       const a = await signUp();
       wait();
-      expect(await code(auth.requestCode(a.email, "signup", { name: "Again" }))).toBe("email_taken");
+      const before = ctx.outbox.sent.length;
+      const fresh = await auth.requestCode(email(), "signup", { name: "New" });
+      wait();
+      const taken = await auth.requestCode(a.email.toUpperCase(), "signup", { name: "Again" });
+      expect(taken).toEqual(fresh); // nothing in the reply tells them apart
+      expect(ctx.outbox.sent.length).toBe(before + 1); // only the new address got a code
+      expect(await code(auth.verifyCode(a.email, "123456", "signup"))).toBe("invalid_code");
     });
 
     it("a short password does not burn the step, and a step works once", async () => {
@@ -155,6 +161,14 @@ for (const engine of engines()) {
         expect(await code(auth.signIn(a.email, a.password))).toBe("rate_limited");
         ctx.clock.advance(15 * 60_000);
         await expect(auth.signIn(a.email, a.password)).resolves.toBeDefined();
+      });
+      it("wrong guesses from one address do not lock the owner out on another; 30 an hour from everywhere do", async () => {
+        const a = await signUp();
+        for (let i = 0; i < 5; i++) expect(await code(auth.signIn(a.email, "wrongwrongwrong", "203.0.113.9"))).toBe("invalid_credentials");
+        expect(await code(auth.signIn(a.email, a.password, "203.0.113.9"))).toBe("rate_limited");
+        await expect(auth.signIn(a.email, a.password, "198.51.100.7")).resolves.toBeDefined(); // the worker's own phone still works
+        for (let i = 0; i < 30; i++) await code(auth.signIn(a.email, "wrongwrongwrong", `192.0.2.${i}`));
+        expect(await code(auth.signIn(a.email, a.password, "198.51.100.8"))).toBe("rate_limited");
       });
       it("thirty guesses fired at once get five tries, not thirty", async () => {
         const a = await signUp();
@@ -285,11 +299,25 @@ for (const engine of engines()) {
         await sendIdentityCode(ctx, a.userId, other);
         expect(await code(addIdentity(ctx, b.userId, other, lastCode()))).toBe("invalid_code");
       });
-      it("refuses an email another account holds, and stops at the cap", async () => {
+      it("an email another account holds gets no code (and the same answer), so it can never be added; stops at 10 emails", async () => {
         const a = await signUp(); const b = await signUp();
-        expect(await code(sendIdentityCode(ctx, a.userId, b.email))).toBe("email_taken");
+        const before = ctx.outbox.sent.length;
+        await expect(sendIdentityCode(ctx, a.userId, b.email)).resolves.toBeDefined();
+        expect(ctx.outbox.sent.length).toBe(before);
+        expect(await code(addIdentity(ctx, a.userId, b.email, "123456"))).toBe("invalid_code");
         for (let i = 0; i < 9; i++) { const e = email(); wait(); await sendIdentityCode(ctx, a.userId, e); await addIdentity(ctx, a.userId, e, lastCode()); }
         expect(await code(sendIdentityCode(ctx, a.userId, email()))).toBe("bad_request");
+      });
+      it("codes sent to many emails before the cap cannot push an account past 10", async () => {
+        const a = await signUp();
+        for (let i = 0; i < 8; i++) { const e = email(); wait(); await sendIdentityCode(ctx, a.userId, e); await addIdentity(ctx, a.userId, e, lastCode()); }
+        // 9 emails now: two codes go out while there is still room for one
+        const x = email(); const y = email();
+        await sendIdentityCode(ctx, a.userId, x); const cx = lastCode();
+        wait(); await sendIdentityCode(ctx, a.userId, y); const cy = lastCode();
+        await addIdentity(ctx, a.userId, x, cx);
+        expect(await code(addIdentity(ctx, a.userId, y, cy))).toBe("bad_request");
+        expect((await getMe(ctx, a.userId)).identities).toHaveLength(10);
       });
     });
 
@@ -316,6 +344,48 @@ for (const engine of engines()) {
       expect(purged.sessions).toBeGreaterThanOrEqual(1);
       const [c] = await ctx.db.query<{ n: number }>("select count(*)::int as n from users where id = $1", [u.userId]);
       expect(c!.n).toBe(1);
+    });
+
+    it("a deleted account's email is released after 30 days: the address can sign up again and the old records stay", async () => {
+      const admin = await makeAdmin(ctx);
+      const a = await signUp();
+      const [{ id: oldIdentity }] = await ctx.db.query<{ id: string }>("select id from identities where user_id = $1", [a.userId]) as [{ id: string }];
+      await setUserStatus(ctx, admin, a.userId, "deleted");
+      ctx.clock.advance(29 * 86_400_000);
+      expect((await purgeExpired(ctx)).releasedEmails).toBe(0);
+      wait();
+      const before = ctx.outbox.sent.length;
+      await auth.requestCode(a.email, "signup", { name: "Back again" });
+      expect(ctx.outbox.sent.length).toBe(before); // still held: no code
+      ctx.clock.advance(2 * 86_400_000);
+      expect((await purgeExpired(ctx)).releasedEmails).toBe(1);
+      const again = await signUp(a.email, "a new password 1");
+      expect(again.userId).not.toBe(a.userId);
+      const [old] = await ctx.db.query<{ user_id: string; released_at: Date | null }>("select user_id, released_at from identities where id = $1", [oldIdentity]);
+      expect(old).toMatchObject({ user_id: a.userId }); // the old identity, and everything pointing at it, is still there
+      expect(old!.released_at).not.toBeNull();
+      const [log] = await ctx.db.query<{ n: number }>("select count(*)::int as n from admin_audit_log where action = 'user.release_emails'");
+      expect(log!.n).toBeGreaterThanOrEqual(1);
+    });
+
+    it("the monthly clean-up deletes month-old uploads nothing uses and keeps everything that is used", async () => {
+      const admin = await makeAdmin(ctx);
+      const u = await makeUser(ctx);
+      const unused = await saveUpload(ctx, u.userId, "proof", PNG);
+      const used = await saveUpload(ctx, u.userId, "proof", PNG);
+      const claim = await claimTask(ctx, u.userId, await makeTask(ctx, admin, { timerMinutes: null }), u.identityId);
+      await submitProof(ctx, u.userId, claim.id, { fileId: used.fileId });
+      const fresh = await saveUpload(ctx, u.userId, "proof", PNG);
+      ctx.clock.advance(31 * 86_400_000);
+      const recent = await saveUpload(ctx, u.userId, "proof", PNG);
+      const keyOf = async (id: string) => (await ctx.db.query<{ storage_key: string }>("select storage_key from files where id = $1", [id]))[0]?.storage_key;
+      const unusedKey = (await keyOf(unused.fileId))!;
+      expect(await purgeUnusedFiles(ctx)).toBeGreaterThanOrEqual(2); // unused + fresh (now 31 days old)
+      expect(await keyOf(unused.fileId)).toBeUndefined();
+      expect(await keyOf(fresh.fileId)).toBeUndefined();
+      await expect(ctx.storage.get(unusedKey)).rejects.toThrow();
+      expect(await keyOf(used.fileId)).toBeDefined();    // part of a submission
+      expect(await keyOf(recent.fileId)).toBeDefined();  // not a month old yet
     });
   });
 }

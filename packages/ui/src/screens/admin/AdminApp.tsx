@@ -8,7 +8,7 @@ import {
   BottomNav, DataTable, Icon, Segmented, Sheet, useLayout, type Column, type IconName, Button, Card, Chips, ConfirmSheet, CopyButton, EmptyState, Field, FileUpload, Input, ListRow, Select,
   StatusPill, Tabs, Textarea, Toast, TopBar
 } from "../../primitives";
-import { ErrorBox, Loading, isUnauthenticated, messageOf, useAsync, useRefreshOnFocus } from "../../data";
+import { ErrorBox, LoadMore, Loading, PAGE, isUnauthenticated, messageOf, useAsync, useRefreshOnFocus } from "../../data";
 import { useServices } from "../../services";
 import { useBrowserHistory } from "../../lib/useBrowserHistory";
 import { AuthFlow } from "../auth/AuthFlow";
@@ -27,7 +27,7 @@ const ACCESS_TABS: ReadonlySet<string> = new Set<AccessTab>(["users", "team", "r
 
 /** Screen -> permission needed. Mirrors the server, which checks the database on every request. */
 const NEEDS: Partial<Record<AdminScreen, PermissionKey[]>> = {
-  tasks: ["task.manage", "task.assign"], newtask: ["task.manage"], taskdetail: ["task.manage", "task.assign"],
+  tasks: ["task.manage", "task_text.manage"], newtask: ["task.manage"], taskdetail: ["task.manage", "task_text.manage"],
   reviewqueue: ["review.decide"], reviewitem: ["review.decide"],
   payouts: ["payout.mark_paid"], payoutitem: ["payout.mark_paid"],
   userdetail: ["user.manage"], access: ["user.manage", "role.manage"],
@@ -526,10 +526,12 @@ function ReviewForm({ item, onBack, onDone }: { item: ReviewQueueItem; onBack: (
 
 function PayoutsScreen({ wide, rev, onOpen }: { wide: boolean; rev: number; onOpen: (id: string) => void }) {
   const { api } = useServices();
-  const { data, error, loading, reload } = useAsync(() => api.admin.listPayouts(), [rev], { refreshMs: 30_000 });
+  const [limit, setLimit] = useState(PAGE);
+  const { data, error, loading, reload } = useAsync(() => api.admin.listPayouts(limit), [rev, limit], { refreshMs: 30_000 });
   const payouts = data ?? [];
   const action = payouts.filter((p) => p.status === "pending");
   const history = payouts.filter((p) => p.status !== "pending");
+  const moreHistory = history.length >= limit;
   const pill = (p: PayoutRequest) => <StatusPill tone={p.status === "paid" ? "green" : p.status === "rejected" ? "coral" : "amber"}>{p.status === "paid" ? "Paid" : p.status === "rejected" ? "Rejected" : "Pending"}</StatusPill>;
   const row = (p: PayoutRequest) => (
     <ListRow key={p.id} onClick={() => onOpen(p.id)} title={`${p.who} · ${formatRupees(p.amount)}`}
@@ -546,45 +548,24 @@ function PayoutsScreen({ wide, rev, onOpen }: { wide: boolean; rev: number; onOp
   ];
   return (
     <div className="screen"><TopBar title="Payouts" subtitle={`${action.length} to pay · ${history.length} done`} /><div className="scrollarea"><div className="content">
-      <ReleaseUpi />
       {loading ? <Loading /> : null}
       {error ? <ErrorBox message={error} onRetry={reload} /> : null}
       {!loading && !error ? (wide ? (<>
         <section className="table-section"><h2>Needs action ({action.length})</h2>
           {action.length ? <DataTable caption="Payouts needing action" columns={cols} rows={action} rowKey={(p) => p.id} onRowClick={(p) => onOpen(p.id)} /> : <EmptyState>Nothing to pay right now.</EmptyState>}
         </section>
-        <section className="table-section"><h2>History ({history.length})</h2>
+        <section className="table-section"><h2>History ({history.length}{moreHistory ? "+" : ""})</h2>
           {history.length ? <DataTable caption="Payout history" columns={cols} rows={history} rowKey={(p) => p.id} onRowClick={(p) => onOpen(p.id)} /> : <EmptyState>No payments yet.</EmptyState>}
+          {moreHistory ? <LoadMore onClick={() => setLimit(limit + PAGE)} /> : null}
         </section>
       </>) : (<>
         <p className="section-label" style={{ marginTop: 0 }}>Needs action ({action.length})</p>
         {action.length ? action.map(row) : <EmptyState>Nothing to pay right now.</EmptyState>}
-        <p className="section-label">History ({history.length})</p>
+        <p className="section-label">History ({history.length}{moreHistory ? "+" : ""})</p>
         {history.map(row)}
+        {moreHistory ? <LoadMore onClick={() => setLimit(limit + PAGE)} /> : null}
       </>)) : null}
     </div></div></div>
-  );
-}
-
-/** For a worker who lost their old account and wants their UPI ID on the new one (they ask through a support ticket). */
-function ReleaseUpi() {
-  const { api } = useServices();
-  const [open, setOpen] = useState(false); const [upi, setUpi] = useState(""); const [busy, setBusy] = useState(false); const [msg, setMsg] = useState(""); const [bad, setBad] = useState(false);
-  async function release() {
-    setBusy(true); setMsg("");
-    try { await api.admin.releaseUpi(upi.trim()); setBad(false); setMsg("Done. That UPI ID can now be used on another account."); setUpi(""); }
-    catch (e) { setBad(true); setMsg(messageOf(e)); }
-    setBusy(false);
-  }
-  if (!open) return <p className="hint" style={{ marginTop: 0 }}>A worker lost their old account? <button className="expander" style={{ padding: 0, minHeight: 0 }} onClick={() => setOpen(true)}>Release their UPI ID</button></p>;
-  return (
-    <Card>
-      <Field label="UPI ID to release" hint="Only after the worker has asked through a support ticket. It stops being linked to the old account, and the action is logged with your name.">
-        <Input value={upi} onChange={(e) => setUpi(e.target.value)} placeholder="name@bank" autoComplete="off" />
-      </Field>
-      {msg ? <div className={bad ? "field-error" : "hint"} role={bad ? "alert" : "status"}>{msg}</div> : null}
-      <Button disabled={busy || !upi.includes("@")} onClick={() => { void release(); }}>{busy ? "Releasing…" : "Release UPI ID"}</Button>
-    </Card>
   );
 }
 
@@ -679,10 +660,12 @@ function AccessScreen({ me, wide, perms, tab: want, setTab, rev, notify, guard, 
 
 function UsersPanel({ wide, rev, onOpen }: { wide: boolean; rev: number; onOpen: (id: string) => void }) {
   const { api } = useServices();
-  const { data, error, loading, reload } = useAsync(() => api.admin.listUsers(), [rev]);
+  const [limit, setLimit] = useState(PAGE);
+  const { data, error, loading, reload } = useAsync(() => api.admin.listUsers(limit), [rev, limit]);
   const users = data ?? [];
+  const more = users.length >= limit;
   return (<>
-    <p className="note-text" style={{ marginBottom: 10 }}>People who use the app. {users.length} total.</p>
+    <p className="note-text" style={{ marginBottom: 10 }}>People who use the app, newest first. Showing {users.length}{more ? "" : " (all)"}.</p>
     {loading ? <Loading /> : null}
     {error ? <ErrorBox message={error} onRetry={reload} /> : null}
     {wide && users.length ? <DataTable caption="Users" rows={users} rowKey={(u) => u.id} onRowClick={(u) => onOpen(u.id)} columns={[
@@ -696,6 +679,7 @@ function UsersPanel({ wide, rev, onOpen }: { wide: boolean; rev: number; onOpen:
       <ListRow key={u.id} onClick={() => onOpen(u.id)} title={u.name} right={<StatusPill tone={statusTone(u.status)}>{u.status[0]!.toUpperCase() + u.status.slice(1)}</StatusPill>}
         sub={`${u.emailMasked} · ${formatRupees(u.lifetime)} lifetime · ${u.identityCount} email${u.identityCount > 1 ? "s" : ""}`} />
     ))}
+    {more ? <LoadMore onClick={() => setLimit(limit + PAGE)} /> : null}
   </>);
 }
 
@@ -704,8 +688,8 @@ function UserDetailScreen({ userId, rev, onBack, setPending, notify, guard, onCh
   setPending: (p: { title: string; text: string; label: string; tone: "primary" | "danger"; run: () => void } | null) => void;
 }) {
   const { api } = useServices();
-  const { data, error, loading, reload } = useAsync(() => api.admin.listUsers(), [rev]);
-  const u: AdminUserRow | undefined = (data ?? []).find((x) => x.id === userId) ?? (userId ? undefined : data?.[0]);
+  const { data: u, error, loading, reload } = useAsync<AdminUserRow | undefined>(
+    () => (userId ? api.admin.getUser(userId) : api.admin.listUsers(1).then((l) => l[0])), [rev, userId]);
   if (loading) return <div className="screen"><TopBar title="User" onBack={onBack} /><Loading /></div>;
   if (!u) return <div className="screen"><TopBar title="User" onBack={onBack} /><div className="content"><ErrorBox message={error ?? "User not found."} onRetry={reload} /></div></div>;
   const set = (status: "active" | "suspended" | "deleted", m: string) => api.admin.setUserStatus(u.id, status).then(() => { notify(m); onChanged(); }, guard);
